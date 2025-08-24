@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
     "build:web": "expo export --platform web",
+    "start": "npx serve -s dist -l $PORT",
     "lint": "expo lint"
   },
   "dependencies": {
@@ -48,6 +49,7 @@
     "react-native-web": "^0.20.0",
     "react-native-web-maps": "^0.3.0",
     "react-native-webview": "13.13.5",
+    "serve": "^14.2.4",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
