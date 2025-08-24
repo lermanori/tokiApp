@@ -1,0 +1,28 @@
+---
+description: "Create a Markdown documentation file for every code file, summarizing its content and listing fixes."
+alwaysApply: true
+globs:
+  - "src/**/*.*"
+---
+
+Whenever a code file is modified and saved, generate or update a Markdown file named `<filename>.md` in the same directory. This `.md` file should include:
+
+1. A **brief summary** of what the file does.
+2. A **list of issues** that were found and fixed.
+3. A **description of how the fixes were implemented** and why.
+
+For example:
+
+```markdown
+# File: userService.ts
+
+### Summary
+This file contains the user service logic including login, registration, and session management.
+
+### Fixes Applied log
+-problem: Fixed broken JWT token validation.
+-solution: Rewrote token parser using `jsonwebtoken` with `verify` and added error catching.
+
+### How Fixes Were Implemented
+-problem: Refactored `getUserById` to handle null safely.
+-solution: Added early return and null checks for database fetches.```

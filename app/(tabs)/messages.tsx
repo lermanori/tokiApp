@@ -1,0 +1,497 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Search, MessageCircle, Users, Clock, RefreshCw } from 'lucide-react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useApp } from '@/contexts/AppContext';
+import { socketService } from '@/services/socket';
+
+
+interface Conversation {
+  id: string;
+  other_user_id: string;
+  other_user_name: string;
+  other_user_avatar?: string;
+  other_user_bio?: string;
+  last_message?: string;
+  last_message_time?: string;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface TokiGroupChat {
+  id: string;
+  title: string;
+  description: string;
+  host_name: string;
+  last_message?: string;
+  last_message_time?: string;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+  isGroup: true;
+}
+
+export default function MessagesScreen() {
+  const { state, actions } = useApp();
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Get conversations and toki group chats from global state
+  const conversations = state.conversations || [];
+  const tokiGroupChats = state.tokiGroupChats || [];
+
+  const loadConversations = async () => {
+    setIsLoading(true);
+    try {
+      await actions.getConversations();
+      await actions.getTokiGroupChats();
+    } catch (error) {
+      console.error('❌ Failed to load conversations:', error);
+      Alert.alert('Error', 'Failed to load conversations. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Manual refresh function
+  const refreshAllData = async () => {
+    setIsLoading(true);
+    try {
+      // Refresh both conversations and toki group chats
+      await Promise.all([
+        actions.getConversations(),
+        actions.getTokiGroupChats()
+      ]);
+    } catch (error) {
+      console.error('❌ [MESSAGES PAGE] Manual refresh failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+  // Real-time updates for conversations
+  useEffect(() => {
+    // WebSocket listeners are handled globally in AppContext
+  }, [conversations, tokiGroupChats]);
+
+  // Watch for changes in global state to trigger re-renders
+  useEffect(() => {
+    // This effect ensures the component re-renders when conversations or toki group chats change
+  }, [conversations, tokiGroupChats]);
+
+  // Load conversations and toki group chats when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🎯 Messages screen focused, reloading conversations...');
+      
+      // Check WebSocket connection status
+      const socketStatus = socketService.getConnectionStatus();
+      const socket = socketService.getSocket();
+      console.log('🔌 [MESSAGES] WebSocket status:', socketStatus);
+      console.log('🔌 [MESSAGES] Socket instance:', socket ? 'exists' : 'null');
+      console.log('🔌 [MESSAGES] Socket connected:', socket?.connected);
+      
+      // Ensure global message listeners are working
+      if (socketStatus && socket) {
+        console.log('🔌 Messages screen focused, re-establishing global listeners...');
+        actions.reestablishGlobalListeners();
+        
+        // Test if the listeners are working
+        setTimeout(() => {
+          console.log('🧪 [MESSAGES] Testing WebSocket listeners after setup...');
+          actions.testWebSocketListeners();
+        }, 1000);
+      } else {
+        console.log('⚠️ [MESSAGES] WebSocket not ready, skipping listener setup');
+      }
+      
+      loadConversations();
+      actions.getTokiGroupChats();
+    }, [])
+  );
+
+  // Also reload when component mounts to ensure fresh data
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+  // Combine and sort all chats by last message timestamp
+  const getAllChats = () => {
+    const allChats = [
+      // Individual conversations
+      ...conversations.map(conv => ({
+        ...conv,
+        type: 'individual' as const,
+        sortKey: conv.last_message_time || conv.updated_at
+      })),
+      // Toki group chats
+      ...tokiGroupChats.map(toki => ({
+        ...toki,
+        type: 'group' as const,
+        sortKey: toki.last_message_time || toki.updated_at
+      }))
+    ];
+
+    // Sort by last message timestamp (most recent first)
+    return allChats.sort((a, b) => {
+      const timeA = new Date(a.sortKey).getTime();
+      const timeB = new Date(b.sortKey).getTime();
+      return timeB - timeA; // Descending order (newest first)
+    });
+  };
+
+  const handleConversationPress = (conversation: Conversation) => {
+    // Mark conversation as read (reset unread count)
+    if (conversation.unread_count > 0) {
+      // Update global state by refreshing conversations
+      actions.getConversations();
+    }
+    
+    // Navigate to individual chat
+    router.push({
+      pathname: '/chat',
+      params: { 
+        conversationId: conversation.id,
+        otherUserName: conversation.other_user_name,
+        isGroup: 'false'
+      }
+    });
+  };
+
+  const handleTokiGroupChatPress = (tokiChat: TokiGroupChat) => {
+    // Mark Toki group chat as read (reset unread count)
+    if (tokiChat.unread_count > 0) {
+      // Update global state by refreshing toki group chats
+      actions.getTokiGroupChats();
+    }
+    
+    // Navigate to Toki group chat
+    router.push({
+      pathname: '/chat',
+      params: { 
+        tokiId: tokiChat.id,
+        otherUserName: tokiChat.title,
+        isGroup: 'true'
+      }
+    });
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <LinearGradient
+        colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Messages</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity style={styles.refreshButton} onPress={refreshAllData}>
+              <RefreshCw size={20} color="#B49AFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.searchButton}>
+              <Search size={20} color="#B49AFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {isLoading ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Loading conversations...</Text>
+          </View>
+        ) : conversations.length === 0 && tokiGroupChats.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MessageCircle size={48} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>No conversations yet</Text>
+            <Text style={styles.emptyDescription}>
+              Start chatting with your connections or join Tokis
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.conversationsList}>
+            {getAllChats().map((chat) => (
+              <TouchableOpacity
+                key={`${chat.type}-${chat.id}`}
+                style={styles.conversationItem}
+                onPress={() => chat.type === 'individual' 
+                  ? handleConversationPress(chat as Conversation)
+                  : handleTokiGroupChatPress(chat as TokiGroupChat)
+                }
+              >
+                <View style={styles.conversationAvatar}>
+                  <Image
+                    source={{ 
+                      uri: chat.type === 'individual' 
+                        ? (chat as Conversation).other_user_avatar || 
+                          'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2'
+                        : 'https://via.placeholder.com/50' // Placeholder for Toki group avatar
+                    }}
+                    style={styles.avatarImage}
+                  />
+                </View>
+
+                <View style={styles.conversationContent}>
+                  <View style={styles.conversationHeader}>
+                    <Text style={styles.conversationTitle} numberOfLines={1}>
+                      {chat.type === 'individual' 
+                        ? (chat as Conversation).other_user_name
+                        : (chat as TokiGroupChat).title
+                      }
+                    </Text>
+                    <View style={styles.headerRight}>
+                      <Text style={styles.timestamp}>
+                        {chat.last_message_time ? formatTimestamp(chat.last_message_time) : 'No messages'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.conversationFooter}>
+                    <Text style={styles.lastMessage} numberOfLines={1}>
+                      {chat.last_message || 'Start a conversation...'}
+                    </Text>
+                    <View style={styles.conversationMeta}>
+                      {chat.unread_count > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadCount}>
+                            {chat.unread_count}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#1C1C1C',
+  },
+  searchButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  content: {
+    flex: 1,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 100,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-SemiBold',
+    color: '#666666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#888888',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  conversationsList: {
+    backgroundColor: '#FFFFFF',
+  },
+  conversationItem: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  conversationItemDisabled: {
+    opacity: 0.6,
+  },
+  conversationAvatar: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  avatarImageDisabled: {
+    opacity: 0.5,
+  },
+  groupBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#B49AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  conversationContent: {
+    flex: 1,
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  conversationTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+    flex: 1,
+  },
+  conversationTitleDisabled: {
+    color: '#9CA3AF',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+  },
+  timestamp: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#9CA3AF',
+  },
+  timestampDisabled: {
+    color: '#D1D5DB',
+  },
+  conversationFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessage: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666666',
+    flex: 1,
+  },
+  lastMessageDisabled: {
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  conversationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  participantsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  participantsCount: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#9CA3AF',
+  },
+  participantsCountDisabled: {
+    color: '#D1D5DB',
+  },
+  unreadBadge: {
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadCount: {
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
+  bottomSpacing: {
+    height: 20,
+  },
+});

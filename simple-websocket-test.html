@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Simple WebSocket Test</h1>
+    <button onclick="testConnection()">Test Connection</button>
+    <div id="logs"></div>
+
+    <script>
+        function log(message) {
+            const logs = document.getElementById('logs');
+            logs.innerHTML += '<p>' + new Date().toLocaleTimeString() + ': ' + message + '</p>';
+        }
+
+        function testConnection() {
+            log('🔌 Testing simple WebSocket connection...');
+            
+            const socket = io('http://localhost:3002', {
+                transports: ['websocket', 'polling'],
+                upgrade: true,
+                rememberUpgrade: false
+            });
+            
+            socket.on('connect', () => {
+                log('✅ Connected to WebSocket server');
+                log('🔌 Socket ID: ' + socket.id);
+                
+                // Test joining a room
+                socket.emit('join-conversation', 'test-conversation');
+                log('💬 Joined test conversation');
+            });
+            
+            socket.on('disconnect', () => {
+                log('❌ Disconnected from WebSocket server');
+            });
+            
+            socket.on('connect_error', (error) => {
+                log('❌ Connection error: ' + error.message);
+                log('❌ Error details: ' + JSON.stringify(error));
+            });
+            
+            socket.on('message-received', (message) => {
+                log('📨 Message received: ' + JSON.stringify(message));
+            });
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Toki WebSocket Test - Real-time Messaging</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; max-height: 300px; overflow-y: auto; }
+        button { margin: 5px; padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>🔌 Toki WebSocket Test - Real-time Messaging</h1>
+    
+    <div class="test-section">
+        <h3>Connection Test</h3>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <div id="connection-status">Not connected</div>
+    </div>
+
+    <div class="test-section">
+        <h3>Room Management Test</h3>
+        <button onclick="joinUserRoom()">Join User Room</button>
+        <button onclick="joinConversation()">Join Conversation Room</button>
+        <button onclick="joinTokiRoom()">Join Toki Room</button>
+        <button onclick="leaveAllRooms()">Leave All Rooms</button>
+        <div id="room-status">No rooms joined</div>
+    </div>
+
+    <div class="test-section">
+        <h3>Message Event Test</h3>
+        <button onclick="testMessageEvents()">Test Message Events</button>
+        <div id="message-status">No messages received</div>
+    </div>
+
+    <div class="test-section">
+        <h3>Live Event Monitoring</h3>
+        <div id="live-events" class="log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let currentRooms = new Set();
+
+        function log(message, type = 'info') {
+            const liveEvents = document.getElementById('live-events');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            liveEvents.appendChild(logEntry);
+            liveEvents.scrollTop = liveEvents.scrollTop + 1000;
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function updateConnectionStatus(status, type = 'info') {
+            const statusDiv = document.getElementById('connection-status');
+            statusDiv.textContent = status;
+            statusDiv.className = type;
+        }
+
+        function updateRoomStatus() {
+            const statusDiv = document.getElementById('room-status');
+            if (currentRooms.size === 0) {
+                statusDiv.textContent = 'No rooms joined';
+                statusDiv.className = 'info';
+            } else {
+                statusDiv.textContent = `Joined rooms: ${Array.from(currentRooms).join(', ')}`;
+                statusDiv.className = 'success';
+            }
+        }
+
+        function testConnection() {
+            log('🔌 Testing WebSocket connection...', 'info');
+            
+            socket = io('http://localhost:3002', {
+                transports: ['websocket', 'polling'],
+                upgrade: true,
+                rememberUpgrade: false
+            });
+            
+            socket.on('connect', () => {
+                log('✅ Connected to WebSocket server', 'success');
+                log(`🔌 Socket ID: ${socket.id}`, 'info');
+                updateConnectionStatus('Connected', 'success');
+            });
+            
+            socket.on('disconnect', (reason) => {
+                log('❌ Disconnected from WebSocket server', 'error');
+                log(`Reason: ${reason}`, 'info');
+                updateConnectionStatus('Disconnected', 'error');
+                currentRooms.clear();
+                updateRoomStatus();
+            });
+            
+            socket.on('connect_error', (error) => {
+                log('❌ Connection error: ' + error.message, 'error');
+                log('Error details: ' + JSON.stringify(error), 'error');
+                updateConnectionStatus('Connection Error', 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                currentRooms.clear();
+                updateRoomStatus();
+                log('🔌 Disconnected from server', 'info');
+            }
+        }
+
+        function joinUserRoom() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected', 'error');
+                return;
+            }
+            
+            const userId = 'test-user-123';
+            socket.emit('join-user', userId);
+            currentRooms.add(`user-${userId}`);
+            updateRoomStatus();
+            log(`👤 Joined user room: user-${userId}`, 'success');
+        }
+
+        function joinConversation() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected', 'error');
+                return;
+            }
+            
+            const conversationId = 'test-conversation-456';
+            socket.emit('join-conversation', conversationId);
+            currentRooms.add(`conversation-${conversationId}`);
+            updateRoomStatus();
+            log(`💬 Joined conversation room: conversation-${conversationId}`, 'success');
+        }
+
+        function joinTokiRoom() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected', 'error');
+                return;
+            }
+            
+            const tokiId = 'test-toki-789';
+            socket.emit('join-toki', tokiId);
+            currentRooms.add(`toki-${tokiId}`);
+            updateRoomStatus();
+            log(`🏷️ Joined Toki room: toki-${tokiId}`, 'success');
+        }
+
+        function leaveAllRooms() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected', 'error');
+                return;
+            }
+            
+            currentRooms.forEach(roomName => {
+                socket.emit('leave-room', roomName);
+                log(`🚪 Left room: ${roomName}`, 'info');
+            });
+            
+            currentRooms.clear();
+            updateRoomStatus();
+        }
+
+        function testMessageEvents() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected', 'error');
+                return;
+            }
+
+            log('📨 Setting up message event listeners...', 'info');
+            
+            // Listen for individual conversation messages
+            socket.on('message-received', (message) => {
+                log('📨 Individual message received: ' + JSON.stringify(message), 'success');
+                document.getElementById('message-status').textContent = 'Individual message received!';
+            });
+            
+            // Listen for Toki group messages
+            socket.on('toki-message-received', (message) => {
+                log('📨 Toki group message received: ' + JSON.stringify(message), 'success');
+                document.getElementById('message-status').textContent = 'Toki group message received!';
+            });
+            
+            log('✅ Message event listeners set up', 'success');
+        }
+
+        // Auto-clear logs every 5 minutes
+        setInterval(() => {
+            const liveEvents = document.getElementById('live-events');
+            if (liveEvents.children.length > 100) {
+                liveEvents.innerHTML = '<div class="info">[Logs cleared]</div>';
+            }
+        }, 300000);
+    </script>
+</body>
+</html> 

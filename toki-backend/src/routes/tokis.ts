@@ -1,0 +1,1652 @@
+import { Router, Request, Response } from 'express';
+import { pool } from '../config/database';
+import { authenticateToken } from '../middleware/auth';
+import { uploadSingleImage, handleUploadError } from '../middleware/upload';
+import { calculateDistance, formatDistance } from '../utils/distance';
+
+const router = Router();
+
+// Create a new Toki
+router.post('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const {
+      title,
+      description,
+      location,
+      latitude,
+      longitude,
+      timeSlot,
+      scheduledTime,
+      maxAttendees,
+      category,
+      visibility,
+      tags,
+      images
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !location || !timeSlot || !category) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Title, location, time slot, and category are required'
+      });
+    }
+
+    // Validate category
+    const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'];
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid category',
+        message: `Category must be one of: ${validCategories.join(', ')}`
+      });
+    }
+
+    // Validate visibility
+    const validVisibility = ['public', 'connections', 'friends'];
+    if (visibility && !validVisibility.includes(visibility)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid visibility',
+        message: `Visibility must be one of: ${validVisibility.join(', ')}`
+      });
+    }
+
+    // Validate max attendees
+    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 100)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid max attendees',
+        message: 'Max attendees must be between 1 and 100'
+      });
+    }
+
+    // Start a database transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Insert the Toki
+      const tokiResult = await client.query(
+        `INSERT INTO tokis (
+          host_id, title, description, location, latitude, longitude,
+          time_slot, scheduled_time, max_attendees, category, visibility
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *`,
+        [
+          req.user!.id,
+          title,
+          description || null,
+          location,
+          latitude || null,
+          longitude || null,
+          timeSlot,
+          scheduledTime || null,
+          maxAttendees || 10,
+          category,
+          visibility || 'public'
+        ]
+      );
+
+      const toki = tokiResult.rows[0];
+
+      // Insert tags if provided
+      if (tags && Array.isArray(tags) && tags.length > 0) {
+        for (const tag of tags) {
+          await client.query(
+            'INSERT INTO toki_tags (toki_id, tag_name) VALUES ($1, $2)',
+            [toki.id, tag]
+          );
+        }
+      }
+
+      // Handle images if provided
+      if (images && Array.isArray(images) && images.length > 0) {
+        const imageUrls: string[] = [];
+        const imagePublicIds: string[] = [];
+
+        for (const image of images) {
+          try {
+            if (image.publicId && image.publicId.startsWith('temp_')) {
+              console.log(`Processing temporary image: ${image.publicId}`);
+              
+              // For temporary images, store the local URI for now
+              // The frontend can handle uploading them to Cloudinary later
+              imageUrls.push(image.url);
+              imagePublicIds.push(image.publicId);
+            } else {
+              // For already uploaded images, store as-is
+              imageUrls.push(image.url);
+              imagePublicIds.push(image.publicId);
+            }
+          } catch (error) {
+            console.error(`Error processing image: ${error}`);
+            // Continue with other images
+          }
+        }
+
+        // Update the Toki with image information
+        if (imageUrls.length > 0) {
+          await client.query(
+            `UPDATE tokis 
+             SET image_urls = $1, image_public_ids = $2, updated_at = NOW()
+             WHERE id = $3`,
+            [imageUrls, imagePublicIds, toki.id]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+
+      // Return the created Toki with host information
+      const hostResult = await pool.query(
+        'SELECT id, name, avatar_url FROM users WHERE id = $1',
+        [req.user!.id]
+      );
+
+      const responseData = {
+        ...toki,
+        host: {
+          id: hostResult.rows[0].id,
+          name: hostResult.rows[0].name,
+          avatar: hostResult.rows[0].avatar_url
+        },
+        tags: tags || [],
+        images: images || []
+      };
+
+      return res.status(201).json({
+        success: true,
+        message: 'Toki created successfully',
+        data: responseData
+      });
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('Create Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to create Toki'
+    });
+  }
+});
+
+// Get all available categories
+router.get('/categories', async (req: Request, res: Response) => {
+  try {
+    const categories = [
+      { id: 'sports', name: 'Sports', icon: '🏃‍♂️', description: 'Physical activities and sports' },
+      { id: 'coffee', name: 'Coffee', icon: '☕', description: 'Coffee meetups and cafes' },
+      { id: 'music', name: 'Music', icon: '🎵', description: 'Music events and jam sessions' },
+      { id: 'food', name: 'Food', icon: '🍕', description: 'Food and dining experiences' },
+      { id: 'work', name: 'Work', icon: '💼', description: 'Work-related activities and networking' },
+      { id: 'art', name: 'Art', icon: '🎨', description: 'Art and creative activities' },
+      { id: 'nature', name: 'Nature', icon: '🌿', description: 'Outdoor and nature activities' },
+      { id: 'drinks', name: 'Drinks', icon: '🍺', description: 'Social drinking and nightlife' }
+    ];
+
+    return res.status(200).json({
+      success: true,
+      data: categories
+    });
+
+  } catch (error) {
+    console.error('Get categories error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve categories'
+    });
+  }
+});
+
+// Get popular tags
+router.get('/tags/popular', async (req: Request, res: Response) => {
+  try {
+    const { limit = '20' } = req.query;
+    const limitNum = Math.min(parseInt(limit as string) || 20, 100);
+
+    const result = await pool.query(
+      `SELECT 
+        tt.tag_name,
+        COUNT(*) as usage_count
+      FROM toki_tags tt
+      JOIN tokis t ON tt.toki_id = t.id
+      WHERE t.status = 'active'
+      GROUP BY tt.tag_name
+      ORDER BY usage_count DESC
+      LIMIT $1`,
+      [limitNum]
+    );
+
+    const popularTags = result.rows.map(row => ({
+      name: row.tag_name,
+      count: parseInt(row.usage_count)
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: popularTags
+    });
+
+  } catch (error) {
+    console.error('Get popular tags error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve popular tags'
+    });
+  }
+});
+
+// Search tags
+router.get('/tags/search', async (req: Request, res: Response) => {
+  try {
+    const { q, limit = '10' } = req.query;
+    const limitNum = Math.min(parseInt(limit as string) || 10, 50);
+
+    if (!q || typeof q !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query required',
+        message: 'Please provide a search query'
+      });
+    }
+
+    const result = await pool.query(
+      `SELECT DISTINCT tt.tag_name
+      FROM toki_tags tt
+      JOIN tokis t ON tt.toki_id = t.id
+      WHERE t.status = 'active' 
+        AND tt.tag_name ILIKE $1
+      ORDER BY tt.tag_name
+      LIMIT $2`,
+      [`%${q}%`, limitNum]
+    );
+
+    const tags = result.rows.map(row => row.tag_name);
+
+    return res.status(200).json({
+      success: true,
+      data: tags
+    });
+
+  } catch (error) {
+    console.error('Search tags error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to search tags'
+    });
+  }
+});
+
+// Get all Tokis with filtering and pagination
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const {
+      category,
+      location,
+      timeSlot,
+      visibility,
+      search,
+      dateFrom,
+      dateTo,
+      radius,
+      userLatitude,
+      userLongitude,
+      page = '1',
+      limit = '20',
+      sortBy = 'created_at',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // First get the user's coordinates for distance calculation
+    const userResult = await pool.query(
+      'SELECT latitude, longitude FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    const userLat = userResult.rows[0]?.latitude;
+    const userLng = userResult.rows[0]?.longitude;
+
+    const queryParams: any[] = [];
+    let paramCount = 0;
+
+    // Build the base query
+    let query = `
+      SELECT 
+        t.*,
+        u.name as host_name,
+        u.avatar_url as host_avatar,
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees
+    `;
+    
+    // Always add distance calculation if user has coordinates
+    if (userLat && userLng) {
+      query += `,
+        (
+          6371 * acos(
+            cos(radians($${paramCount + 1})) * 
+            cos(radians(t.latitude)) * 
+            cos(radians(t.longitude) - radians($${paramCount + 2})) + 
+            sin(radians($${paramCount + 1})) * 
+            sin(radians(t.latitude))
+          )
+        ) as distance_km`;
+      queryParams.push(userLat, userLng);
+      paramCount += 2;
+    }
+    
+    query += `
+      FROM tokis t
+      LEFT JOIN users u ON t.host_id = u.id
+      LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+      LEFT JOIN toki_participants tp ON t.id = tp.toki_id
+      WHERE t.status = 'active'
+      AND NOT EXISTS (
+        SELECT 1 FROM user_blocks ub 
+        WHERE (ub.blocker_id = $${paramCount + 1} AND ub.blocked_user_id = t.host_id)
+        OR (ub.blocker_id = t.host_id AND ub.blocked_user_id = $${paramCount + 1})
+      )
+    `;
+    paramCount++;
+    queryParams.push(userId);
+    
+    // TODO: Implement radius filtering in next iteration
+    // For now, just log the parameters for debugging
+    if (radius && userLatitude && userLongitude) {
+      console.log('🔍 [BACKEND] Radius filtering requested:', { radius, userLatitude, userLongitude });
+      // query += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
+      // queryParams.push(lat, lng);
+      // paramCount += 2;
+    }
+
+    // Add filters
+    if (category) {
+      paramCount++;
+      query += ` AND t.category = $${paramCount}`;
+      queryParams.push(category);
+    }
+
+    if (location) {
+      paramCount++;
+      query += ` AND t.location ILIKE $${paramCount}`;
+      queryParams.push(`%${location}%`);
+    }
+
+    if (timeSlot) {
+      paramCount++;
+      query += ` AND t.time_slot = $${paramCount}`;
+      queryParams.push(timeSlot);
+    }
+
+    if (visibility) {
+      paramCount++;
+      query += ` AND t.visibility = $${paramCount}`;
+      queryParams.push(visibility);
+    }
+
+    if (search) {
+      paramCount++;
+      query += ` AND t.search_vector @@ plainto_tsquery('english', $${paramCount})`;
+      queryParams.push(search);
+    }
+
+    // Add date range filtering
+    if (dateFrom) {
+      paramCount++;
+      query += ` AND t.scheduled_time >= $${paramCount}::timestamp`;
+      queryParams.push(dateFrom);
+    }
+
+    if (dateTo) {
+      paramCount++;
+      query += ` AND t.scheduled_time <= $${paramCount}::timestamp`;
+      queryParams.push(dateTo);
+    }
+
+    // TODO: Implement radius filtering in next iteration
+    // Add radius-based filtering if coordinates provided
+    if (radius && userLatitude && userLongitude) {
+      console.log('🔍 [BACKEND] Radius filtering in main query:', { radius, userLatitude, userLongitude });
+      // const lat = parseFloat(userLatitude as string);
+      // const lng = parseFloat(userLongitude as string);
+      // const radiusKm = Math.min(parseFloat(radius as string) || 10, 100);
+      // 
+      // if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      //   query += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
+      //   queryParams.push(lat, lng, radiusKm);
+      //   paramCount += 3;
+      // }
+    }
+
+    // Group by to handle tags aggregation
+    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude`;
+
+    // Add sorting
+    const validSortFields = ['created_at', 'title', 'location', 'current_attendees'];
+    const validSortOrders = ['asc', 'desc'];
+    
+    // Add distance to valid sort fields if user coordinates are available
+    if (userLat && userLng) {
+      validSortFields.push('distance');
+    }
+    
+    if (validSortFields.includes(sortBy as string) && validSortOrders.includes(sortOrder as string)) {
+      if (sortBy === 'distance' && userLat && userLng) {
+        query += ` ORDER BY distance_km ${(sortOrder as string).toUpperCase()}`;
+      } else {
+        query += ` ORDER BY t.${sortBy} ${(sortOrder as string).toUpperCase()}`;
+      }
+    } else {
+      query += ` ORDER BY t.created_at DESC`;
+    }
+
+    // Add pagination
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = Math.min(parseInt(limit as string) || 20, 100); // Max 100 items per page
+    const offset = (pageNum - 1) * limitNum;
+
+    paramCount++;
+    query += ` LIMIT $${paramCount}`;
+    queryParams.push(limitNum);
+
+    paramCount++;
+    query += ` OFFSET $${paramCount}`;
+    queryParams.push(offset);
+
+    const result = await pool.query(query, queryParams);
+
+    // Get total count for pagination
+    let countQuery = `
+      SELECT COUNT(DISTINCT t.id) as total
+      FROM tokis t
+      WHERE t.status = 'active'
+    `;
+    const countParams: any[] = [];
+    let countParamCount = 0;
+
+    if (category) {
+      countParamCount++;
+      countQuery += ` AND t.category = $${countParamCount}`;
+      countParams.push(category);
+    }
+
+    if (location) {
+      countParamCount++;
+      countQuery += ` AND t.location ILIKE $${countParamCount}`;
+      countParams.push(`%${location}%`);
+    }
+
+    if (timeSlot) {
+      countParamCount++;
+      countQuery += ` AND t.time_slot = $${countParamCount}`;
+      countParams.push(timeSlot);
+    }
+
+    if (visibility) {
+      countParamCount++;
+      countQuery += ` AND t.visibility = $${countParamCount}`;
+      countParams.push(visibility);
+    }
+
+    if (search) {
+      countParamCount++;
+      countQuery += ` AND t.search_vector @@ plainto_tsquery('english', $${countParamCount})`;
+      countParams.push(search);
+    }
+
+    // Add date range filtering to count query
+    if (dateFrom) {
+      countParamCount++;
+      countQuery += ` AND t.scheduled_time >= $${countParamCount}::timestamp`;
+      countParams.push(dateFrom);
+    }
+
+    if (dateTo) {
+      countParamCount++;
+      countQuery += ` AND t.scheduled_time <= $${countParamCount}::timestamp`;
+      countParams.push(dateTo);
+    }
+
+    // TODO: Implement radius filtering in count query in next iteration
+    // Add radius-based filtering to count query if coordinates provided
+    if (radius && userLatitude && userLongitude) {
+      console.log('🔍 [BACKEND] Radius filtering in count query:', { radius, userLatitude, userLongitude });
+      // countQuery += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
+      // countParams.push(lat, lng, radiusKm);
+      // countParamCount += 3;
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Format response with join status
+    const tokis = await Promise.all(result.rows.map(async (row) => {
+      // Get current user's join status for this Toki
+      let joinStatus = 'not_joined';
+      if (row.host_id !== userId) {
+        const joinResult = await pool.query(
+          'SELECT status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+          [row.id, userId]
+        );
+        
+        if (joinResult.rows.length > 0) {
+          joinStatus = joinResult.rows[0].status;
+        }
+      }
+
+      return {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        location: row.location,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        timeSlot: row.time_slot,
+        scheduledTime: row.scheduled_time,
+        maxAttendees: row.max_attendees,
+        currentAttendees: row.current_attendees,
+        category: row.category,
+        visibility: row.visibility,
+        imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        distance: row.distance_km ? {
+          km: Math.round(row.distance_km * 10) / 10,
+          miles: Math.round((row.distance_km * 0.621371) * 10) / 10
+        } : undefined,
+        host: {
+          id: row.host_id,
+          name: row.host_name,
+          avatar: row.host_avatar
+        },
+        tags: row.tags || [],
+        joinStatus: joinStatus
+      };
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        tokis,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get Tokis error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve Tokis'
+    });
+  }
+});
+
+// Get nearby Tokis based on coordinates
+router.get('/nearby', async (req: Request, res: Response) => {
+  try {
+    const {
+      latitude,
+      longitude,
+      radius = '10', // Default 10km radius
+      limit = '20',
+      category,
+      timeSlot
+    } = req.query;
+
+    // Validate required coordinates
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        success: false,
+        error: 'Coordinates required',
+        message: 'Latitude and longitude are required for nearby search'
+      });
+    }
+
+    const lat = parseFloat(latitude as string);
+    const lng = parseFloat(longitude as string);
+    const radiusKm = Math.min(parseFloat(radius as string) || 10, 100); // Max 100km
+    const limitNum = Math.min(parseInt(limit as string) || 20, 100);
+
+    // Validate coordinates
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid coordinates',
+        message: 'Please provide valid latitude (-90 to 90) and longitude (-180 to 180)'
+      });
+    }
+
+    // Build the query with distance calculation
+    let query = `
+      SELECT 
+        t.*,
+        u.name as host_name,
+        u.avatar_url as host_avatar,
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'joined'), 1) as current_attendees,
+        (
+          6371 * acos(
+            cos(radians($1)) * 
+            cos(radians(t.latitude)) * 
+            cos(radians(t.longitude) - radians($2)) + 
+            sin(radians($1)) * 
+            sin(radians(t.latitude))
+          )
+        ) as distance_km
+      FROM tokis t
+      LEFT JOIN users u ON t.host_id = u.id
+      LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+      LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'joined'
+      WHERE t.status = 'active'
+        AND t.latitude IS NOT NULL 
+        AND t.longitude IS NOT NULL
+        AND (
+          6371 * acos(
+            cos(radians($1)) * 
+            cos(radians(t.latitude)) * 
+            cos(radians(t.longitude) - radians($2)) + 
+            sin(radians($1)) * 
+            sin(radians(t.latitude))
+          )
+        ) <= $3
+    `;
+
+    const queryParams: any[] = [lat, lng, radiusKm];
+    let paramCount = 3;
+
+    // Add category filter
+    if (category) {
+      paramCount++;
+      query += ` AND t.category = $${paramCount}`;
+      queryParams.push(category);
+    }
+
+    // Add time slot filter
+    if (timeSlot) {
+      paramCount++;
+      query += ` AND t.time_slot = $${paramCount}`;
+      queryParams.push(timeSlot);
+    }
+
+    // Group by and order by distance
+    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude`;
+    query += ` ORDER BY distance_km ASC`;
+
+    // Add limit
+    paramCount++;
+    query += ` LIMIT $${paramCount}`;
+    queryParams.push(limitNum);
+
+    const result = await pool.query(query, queryParams);
+
+    // Format response
+    const tokis = result.rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      location: row.location,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      timeSlot: row.time_slot,
+      scheduledTime: row.scheduled_time,
+      maxAttendees: row.max_attendees,
+      currentAttendees: row.current_attendees,
+      category: row.category,
+      visibility: row.visibility,
+      imageUrl: row.image_url,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      distance: {
+        km: Math.round(row.distance_km * 10) / 10,
+        miles: Math.round((row.distance_km * 0.621371) * 10) / 10
+      },
+      host: {
+        id: row.host_id,
+        name: row.host_name,
+        avatar: row.host_avatar
+      },
+      tags: row.tags || []
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        tokis,
+        searchParams: {
+          latitude: lat,
+          longitude: lng,
+          radiusKm,
+          totalFound: tokis.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Nearby search error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to search nearby Tokis'
+    });
+  }
+});
+
+// Get a specific Toki by ID
+router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    const result = await pool.query(
+      `SELECT 
+        t.*,
+        u.name as host_name,
+        u.avatar_url as host_avatar,
+        u.bio as host_bio,
+        u.location as host_location,
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+      FROM tokis t
+      LEFT JOIN users u ON t.host_id = u.id
+      LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+      WHERE t.id = $1 AND t.status = 'active'
+      GROUP BY t.id, u.name, u.avatar_url, u.bio, u.location`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    const toki = result.rows[0];
+
+    // Get participant count
+    const participantResult = await pool.query(
+      'SELECT COUNT(*) as participant_count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
+      [id, 'approved', 'joined']
+    );
+
+    // Get participants for rating system
+    const participantsResult = await pool.query(
+      `SELECT 
+        u.id,
+        u.name,
+        u.avatar_url,
+        tp.status
+      FROM toki_participants tp
+      JOIN users u ON tp.user_id = u.id
+      WHERE tp.toki_id = $1 AND tp.status IN ($2, $3)
+      ORDER BY tp.joined_at ASC`,
+      [id, 'approved', 'joined']
+    );
+
+    // Get current user's join status
+    let joinStatus = 'not_joined';
+    if (toki.host_id !== userId) {
+      const joinResult = await pool.query(
+        'SELECT status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      
+      if (joinResult.rows.length > 0) {
+        joinStatus = joinResult.rows[0].status;
+      }
+    }
+
+    // Calculate current attendees: host (always 1) + approved/joined participants
+    const participantCount = parseInt(participantResult.rows[0].participant_count);
+    const currentAttendees = 1 + participantCount; // Host + participants
+
+    const responseData = {
+      id: toki.id,
+      title: toki.title,
+      description: toki.description,
+      location: toki.location,
+      latitude: toki.latitude,
+      longitude: toki.longitude,
+      timeSlot: toki.time_slot,
+      scheduledTime: toki.scheduled_time,
+      maxAttendees: toki.max_attendees,
+      currentAttendees: currentAttendees, // Fixed: includes host
+      category: toki.category,
+      visibility: toki.visibility,
+              imageUrl: toki.image_urls && toki.image_urls.length > 0 ? toki.image_urls[0] : toki.image_url,
+      image_urls: toki.image_urls || [],
+      image_public_ids: toki.image_public_ids || [],
+      status: toki.status,
+      createdAt: toki.created_at,
+      updatedAt: toki.updated_at,
+      host: {
+        id: toki.host_id,
+        name: toki.host_name,
+        avatar: toki.host_avatar,
+        bio: toki.host_bio,
+        location: toki.host_location
+      },
+      tags: toki.tags || [],
+      joinStatus: joinStatus,
+      participants: participantsResult.rows.map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar_url,
+        status: p.status
+      }))
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: responseData
+    });
+
+  } catch (error) {
+    console.error('Get Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve Toki'
+    });
+  }
+});
+
+// Update a Toki (only by host)
+router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      description,
+      location,
+      latitude,
+      longitude,
+      timeSlot,
+      scheduledTime,
+      maxAttendees,
+      category,
+      visibility,
+      tags
+    } = req.body;
+
+    // Check if Toki exists and user is the host
+    const existingResult = await pool.query(
+      'SELECT host_id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (existingResult.rows[0].host_id !== req.user!.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'You can only update Tokis you host'
+      });
+    }
+
+    // Validate category if provided
+    if (category) {
+      const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid category',
+          message: `Category must be one of: ${validCategories.join(', ')}`
+        });
+      }
+    }
+
+    // Validate visibility if provided
+    if (visibility) {
+      const validVisibility = ['public', 'connections', 'friends'];
+      if (!validVisibility.includes(visibility)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid visibility',
+          message: `Visibility must be one of: ${validVisibility.join(', ')}`
+        });
+      }
+    }
+
+    // Validate max attendees if provided
+    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 100)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid max attendees',
+        message: 'Max attendees must be between 1 and 100'
+      });
+    }
+
+    // Start a database transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      // Build update query dynamically
+      const updateFields: string[] = [];
+      const updateValues: any[] = [];
+      let paramCount = 0;
+
+      if (title !== undefined) {
+        paramCount++;
+        updateFields.push(`title = $${paramCount}`);
+        updateValues.push(title);
+      }
+
+      if (description !== undefined) {
+        paramCount++;
+        updateFields.push(`description = $${paramCount}`);
+        updateValues.push(description);
+      }
+
+      if (location !== undefined) {
+        paramCount++;
+        updateFields.push(`location = $${paramCount}`);
+        updateValues.push(location);
+      }
+
+      if (latitude !== undefined) {
+        paramCount++;
+        updateFields.push(`latitude = $${paramCount}`);
+        updateValues.push(latitude);
+      }
+
+      if (longitude !== undefined) {
+        paramCount++;
+        updateFields.push(`longitude = $${paramCount}`);
+        updateValues.push(longitude);
+      }
+
+      if (timeSlot !== undefined) {
+        paramCount++;
+        updateFields.push(`time_slot = $${paramCount}`);
+        updateValues.push(timeSlot);
+      }
+
+      if (scheduledTime !== undefined) {
+        paramCount++;
+        updateFields.push(`scheduled_time = $${paramCount}`);
+        updateValues.push(scheduledTime);
+      }
+
+      if (maxAttendees !== undefined) {
+        paramCount++;
+        updateFields.push(`max_attendees = $${paramCount}`);
+        updateValues.push(maxAttendees);
+      }
+
+      if (category !== undefined) {
+        paramCount++;
+        updateFields.push(`category = $${paramCount}`);
+        updateValues.push(category);
+      }
+
+      if (visibility !== undefined) {
+        paramCount++;
+        updateFields.push(`visibility = $${paramCount}`);
+        updateValues.push(visibility);
+      }
+
+      // Always update the updated_at timestamp
+      paramCount++;
+      updateFields.push(`updated_at = $${paramCount}`);
+      updateValues.push(new Date());
+
+      // Add the WHERE clause parameter
+      paramCount++;
+      updateValues.push(id);
+
+      const updateQuery = `
+        UPDATE tokis 
+        SET ${updateFields.join(', ')}
+        WHERE id = $${paramCount}
+        RETURNING *
+      `;
+
+      const updateResult = await client.query(updateQuery, updateValues);
+      const updatedToki = updateResult.rows[0];
+
+      // Update tags if provided
+      if (tags !== undefined) {
+        // Delete existing tags
+        await client.query('DELETE FROM toki_tags WHERE toki_id = $1', [id]);
+
+        // Insert new tags
+        if (Array.isArray(tags) && tags.length > 0) {
+          for (const tag of tags) {
+            await client.query(
+              'INSERT INTO toki_tags (toki_id, tag_name) VALUES ($1, $2)',
+              [id, tag]
+            );
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+
+      // Get updated Toki with host and tags
+      const finalResult = await pool.query(
+        `SELECT 
+          t.*,
+          u.name as host_name,
+          u.avatar_url as host_avatar,
+          ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+        FROM tokis t
+        LEFT JOIN users u ON t.host_id = u.id
+        LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+        WHERE t.id = $1
+        GROUP BY t.id, u.name, u.avatar_url`,
+        [id]
+      );
+
+      const responseData = {
+        ...finalResult.rows[0],
+        host: {
+          id: finalResult.rows[0].host_id,
+          name: finalResult.rows[0].host_name,
+          avatar: finalResult.rows[0].host_avatar
+        },
+        tags: finalResult.rows[0].tags || []
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: 'Toki updated successfully',
+        data: responseData
+      });
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+  } catch (error) {
+    console.error('Update Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to update Toki'
+    });
+  }
+});
+
+// Delete a Toki (only by host)
+router.delete('/:id', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if Toki exists and user is the host
+    const existingResult = await pool.query(
+      'SELECT host_id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (existingResult.rows[0].host_id !== req.user!.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'You can only delete Tokis you host'
+      });
+    }
+
+    // Soft delete by setting status to 'cancelled'
+    const result = await pool.query(
+      'UPDATE tokis SET status = $1, updated_at = $2 WHERE id = $3 RETURNING id',
+      ['cancelled', new Date(), id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Toki deleted successfully',
+      data: { id: result.rows[0].id }
+    });
+
+  } catch (error) {
+    console.error('Delete Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to delete Toki'
+    });
+  }
+});
+
+// Join a Toki
+router.post('/:id/join', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    // Check if Toki exists and is active
+    const tokiResult = await pool.query(
+      `SELECT t.*, u.name as host_name 
+       FROM tokis t 
+       JOIN users u ON t.host_id = u.id 
+       WHERE t.id = $1 AND t.status = $2`,
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist or is not active'
+      });
+    }
+
+    const toki = tokiResult.rows[0];
+
+    // Check if user is trying to join their own Toki
+    if (toki.host_id === userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot join own Toki',
+        message: 'You cannot join a Toki that you are hosting'
+      });
+    }
+
+    // Check if user has already joined or requested to join
+    const existingJoinResult = await pool.query(
+      'SELECT * FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (existingJoinResult.rows.length > 0) {
+      const existingJoin = existingJoinResult.rows[0];
+      
+      if (existingJoin.status === 'joined') {
+        return res.status(400).json({
+          success: false,
+          error: 'Already joined',
+          message: 'You have already joined this Toki'
+        });
+      } else if (existingJoin.status === 'pending') {
+        return res.status(400).json({
+          success: false,
+          error: 'Request pending',
+          message: 'You have already requested to join this Toki'
+        });
+      }
+    }
+
+    // Check if Toki is full
+    const currentAttendeesResult = await pool.query(
+      'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
+      [id, 'approved', 'joined']
+    );
+    
+    const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count); // Host (1) + participants
+    
+    if (currentAttendees >= toki.max_attendees) {
+      return res.status(400).json({
+        success: false,
+        error: 'Toki is full',
+        message: 'This Toki has reached its maximum number of attendees'
+      });
+    }
+
+    // Insert join request
+    const joinResult = await pool.query(
+      'INSERT INTO toki_participants (toki_id, user_id, status, joined_at) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id, userId, 'pending', new Date()]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Join request sent successfully',
+      data: {
+        id: joinResult.rows[0].id,
+        tokiId: id,
+        status: 'pending',
+        createdAt: joinResult.rows[0].joined_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Join Toki error:', error);
+    
+    // Check if it's a table doesn't exist error
+    if (error instanceof Error && error.message && error.message.includes('relation "toki_participants" does not exist')) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database setup required',
+        message: 'The database tables need to be initialized. Please run the database setup script.'
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to join Toki'
+    });
+  }
+});
+
+// Approve join request (only by host)
+router.put('/:id/join/:requestId/approve', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id, requestId } = req.params;
+    const hostId = (req as any).user.id;
+
+    // Check if Toki exists and user is the host
+    const tokiResult = await pool.query(
+      'SELECT host_id, max_attendees FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (tokiResult.rows[0].host_id !== hostId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only the host can approve join requests'
+      });
+    }
+
+    // Check if join request exists and is pending
+    const requestResult = await pool.query(
+      'SELECT * FROM toki_participants WHERE id = $1 AND toki_id = $2 AND status = $3',
+      [requestId, id, 'pending']
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Join request not found',
+        message: 'The specified join request does not exist or is not pending'
+      });
+    }
+
+    // Check if Toki is full
+    const currentAttendeesResult = await pool.query(
+      'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
+      [id, 'approved', 'joined']
+    );
+    
+    const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count);
+    const maxAttendees = tokiResult.rows[0].max_attendees;
+    
+    if (currentAttendees >= maxAttendees) {
+      return res.status(400).json({
+        success: false,
+        error: 'Toki is full',
+        message: 'This Toki has reached its maximum number of attendees'
+      });
+    }
+
+    // Approve the join request
+    const updateResult = await pool.query(
+      'UPDATE toki_participants SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      ['approved', new Date(), requestId]
+    );
+
+    // Get user info for notification
+    const userResult = await pool.query(
+      'SELECT u.name as user_name, t.title as toki_title FROM toki_participants tp JOIN users u ON tp.user_id = u.id JOIN tokis t ON tp.toki_id = t.id WHERE tp.id = $1',
+      [requestId]
+    );
+
+    if (userResult.rows.length > 0) {
+      const { user_name, toki_title } = userResult.rows[0];
+      console.log(`✅ Notifying user ${user_name} that their join request for "${toki_title}" was approved`);
+      // TODO: Send push notification or in-app notification to the user
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Join request approved successfully',
+      data: {
+        id: updateResult.rows[0].id,
+        tokiId: id,
+        status: 'approved',
+        updatedAt: updateResult.rows[0].updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Approve join request error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to approve join request'
+    });
+  }
+});
+
+// Decline join request (only by host)
+router.put('/:id/join/:requestId/decline', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id, requestId } = req.params;
+    const hostId = (req as any).user.id;
+
+    // Check if Toki exists and user is the host
+    const tokiResult = await pool.query(
+      'SELECT host_id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (tokiResult.rows[0].host_id !== hostId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only the host can decline join requests'
+      });
+    }
+
+    // Check if join request exists and is pending
+    const requestResult = await pool.query(
+      'SELECT * FROM toki_participants WHERE id = $1 AND toki_id = $2 AND status = $3',
+      [requestId, id, 'pending']
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Join request not found',
+        message: 'The specified join request does not exist or is not pending'
+      });
+    }
+
+    // Decline the join request
+    const updateResult = await pool.query(
+      'UPDATE toki_participants SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      ['declined', new Date(), requestId]
+    );
+
+    // Get user info for notification
+    const userResult = await pool.query(
+      'SELECT u.name as user_name, t.title as toki_title FROM toki_participants tp JOIN users u ON tp.user_id = u.id JOIN tokis t ON tp.toki_id = t.id WHERE tp.id = $1',
+      [requestId]
+    );
+
+    if (userResult.rows.length > 0) {
+      const { user_name, toki_title } = userResult.rows[0];
+      console.log(`❌ Notifying user ${user_name} that their join request for "${toki_title}" was declined`);
+      // TODO: Send push notification or in-app notification to the user
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Join request declined successfully',
+      data: {
+        id: updateResult.rows[0].id,
+        tokiId: id,
+        status: 'declined',
+        updatedAt: updateResult.rows[0].updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Decline join request error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to decline join request'
+    });
+  }
+});
+
+// Get pending join requests for a Toki (only by host)
+router.get('/:id/join-requests', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const hostId = (req as any).user.id;
+
+    // Check if Toki exists and user is the host
+    const tokiResult = await pool.query(
+      'SELECT host_id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (tokiResult.rows[0].host_id !== hostId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only the host can view join requests'
+      });
+    }
+
+    // Get pending join requests with user details
+    const requestsResult = await pool.query(
+      `SELECT 
+        tp.id,
+        tp.status,
+        tp.joined_at,
+        tp.updated_at,
+        u.id as user_id,
+        u.name as user_name,
+        u.avatar_url as user_avatar,
+        u.bio as user_bio
+      FROM toki_participants tp
+      JOIN users u ON tp.user_id = u.id
+      WHERE tp.toki_id = $1 AND tp.status = $2
+      ORDER BY tp.joined_at DESC`,
+      [id, 'pending']
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        requests: requestsResult.rows.map(row => ({
+          id: row.id,
+          status: row.status,
+          joinedAt: row.joined_at,
+          updatedAt: row.updated_at,
+          user: {
+            id: row.user_id,
+            name: row.user_name,
+            avatar: row.user_avatar,
+            bio: row.user_bio
+          }
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Get join requests error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve join requests'
+    });
+  }
+});
+
+// Complete a Toki (only by host)
+router.put('/:id/complete', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const hostId = (req as any).user.id;
+
+    // Check if Toki exists and user is the host
+    const tokiResult = await pool.query(
+      'SELECT host_id, status FROM tokis WHERE id = $1',
+      [id]
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (tokiResult.rows[0].host_id !== hostId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only the host can complete the Toki'
+      });
+    }
+
+    if (tokiResult.rows[0].status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Already completed',
+        message: 'This Toki is already marked as completed'
+      });
+    }
+
+    // Update Toki status to completed
+    const result = await pool.query(
+      'UPDATE tokis SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      ['completed', new Date(), id]
+    );
+
+    // Update all participants' join status to completed
+    await pool.query(
+      'UPDATE toki_participants SET status = $1, updated_at = $2 WHERE toki_id = $3',
+      ['completed', new Date(), id]
+    );
+
+    console.log(`✅ Toki ${id} completed by host ${hostId}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Toki completed successfully',
+      data: {
+        id: result.rows[0].id,
+        status: result.rows[0].status,
+        updatedAt: result.rows[0].updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error('Complete Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to complete Toki'
+    });
+  }
+});
+
+// Upload image for a Toki (only by host)
+router.post('/:id/image', authenticateToken, uploadSingleImage, handleUploadError, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image provided',
+        message: 'Please provide an image file'
+      });
+    }
+
+    // Check if Toki exists and user is the host
+    const existingResult = await pool.query(
+      'SELECT host_id, image_url FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    if (existingResult.rows[0].host_id !== req.user!.id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'You can only upload images for Tokis you host'
+      });
+    }
+
+    // Generate the image URL
+    const imageUrl = `/uploads/${req.file.filename}`;
+
+    // Update the Toki with the new image URL
+    const result = await pool.query(
+      'UPDATE tokis SET image_url = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+      [imageUrl, new Date(), id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: {
+        id: result.rows[0].id,
+        imageUrl: result.rows[0].image_url
+      }
+    });
+
+  } catch (error) {
+    console.error('Upload image error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to upload image'
+    });
+  }
+});
+
+export default router; 
