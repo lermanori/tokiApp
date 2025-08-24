@@ -51,8 +51,19 @@ app.use(helmet({
 // CORS configuration
 app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:8082'];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    const allowedOrigins = [
+      'http://localhost:3000', 
+      'http://localhost:8081', 
+      'http://localhost:8082',
+      'https://tokiapp.netlify.app',
+      'https://*.netlify.app'
+    ];
+    if (!origin || allowedOrigins.some(allowed => {
+      if (allowed.includes('*')) {
+        return origin.includes(allowed.replace('*', ''));
+      }
+      return origin === allowed;
+    })) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
