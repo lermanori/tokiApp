@@ -14,7 +14,8 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "basePath": "/tokiApp"
     },
     "plugins": ["expo-router", "expo-font", "expo-web-browser"],
     "experiments": {

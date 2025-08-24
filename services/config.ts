@@ -1,5 +1,20 @@
+import { getCurrentDeploymentConfig } from './deployment-config';
+
 // Configuration for the Toki app
 export const config = {
+  // Frontend configuration
+  frontend: {
+    // Base path for routing - empty for custom domain, '/tokiApp' for GitHub Pages
+    basePath: __DEV__ 
+      ? ''  // Local development - no base path
+      : getCurrentDeploymentConfig().basePath,  // Production - from deployment config
+    
+    // Full frontend URL - for absolute URLs and redirects
+    baseUrl: __DEV__ 
+      ? 'http://localhost:8081'  // Local development
+      : getCurrentDeploymentConfig().baseUrl,  // Production - from deployment config
+  },
+  
   // Backend API configuration
   backend: {
     // For development on mobile device, use your computer's IP address
@@ -49,4 +64,14 @@ export const getWebSocketUrl = () => {
     return config.backend.websocket.url;
   }
   return config.backend.websocket.url;
+};
+
+// Helper function to get the frontend base path for routing
+export const getFrontendBasePath = () => {
+  return config.frontend.basePath;
+};
+
+// Helper function to get the full frontend URL
+export const getFrontendUrl = () => {
+  return config.frontend.baseUrl;
 };
