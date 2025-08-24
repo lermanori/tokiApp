@@ -6,13 +6,13 @@ export const config = {
     // You can find this by running 'ipconfig' on Windows or 'ifconfig' on Mac/Linux
     baseUrl: __DEV__ 
       ? 'http://localhost:3002'  // Local development
-      : 'https://your-production-domain.com',
+      : 'https://backend-production-d8ec.up.railway.app/',
     
     // WebSocket configuration
     websocket: {
       url: __DEV__ 
         ? 'http://localhost:3002'  // Local development
-        : 'wss://your-production-domain.com',
+        : 'wss://backend-production-d8ec.up.railway.app',
       options: {
         transports: ['websocket', 'polling'],
         reconnection: true,
