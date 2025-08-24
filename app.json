@@ -18,8 +18,7 @@
     },
     "plugins": ["expo-router", "expo-font", "expo-web-browser"],
     "experiments": {
-      "typedRoutes": true,
-      "baseUrl": "/tokiApp"
+      "typedRoutes": true
     },
     "extra": {
       "EXPO_PUBLIC_API_URL": "http://localhost:3001"

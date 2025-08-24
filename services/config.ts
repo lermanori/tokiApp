@@ -21,7 +21,7 @@ export const config = {
     // You can find this by running 'ipconfig' on Windows or 'ifconfig' on Mac/Linux
     baseUrl: __DEV__ 
       ? 'http://localhost:3002'  // Local development
-      : 'https://backend-production-d8ec.up.railway.app/',
+      : 'https://backend-production-d8ec.up.railway.app',  // No trailing slash
     
     // WebSocket configuration
     websocket: {
