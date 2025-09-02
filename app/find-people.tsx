@@ -232,8 +232,11 @@ export default function FindPeopleScreen() {
   };
 
   const handleUserPress = (user: User) => {
-    // Navigate to user profile (if we had one)
-    Alert.alert('User Profile', `Viewing ${user.name}'s profile`);
+    // Navigate to user profile
+    router.push({
+      pathname: '/user-profile/[userId]',
+      params: { userId: user.id }
+    });
   };
 
   return (
@@ -341,22 +344,17 @@ export default function FindPeopleScreen() {
                 style={styles.chatButton}
                 onPress={async () => {
                   try {
-                    const conversationId = await actions.startConversation(user.id);
-                    if (conversationId) {
-                      router.push({
-                        pathname: '/chat',
-                        params: { 
-                          conversationId: conversationId,
-                          otherUserName: user.name,
-                          isGroup: 'false'
-                        }
-                      });
-                    } else {
-                      Alert.alert('Error', 'Failed to start conversation. Please try again.');
-                    }
+                    router.push({
+                      pathname: '/chat',
+                      params: { 
+                        otherUserId: user.id,
+                        otherUserName: user.name,
+                        isGroup: 'false'
+                      }
+                    });
                   } catch (error) {
-                    console.error('Error starting conversation:', error);
-                    Alert.alert('Error', 'Failed to start conversation. Please try again.');
+                    console.error('Error opening chat:', error);
+                    Alert.alert('Error', 'Failed to open chat. Please try again.');
                   }
                 }}
               >

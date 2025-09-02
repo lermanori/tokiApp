@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
 import { MapPin, Clock, Users, Tag, Camera, X, Navigation, Calendar } from 'lucide-react-native';
 import { useApp } from '@/contexts/AppContext';
@@ -17,6 +18,24 @@ import TokiImageUpload from './TokiImageUpload';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { getBackendUrl } from '@/services/config';
 import { apiService } from '@/services/api';
+import DateTimePicker from 'react-native-ui-datepicker';
+import RNDateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+// Web-only analog time picker
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import TimePicker from 'react-time-picker';
+// iOS-like wheel picker for web
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import Picker from 'react-mobile-picker';
+// Load styles for web analog clock
+if (Platform.OS === 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('react-time-picker/dist/TimePicker.css');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('react-clock/dist/Clock.css');
+}
+import dayjs from 'dayjs';
 
 interface TokiFormProps {
   mode: 'create' | 'edit';
@@ -28,6 +47,7 @@ interface TokiFormProps {
     latitude?: number | null;
     longitude?: number | null;
     activity?: string;
+    activities?: string[]; // Add support for multiple activities
     time?: string;
     maxAttendees?: number;
     tags?: string[];
@@ -57,7 +77,9 @@ export default function TokiForm({
   const [location, setLocation] = useState(initialData.location || '');
   const [latitude, setLatitude] = useState<number | null>(initialData.latitude || null);
   const [longitude, setLongitude] = useState<number | null>(initialData.longitude || null);
-  const [selectedActivity, setSelectedActivity] = useState<string | null>(initialData.activity || null);
+  const [selectedActivities, setSelectedActivities] = useState<string[]>(
+    initialData.activities || (initialData.activity ? [initialData.activity] : [])
+  );
   const [selectedTime, setSelectedTime] = useState<string | null>(initialData.time || null);
   const [maxAttendees, setMaxAttendees] = useState(initialData.maxAttendees?.toString() || '10');
   const [customTags, setCustomTags] = useState<string[]>(initialData.tags || []);
@@ -66,6 +88,9 @@ export default function TokiForm({
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [customDateTime, setCustomDateTime] = useState<string>('');
   const [tokiImages, setTokiImages] = useState<Array<{ url: string; publicId: string }>>(initialData.images || []);
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+  const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
+  const [webTimeTemp, setWebTimeTemp] = useState<string>('');
 
   // Update tokiImages when initialData.images changes
   useEffect(() => {
@@ -167,6 +192,13 @@ export default function TokiForm({
     }
   }, [mode, initialData.customDateTime]);
 
+  // Ensure that any manual date/time change marks the selection as custom
+  useEffect(() => {
+    if (customDateTime) {
+      setSelectedTime('custom');
+    }
+  }, [customDateTime]);
+
   // Update form state when initialData changes (for edit mode)
   useEffect(() => {
     if (mode === 'edit' && initialData) {
@@ -177,7 +209,11 @@ export default function TokiForm({
       if (initialData.location) setLocation(initialData.location);
       if (initialData.latitude !== undefined) setLatitude(initialData.latitude);
       if (initialData.longitude !== undefined) setLongitude(initialData.longitude);
-      if (initialData.activity) setSelectedActivity(initialData.activity);
+      if (initialData.activities) {
+        setSelectedActivities(initialData.activities);
+      } else if (initialData.activity) {
+        setSelectedActivities([initialData.activity]);
+      }
       if (initialData.time) setSelectedTime(initialData.time);
       if (initialData.maxAttendees) setMaxAttendees(initialData.maxAttendees.toString());
       if (initialData.tags) setCustomTags(initialData.tags);
@@ -199,7 +235,7 @@ export default function TokiForm({
           location,
           latitude,
           longitude,
-          selectedActivity,
+          selectedActivities,
           selectedTime,
           maxAttendees,
           customTags,
@@ -372,6 +408,20 @@ export default function TokiForm({
     setCustomTags(customTags.filter(tag => tag !== tagToRemove));
   };
 
+  // Function to handle activity selection (multiple selection up to 3)
+  const handleActivitySelect = (activityId: string) => {
+    if (selectedActivities.includes(activityId)) {
+      // Remove activity if already selected
+      setSelectedActivities(selectedActivities.filter(id => id !== activityId));
+    } else if (selectedActivities.length < 3) {
+      // Add activity if less than 3 selected
+      setSelectedActivities([...selectedActivities, activityId]);
+    } else {
+      // Show alert if trying to select more than 3
+      Alert.alert('Maximum Reached', 'You can select up to 3 activity types.');
+    }
+  };
+
   // Function to handle location input change
   const handleLocationChange = async (newLocation: string) => {
     setLocation(newLocation);
@@ -416,8 +466,8 @@ export default function TokiForm({
 
 
   const handleSubmit = async () => {
-    if (!title || !selectedActivity || !location || !selectedTime) {
-      Alert.alert('Missing Information', 'Please fill in all required fields (title, activity type, location, and time).');
+    if (!title || selectedActivities.length === 0 || !location || !selectedTime) {
+      Alert.alert('Missing Information', 'Please fill in all required fields (title, at least one activity type, location, and time).');
       return;
     }
 
@@ -440,12 +490,13 @@ export default function TokiForm({
         location,
         latitude: latitude || null,
         longitude: longitude || null,
-        activity: selectedActivity,
+        activity: selectedActivities[0], // Primary activity (first selected)
+        activities: selectedActivities, // All selected activities
         time: selectedTime,
         customDateTime: selectedTime === 'custom' ? customDateTime : null,
         maxAttendees: parseInt(maxAttendees) || 10,
-        tags: [selectedActivity, ...customTags],
-        category: selectedActivity,
+        tags: [...selectedActivities, ...customTags],
+        category: selectedActivities[0], // Primary category
         images: [], // No images initially
       };
 
@@ -481,12 +532,13 @@ export default function TokiForm({
         location,
         latitude: latitude || null,
         longitude: longitude || null,
-        activity: selectedActivity,
+        activity: selectedActivities[0], // Primary activity (first selected)
+        activities: selectedActivities, // All selected activities
         time: selectedTime,
         customDateTime: selectedTime === 'custom' ? customDateTime : null,
         maxAttendees: parseInt(maxAttendees) || 10,
-        tags: [selectedActivity, ...customTags],
-        category: selectedActivity,
+        tags: [...selectedActivities, ...customTags],
+        category: selectedActivities[0], // Primary category
         images: [], // No images
       };
 
@@ -570,20 +622,26 @@ export default function TokiForm({
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Activity Type *</Text>
+          <Text style={styles.activityHint}>
+            Select up to 3 activity types ({selectedActivities.length}/3 selected)
+          </Text>
           <View style={styles.activityGrid}>
             {activityTypes.map((activity) => (
               <TouchableOpacity
                 key={activity.id}
                 style={[
                   styles.activityButton,
-                  selectedActivity === activity.id && styles.activityButtonSelected
+                  selectedActivities.includes(activity.id) && styles.activityButtonSelected,
+                  selectedActivities.length >= 3 && !selectedActivities.includes(activity.id) && styles.activityButtonDisabled
                 ]}
-                onPress={() => setSelectedActivity(activity.id)}
+                onPress={() => handleActivitySelect(activity.id)}
+                disabled={selectedActivities.length >= 3 && !selectedActivities.includes(activity.id)}
               >
                 <Text style={styles.activityIcon}>{activity.icon}</Text>
                 <Text style={[
                   styles.activityLabel,
-                  selectedActivity === activity.id && styles.activityLabelSelected
+                  selectedActivities.includes(activity.id) && styles.activityLabelSelected,
+                  selectedActivities.length >= 3 && !selectedActivities.includes(activity.id) && styles.activityLabelDisabled
                 ]}>
                   {activity.label}
                 </Text>
@@ -629,36 +687,19 @@ export default function TokiForm({
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>When? *</Text>
-          <View style={styles.timeSlots}>
-            {timeSlots.map((time) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.timeSlot,
-                  selectedTime === time && styles.timeSlotSelected
-                ]}
-                onPress={() => handleTimeSlotSelect(time)}
-              >
-                <Text style={[
-                  styles.timeSlotText,
-                  selectedTime === time && styles.timeSlotTextSelected
-                ]}>
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
+
+
           {/* Custom Date & Time Input */}
           <View style={styles.customDateTimeContainer}>
-            <Text style={styles.customDateTimeLabel}>Or set custom date & time:</Text>
             
             {/* Date and Time in a row */}
             <View style={styles.dateTimeRow}>
               {/* Date Input */}
               <View style={styles.dateTimeInputGroup}>
                 <Text style={styles.dateTimeLabel}>Date:</Text>
+
                 <View style={styles.dateTimeInputContainer}>
+                  
                   <TextInput
                     style={styles.dateTimeInput}
                     value={customDateTime ? customDateTime.split(' ')[0] : ''}
@@ -671,16 +712,7 @@ export default function TokiForm({
                   />
                   <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={() => {
-                      // Simple date picker - set to tomorrow
-                      const today = new Date();
-                      const tomorrow = new Date(today);
-                      tomorrow.setDate(tomorrow.getDate() + 1);
-                      
-                      const customDate = tomorrow.toISOString().split('T')[0];
-                      const currentTime = customDateTime ? customDateTime.split(' ')[1] : '14:00';
-                      setCustomDateTime(`${customDate} ${currentTime}`);
-                    }}
+                    onPress={() => setIsDatePickerVisible(true)}
                   >
                     <Calendar size={16} color="#B49AFF" />
                   </TouchableOpacity>
@@ -703,25 +735,7 @@ export default function TokiForm({
                   />
                   <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={() => {
-                      // Show time options dropdown
-                      const timeOptions = [
-                        '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', 
-                        '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-                      ];
-                      
-                      Alert.alert(
-                        'Select Time',
-                        'Choose a time:',
-                        timeOptions.map(time => ({
-                          text: time,
-                          onPress: () => {
-                            const currentDate = customDateTime ? customDateTime.split(' ')[0] : new Date().toISOString().split('T')[0];
-                            setCustomDateTime(`${currentDate} ${time}`);
-                          }
-                        }))
-                      );
-                    }}
+                    onPress={() => setIsTimePickerVisible(true)}
                   >
                     <Clock size={16} color="#B49AFF" />
                   </TouchableOpacity>
@@ -730,6 +744,132 @@ export default function TokiForm({
             </View>
           </View>
         </View>
+
+        {/* Date Picker Modal */}
+        <Modal
+          transparent
+          visible={isDatePickerVisible}
+          animationType="fade"
+          onRequestClose={() => setIsDatePickerVisible(false)}
+        >
+          <View style={styles.pickerBackdrop}>
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                mode="single"
+                date={customDateTime ? dayjs(customDateTime.split(' ')[0]).toDate() : new Date()}
+                styles={{
+                  today: { borderColor: '#8B5CF6', borderWidth: 1 },
+                  selected: { backgroundColor: '#B49AFF' },
+                  selected_label: { color: '#FFFFFF' },
+                }}
+                onChange={(params: any) => {
+                  try {
+                    const pickedDate: Date = params.date;
+                    const dateStr = dayjs(pickedDate).format('YYYY-MM-DD');
+                    const currentTime = customDateTime ? customDateTime.split(' ')[1] : '14:00';
+                    setCustomDateTime(`${dateStr} ${currentTime}`);
+                  } catch {}
+                }}
+              />
+              <TouchableOpacity style={styles.pickerCloseButton} onPress={() => setIsDatePickerVisible(false)}>
+                <Text style={styles.pickerCloseText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Time Picker Modal using @react-native-community/datetimepicker */}
+        {isTimePickerVisible && (
+          <Modal
+            transparent
+            visible={isTimePickerVisible}
+            animationType="fade"
+            onRequestClose={() => setIsTimePickerVisible(false)}
+          >
+            <View style={styles.pickerBackdrop}>
+              <View style={styles.pickerContainer}>
+                {Platform.OS === 'web' ? (
+                  <View>
+                    <Text style={[styles.dateTimeLabel, { marginBottom: 8 }]}>Select time</Text>
+                    {(() => {
+                      const current = (webTimeTemp || (customDateTime ? customDateTime.split(' ')[1] : '14:00')).split(':');
+                      const hour = current[0];
+                      const minute = current[1];
+                      const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+                      const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                      return (
+                        <Picker
+                          value={{ hour, minute }}
+                          onChange={(val: any) => {
+                            const h = val.hour ?? hour;
+                            const m = val.minute ?? minute;
+                            setWebTimeTemp(`${h}:${m}`);
+                          }}
+                        >
+                          <Picker.Column name="hour">
+                            {hours.map(h => (
+                              <Picker.Item key={h} value={h}>
+                                {h}
+                              </Picker.Item>
+                            ))}
+                          </Picker.Column>
+                          <Picker.Column name="minute">
+                            {minutes.map(m => (
+                              <Picker.Item key={m} value={m}>
+                                {m}
+                              </Picker.Item>
+                            ))}
+                          </Picker.Column>
+                        </Picker>
+                      );
+                    })()}
+                    <TouchableOpacity
+                      style={[styles.pickerCloseButton, { marginTop: 12 }]}
+                      onPress={() => {
+                        const timeStr = webTimeTemp || (customDateTime ? customDateTime.split(' ')[1] : '14:00');
+                        const currentDate = customDateTime ? customDateTime.split(' ')[0] : dayjs().format('YYYY-MM-DD');
+                        setCustomDateTime(`${currentDate} ${timeStr}`);
+                        setIsTimePickerVisible(false);
+                        setWebTimeTemp('');
+                      }}
+                    >
+                      <Text style={styles.pickerCloseText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <RNDateTimePicker
+                      mode="time"
+                      value={customDateTime ? dayjs(customDateTime.replace(' ', 'T')).toDate() : new Date()}
+                      display={Platform.OS === 'android' ? 'clock' : 'spinner'}
+                      onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
+                        if (Platform.OS === 'android') {
+                          if (event.type === 'set' && selectedDate) {
+                            const timeStr = dayjs(selectedDate).format('HH:mm');
+                            const currentDate = customDateTime ? customDateTime.split(' ')[0] : dayjs().format('YYYY-MM-DD');
+                            setCustomDateTime(`${currentDate} ${timeStr}`);
+                          }
+                          setIsTimePickerVisible(false);
+                        } else {
+                          if (selectedDate) {
+                            const timeStr = dayjs(selectedDate).format('HH:mm');
+                            const currentDate = customDateTime ? customDateTime.split(' ')[0] : dayjs().format('YYYY-MM-DD');
+                            setCustomDateTime(`${currentDate} ${timeStr}`);
+                          }
+                        }
+                      }}
+                    />
+                    {Platform.OS !== 'android' && (
+                      <TouchableOpacity style={styles.pickerCloseButton} onPress={() => setIsTimePickerVisible(false)}>
+                        <Text style={styles.pickerCloseText}>Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Max Attendees</Text>
@@ -884,6 +1024,20 @@ const styles = StyleSheet.create({
   activityLabelSelected: {
     color: '#FFFFFF',
   },
+  activityLabelDisabled: {
+    color: '#D1D5DB',
+  },
+  activityButtonDisabled: {
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
+    opacity: 0.5,
+  },
+  activityHint: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginBottom: 12,
+  },
   locationInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -973,6 +1127,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#666666',
     marginBottom: 8,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    width: '100%',
+    maxWidth: 420,
+  },
+  pickerCloseButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    backgroundColor: '#B49AFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  pickerCloseText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
   },
   dateTimeRow: {
     flexDirection: 'row',

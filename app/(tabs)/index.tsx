@@ -421,7 +421,14 @@ export default function ExploreScreen() {
                 onPress={() => handleTokiPress(toki)}
                 onHostPress={() => {
                   if (toki.host.id && toki.host.id !== state.currentUser?.id) {
-                    actions.startConversation(toki.host.id);
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        otherUserId: toki.host.id,
+                        otherUserName: toki.host.name,
+                        isGroup: 'false'
+                      }
+                    });
                   }
                 }}
               />

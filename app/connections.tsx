@@ -273,6 +273,10 @@ export default function ConnectionsScreen() {
 
   const handleConnectionPress = (user: UnifiedUser) => {
     console.log('View profile:', user.name);
+    router.push({
+      pathname: '/user-profile/[userId]',
+      params: { userId: user.id }
+    });
   };
 
   const handleAvatarPress = (user: UnifiedUser) => {
@@ -285,23 +289,17 @@ export default function ConnectionsScreen() {
 
   const handleMessagePress = async (user: UnifiedUser) => {
     try {
-      const conversationId = await actions.startConversation(user.id);
-      
-      if (conversationId) {
-        router.push({
-          pathname: '/chat',
-          params: { 
-            conversationId: conversationId,
-            otherUserName: user.name,
-            isGroup: 'false'
-          }
-        });
-      } else {
-        Alert.alert('Error', 'Failed to start conversation. Please try again.');
-      }
+      router.push({
+        pathname: '/chat',
+        params: { 
+          otherUserId: user.id,
+          otherUserName: user.name,
+          isGroup: 'false'
+        }
+      });
     } catch (error) {
-      console.error('Error starting conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      console.error('Error opening chat:', error);
+      Alert.alert('Error', 'Failed to open chat. Please try again.');
     }
   };
 

@@ -55,6 +55,10 @@
 | **M023** | Privacy & Access Control System | Implement private Tokis, participant visibility, and messaging restrictions | ⏳ | 🔴 | 3-4 days | User system, connection API | Critical for user privacy and security |
 | **M024** | Mobile Map Integration | Add React Native supported map for location-based features and Toki discovery | ⏳ | 🟡 | 5-6 days | Map service integration, location API | Enhanced user experience and location discovery |
 | **M025** | Frontend Railway Deployment | Deploy React Native/Expo web app to Railway static hosting | ✅ | 🟡 | 2-3 days | Frontend build system | ✅ **COMPLETED** - Railway config, deployment guide, build script ready |
+| **M026** | Messages Page Filtering | Only show group chats that user is part of and are not empty on messages page | ⏳ | 🟡 | 2-3 days | Messages API, chat filtering | Improves user experience by showing relevant chats only |
+| **M028** | Public Profile Page Backend | Add missing backend endpoint for getting user profiles by ID | ✅ | 🔴 | 0.5 days | Backend API, user profiles | ✅ **COMPLETED** - Added GET /api/auth/users/:userId endpoint with full profile data |
+| **M027** | Messages Page Search Fix | Fix search functionality in messages page to properly filter chats by name/content | ✅ | 🟡 | 1-2 days | Messages API, search implementation | ✅ **COMPLETED** - Beautiful search UI with real-time filtering, highlighting, and comprehensive error handling |
+| **M029** | Chat Profile Navigation Fix | Fix chat screen navigation to user profile - use other_user_id instead of conversationId | ✅ | 🟡 | 0.5 days | Chat navigation, user profiles | ✅ **COMPLETED** - Fixed navigation from chat header to user profiles, resolves "Profile Not Found" errors |
 
 ---
 
@@ -144,23 +148,23 @@
 
 ## 📊 **PROGRESS SUMMARY**
 
-### **✅ COMPLETED TASKS (23/49)**
-- **High Priority**: 3/5 (60%)
-- **Medium Priority**: 16/25 (64%)
+### **✅ COMPLETED TASKS (26/53)**
+- **High Priority**: 4/6 (67%)
+- **Medium Priority**: 18/28 (64%)
 - **Low Priority**: 0/8 (0%)
 - **Bug Fixes**: 1/5 (20%)
 - **Testing**: 0/5 (0%)
 - **Deployment**: 2/5 (40%)
 - **Documentation**: 0/5 (0%)
 
-### **🔄 IN PROGRESS (3/49)**
+### **🔄 IN PROGRESS (3/51)**
 - **H003**: Frontend Testing Completion
 - **T002**: Integration Testing  
 - **T005**: Cross-platform Testing
 - **DOC002**: API Documentation
 
-### **⏳ PENDING (26/49)**
-- **High Priority**: 3 tasks
+### **⏳ PENDING (27/53)**
+- **High Priority**: 2 tasks
 - **Medium Priority**: 10 tasks
 - **Low Priority**: 8 tasks
 - **Bug Fixes**: 4 tasks

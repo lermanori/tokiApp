@@ -909,9 +909,24 @@ export default function TokiDetailsScreen() {
                       </View>
                     )}
                     <View style={styles.participantInfo}>
-                      <Text style={styles.participantName}>
-                        {participant.name || `Participant ${index + 1}`}
-                      </Text>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          if (participant.id !== state.currentUser?.id) {
+                            router.push({
+                              pathname: '/user-profile/[userId]',
+                              params: { userId: participant.id }
+                            });
+                          }
+                        }}
+                        disabled={participant.id === state.currentUser?.id}
+                      >
+                        <Text style={[
+                          styles.participantName,
+                          participant.id !== state.currentUser?.id && { textDecorationLine: 'underline' }
+                        ]}>
+                          {participant.name || `Participant ${index + 1}`}
+                        </Text>
+                      </TouchableOpacity>
                       <Text style={styles.participantStatus}>
                         {participant.id === toki.host?.id ? 'Host' : 'Attendee'}
                       </Text>
@@ -950,9 +965,24 @@ export default function TokiDetailsScreen() {
                 </View>
               )}
               <View style={styles.hostDetails}>
-                <Text style={styles.hostName}>
-                  {toki.isHostedByUser ? 'You' : toki.host.name}
-                </Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    if (!toki.isHostedByUser) {
+                      router.push({
+                        pathname: '/user-profile/[userId]',
+                        params: { userId: toki.host.id }
+                      });
+                    }
+                  }}
+                  disabled={toki.isHostedByUser}
+                >
+                  <Text style={[
+                    styles.hostName,
+                    !toki.isHostedByUser && { textDecorationLine: 'underline' }
+                  ]}>
+                    {toki.isHostedByUser ? 'You' : toki.host.name}
+                  </Text>
+                </TouchableOpacity>
                 {toki.host.bio && (
                   <Text style={styles.hostBio}>{toki.host.bio}</Text>
                 )}
@@ -967,25 +997,20 @@ export default function TokiDetailsScreen() {
                       // Get the host ID from the Toki data
                       const hostId = toki.host.id || toki.hostId;
                       if (hostId) {
-                        const conversationId = await actions.startConversation(hostId);
-                        if (conversationId) {
-                          router.push({
-                            pathname: '/chat',
-                            params: { 
-                              conversationId: conversationId,
-                              otherUserName: toki.host.name,
-                              isGroup: 'false'
-                            }
-                          });
-                        } else {
-                          Alert.alert('Error', 'Failed to start conversation with host. Please try again.');
-                        }
+                        router.push({
+                          pathname: '/chat',
+                          params: { 
+                            otherUserId: hostId,
+                            otherUserName: toki.host.name,
+                            isGroup: 'false'
+                          }
+                        });
                       } else {
                         Alert.alert('Error', 'Unable to identify host for chat.');
                       }
                     } catch (error) {
                       console.error('Error starting conversation with host:', error);
-                      Alert.alert('Error', 'Failed to start conversation with host. Please try again.');
+                      Alert.alert('Error', 'Failed to open chat with host. Please try again.');
                     }
                   }}
                 >

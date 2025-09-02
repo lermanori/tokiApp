@@ -12,7 +12,7 @@ router.get('/conversations', authenticateToken, async (req: Request, res: Respon
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
     const offset = (pageNum - 1) * limitNum;
 
-    // Get conversations where user is either user1 or user2
+    // Get conversations where user is either user1 or user2 AND has at least one message
     const result = await pool.query(
       `SELECT 
         c.id,
@@ -59,7 +59,10 @@ router.get('/conversations', authenticateToken, async (req: Request, res: Respon
       JOIN users u1 ON c.user1_id = u1.id
       JOIN users u2 ON c.user2_id = u2.id
       LEFT JOIN conversation_read_state crs ON c.id = crs.conversation_id AND crs.user_id = $1
-      WHERE c.user1_id = $1 OR c.user2_id = $1
+      WHERE (c.user1_id = $1 OR c.user2_id = $1)
+        AND EXISTS (
+          SELECT 1 FROM messages m WHERE m.conversation_id = c.id
+        )
       ORDER BY COALESCE((
         SELECT m.created_at 
         FROM messages m 
@@ -71,11 +74,14 @@ router.get('/conversations', authenticateToken, async (req: Request, res: Respon
       [req.user!.id, limitNum, offset]
     );
 
-    // Get total count for pagination
+    // Get total count for pagination (only conversations with messages)
     const countResult = await pool.query(
       `SELECT COUNT(*) as total
       FROM conversations c
-      WHERE c.user1_id = $1 OR c.user2_id = $1`,
+      WHERE (c.user1_id = $1 OR c.user2_id = $1)
+        AND EXISTS (
+          SELECT 1 FROM messages m WHERE m.conversation_id = c.id
+        )`,
       [req.user!.id]
     );
 

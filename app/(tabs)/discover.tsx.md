@@ -8,6 +8,8 @@ This file contains the Discover screen component that displays Toki events with 
 - **solution**: Fixed property name mismatch between AppContext and Discover screen data mapping
 - **problem**: Excessive debug logging cluttering the console
 - **solution**: Removed all debug console.log statements for production readiness
+- **problem**: Pressing host avatar/name initiated `startConversation`, creating conversations prematurely
+- **solution**: Updated `onHostPress` to navigate to `/chat` with `otherUserId` only; conversation is now created on first message send in `chat.tsx`
 
 ### How Fixes Were Implemented
 

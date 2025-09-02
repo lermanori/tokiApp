@@ -824,6 +824,37 @@ class ApiService {
     return response;
   }
 
+  // Public Profile Methods
+  async getUserProfile(userId: string): Promise<any> {
+    const response = await this.makeRequest<{ 
+      success: boolean; 
+      data: any 
+    }>(`/auth/users/${userId}`);
+    return response.data;
+  }
+
+  async getConnectionStatus(userId: string): Promise<{
+    status: 'none' | 'pending' | 'accepted' | 'declined';
+    isRequester: boolean;
+    id?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }> {
+    const response = await this.makeRequest<{ 
+      success: boolean; 
+      data: {
+        status: 'none' | 'pending' | 'accepted' | 'declined';
+        isRequester: boolean;
+        id?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }
+    }>(`/connections/status/${userId}`);
+    return response.data;
+  }
+
+
+
   async getMyRatings(page?: number, limit?: number): Promise<{ 
     ratings: UserRating[]; 
     pagination: any 

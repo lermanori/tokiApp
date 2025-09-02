@@ -820,7 +820,14 @@ export default function DiscoverScreen() {
                 onPress={() => handleEventPress(event)}
                 onHostPress={() => {
                   if (event.host.id && event.host.id !== state.currentUser?.id) {
-                    actions.startConversation(event.host.id);
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        otherUserId: event.host.id,
+                        otherUserName: event.host.name,
+                        isGroup: 'false'
+                      }
+                    });
                   }
                 }}
               />
@@ -868,7 +875,14 @@ export default function DiscoverScreen() {
               onPress={() => handleEventPress(event)}
               onHostPress={() => {
                 if (event.host.id && event.host.id !== state.currentUser?.id) {
-                  actions.startConversation(event.host.id);
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      otherUserId: event.host.id,
+                      otherUserName: event.host.name,
+                      isGroup: 'false'
+                    }
+                  });
                 }
               }}
             />

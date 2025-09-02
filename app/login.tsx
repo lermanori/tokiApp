@@ -143,7 +143,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
         style={styles.gradient}
       >
         <KeyboardAvoidingView
@@ -257,12 +257,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: 'white',
+    color: 'black',
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 18,
-    color: 'white',
+    color: 'black',
     opacity: 0.9,
     marginBottom: 40,
     textAlign: 'center',
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   switchText: {
-    color: 'white',
+    color: 'black',
     fontSize: 16,
     textDecorationLine: 'underline',
   },
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    color: 'white',
+    color: 'black',
     opacity: 0.8,
     fontSize: 14,
     textAlign: 'center',

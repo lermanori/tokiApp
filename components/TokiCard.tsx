@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { MapPin, Users, Heart, Clock } from 'lucide-react-native';
+import { router } from 'expo-router';
 import TokiIcon from './TokiIcon';
 import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -18,6 +19,7 @@ export interface TokiCardProps {
         image: string;
         images?: Array<{ url: string; publicId: string }>; // Add support for multiple images
         host: {
+            id: string;
             name: string;
             avatar: string;
         };
@@ -166,33 +168,33 @@ const formatAttendees = (attendees: number, maxAttendees: number) => {
 // Helper function to format location for compact display
 const formatLocationDisplay = (fullLocation: string): string => {
     if (!fullLocation) return '';
-    
+
     // Split by commas and clean up
     const parts = fullLocation.split(',').map(part => part.trim());
-    
+
     if (parts.length >= 2) {
         // Try to extract city and landmark/area name
         const city = parts[parts.length - 2]; // Usually the city is second to last
         const landmark = parts[0]; // First part is usually the landmark/area name
-        
+
         // If we have a city and landmark, format as "City, Landmark"
         if (city && landmark && city !== landmark) {
             return `${city}, ${landmark}`;
         }
-        
+
         // Fallback: just show first two meaningful parts
-        const meaningfulParts = parts.filter(part => 
-            part && 
-            !part.includes('Subdistrict') && 
+        const meaningfulParts = parts.filter(part =>
+            part &&
+            !part.includes('Subdistrict') &&
             !part.includes('District') &&
             part.length > 2
         );
-        
+
         if (meaningfulParts.length >= 2) {
             return `${meaningfulParts[0]}, ${meaningfulParts[1]}`;
         }
     }
-    
+
     // If all else fails, just show the first meaningful part
     return parts[0] || fullLocation;
 };
@@ -217,59 +219,59 @@ const formatDistanceDisplay = (distance: TokiCardProps['toki']['distance']): str
 
 // Helper function to format time display
 const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): string => {
-  // If we have scheduled time, use it for smart display
-  if (scheduledTime) {
-    try {
-      const date = new Date(scheduledTime);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      
-      // Format time as HH:MM
-      const timeString = date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-      
-      // Check if it's today, tomorrow, or later
-      if (eventDate.getTime() === today.getTime()) {
-        return `today at ${timeString}`;
-      } else if (eventDate.getTime() === tomorrow.getTime()) {
-        return `tomorrow at ${timeString}`;
-      } else {
-        // Format as DD/MM/YY HH:MM
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear().toString().slice(-2);
-        return `${day}/${month}/${year} ${timeString}`;
-      }
-    } catch (error) {
-      // Fallback to original time if parsing fails
-      return time || 'Time TBD';
+    // If we have scheduled time, use it for smart display
+    if (scheduledTime) {
+        try {
+            const date = new Date(scheduledTime);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+            // Format time as HH:MM
+            const timeString = date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            // Check if it's today, tomorrow, or later
+            if (eventDate.getTime() === today.getTime()) {
+                return `today at ${timeString}`;
+            } else if (eventDate.getTime() === tomorrow.getTime()) {
+                return `tomorrow at ${timeString}`;
+            } else {
+                // Format as DD/MM/YY HH:MM
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear().toString().slice(-2);
+                return `${day}/${month} ${timeString}`;
+            }
+        } catch (error) {
+            // Fallback to original time if parsing fails
+            return time || 'Time TBD';
+        }
     }
-  }
-  
-  // If no scheduled time, handle the time parameter safely
-  if (!time) {
-    return 'Time TBD';
-  }
-  
-  // For relative time slots, show as is
-  if (['Now', '30 min', '1 hour', '2 hours', '3 hours', 'Tonight', 'Tomorrow'].includes(time)) {
+
+    // If no scheduled time, handle the time parameter safely
+    if (!time) {
+        return 'Time TBD';
+    }
+
+    // For relative time slots, show as is
+    if (['Now', '30 min', '1 hour', '2 hours', '3 hours', 'Tonight', 'Tomorrow'].includes(time)) {
+        return time;
+    }
+
+    // For specific time slots like "9:00 AM", show as is
+    if (time.includes(':')) {
+        return time;
+    }
+
+    // For generic slots like "morning", "afternoon", "evening"
     return time;
-  }
-  
-  // For specific time slots like "9:00 AM", show as is
-  if (time.includes(':')) {
-    return time;
-  }
-  
-  // For generic slots like "morning", "afternoon", "evening"
-  return time;
 };
 
 export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) {
@@ -321,15 +323,15 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
         >
             {/* Header Image - Pexels photo based on activity type */}
             <View style={styles.headerImageContainer}>
-                <Image 
-                    source={{ 
-                        uri: toki.image || getActivityPhoto(toki.category) 
-                    }} 
-                    style={styles.headerImage} 
+                <Image
+                    source={{
+                        uri: toki.image || getActivityPhoto(toki.category)
+                    }}
+                    style={styles.headerImage}
                 />
                 <View style={styles.headerImageOverlay} />
             </View>
-            
+
             <View style={styles.eventContent}>
                 <View style={styles.eventHeader}>
                     <View style={styles.titleRow}>
@@ -360,31 +362,7 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
 
                 <Text style={styles.eventDescription}>{toki.description}</Text>
 
-                {/* Toki Images
-                // {toki.images && toki.images.length > 0 ? (
-                //     <View style={styles.imagesContainer}>
-                //         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                //             {toki.images.map((image, index) => (
-                //                 <Image
-                //                     key={index}
-                //                     source={{ uri: image.url }}
-                //                     style={styles.tokiImage}
-                //                 />
-                //             ))}
-                //         </ScrollView>
-                //     </View>
-                // ) : (
-                //     <View style={styles.imagesContainer}>
-                //         <View style={[styles.tokiImage, styles.fallbackImageContainer]}>
-                //             <Text style={styles.fallbackImageText}>
-                //                 {getActivityEmoji(toki.category)}
-                //             </Text>
-                //             <Text style={styles.fallbackImageLabel}>
-                //                 {getActivityLabel(toki.category)}
-                //             </Text>
-                //         </View>
-                //     </View>
-                // )} */}
+
 
                 <View style={styles.eventInfo}>
                     <View style={styles.infoItem}>
@@ -408,8 +386,8 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                 <View style={styles.eventFooter}>
                     <View style={styles.hostInfo}>
                         {toki.host.avatar ? (
-                            <Image 
-                                source={{ uri: toki.host.avatar }} 
+                            <Image
+                                source={{ uri: toki.host.avatar }}
                                 style={styles.hostAvatar}
                             />
                         ) : (
@@ -419,19 +397,26 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                                 </Text>
                             </View>
                         )}
-                        <Text style={styles.hostName}>by {toki.host.name}</Text>
-                    </View>
-                    {/* Status Badge - Show user's relationship to this Toki */}
-                    {toki.isHostedByUser || toki.joinStatus ? (
-                        <View style={[
-                            styles.statusBadge,
-                            { backgroundColor: getJoinStatusColor(toki) }
-                        ]}>
-                            <Text style={styles.statusBadgeText}>
-                                {getJoinStatusText(toki)}
+                        <TouchableOpacity 
+                            onPress={() => {
+                                if (!toki.isHostedByUser) {
+                                    router.push({
+                                        pathname: '/user-profile/[userId]',
+                                        params: { userId: toki.host.id }
+                                    });
+                                }
+                            }}
+                            disabled={toki.isHostedByUser}
+                        >
+                            <Text style={[
+                                styles.hostName,
+                                !toki.isHostedByUser && { textDecorationLine: 'underline' }
+                            ]}>
+                                by {toki.host.name}
                             </Text>
-                        </View>
-                    ) : null}
+                        </TouchableOpacity>
+                    </View>
+
                     <Text style={styles.distance}>
                         {toki.distance ? formatDistanceDisplay(toki.distance) : ''} away
                     </Text>
@@ -445,6 +430,17 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                             </View>
                         ))}
                     </View>
+                    {/* Status Badge - Show user's relationship to this Toki */}
+                    {toki.isHostedByUser || toki.joinStatus ? (
+                        <View style={[
+                            styles.statusBadge,
+                            { backgroundColor: getJoinStatusColor(toki) }
+                        ]}>
+                            <Text style={styles.statusBadgeText}>
+                                {getJoinStatusText(toki)}
+                            </Text>
+                        </View>
+                    ) : null}
                 </View>
             </View>
         </TouchableOpacity>

@@ -84,8 +84,12 @@ export default function ChatScreen() {
 
   const conversationId = params.conversationId as string;
   const tokiId = params.tokiId as string;
+  const otherUserId = params.otherUserId as string;
   const otherUserName = params.otherUserName as string;
   const isGroup = params.isGroup === 'true';
+
+  // Support creating conversation only upon first send
+  const [dynamicConversationId, setDynamicConversationId] = useState<string | undefined>(conversationId);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -488,10 +492,26 @@ export default function ChatScreen() {
           // Send Toki group message
           console.log('📤 Sending message to Toki:', tokiId);
           success = await actions.sendTokiMessage(tokiId, messageText);
-        } else if (conversationId) {
+        } else if (dynamicConversationId) {
           // Send individual conversation message
-          console.log('📤 Sending message to conversation:', conversationId);
-          success = await actions.sendConversationMessage(conversationId, messageText);
+          console.log('📤 Sending message to conversation:', dynamicConversationId);
+          success = await actions.sendConversationMessage(dynamicConversationId, messageText);
+        } else if (otherUserId) {
+          // No conversation yet: create on first send
+          console.log('🆕 Creating conversation with user:', otherUserId);
+          const newConversationId = await actions.startConversation(otherUserId);
+          if (newConversationId) {
+            setDynamicConversationId(newConversationId);
+            try {
+              await socketService.joinConversation(newConversationId);
+            } catch {}
+            console.log('📤 Sending message to newly created conversation:', newConversationId);
+            success = await actions.sendConversationMessage(newConversationId, messageText);
+            // Refresh conversations so it appears in list
+            actions.getConversations();
+          } else {
+            success = false;
+          }
         }
         
         if (success) {
@@ -574,10 +594,26 @@ export default function ChatScreen() {
           // Send Toki group message
           console.log('📤 Sending message to Toki:', tokiId);
           success = await actions.sendTokiMessage(tokiId, messageText);
-        } else if (conversationId) {
+        } else if (dynamicConversationId) {
           // Send individual conversation message
-          console.log('📤 Sending message to conversation:', conversationId);
-          success = await actions.sendConversationMessage(conversationId, messageText);
+          console.log('📤 Sending message to conversation:', dynamicConversationId);
+          success = await actions.sendConversationMessage(dynamicConversationId, messageText);
+        } else if (otherUserId) {
+          // No conversation yet: create on first send
+          console.log('🆕 Creating conversation with user (Enter):', otherUserId);
+          const newConversationId = await actions.startConversation(otherUserId);
+          if (newConversationId) {
+            setDynamicConversationId(newConversationId);
+            try {
+              await socketService.joinConversation(newConversationId);
+            } catch {}
+            console.log('📤 Sending message to newly created conversation:', newConversationId);
+            success = await actions.sendConversationMessage(newConversationId, messageText);
+            // Refresh conversations so it appears in list
+            actions.getConversations();
+          } else {
+            success = false;
+          }
         }
         
         if (success) {
@@ -612,7 +648,25 @@ export default function ChatScreen() {
             <ArrowLeft size={24} color="#1F2937" />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle}>{otherUserName || 'Chat'}</Text>
+            <TouchableOpacity 
+              onPress={() => {
+                if (!isGroup && otherUserId) {
+                  // For individual chats, navigate to user profile
+                  router.push({
+                    pathname: '/user-profile/[userId]',
+                    params: { userId: otherUserId }
+                  });
+                }
+              }}
+              disabled={isGroup}
+            >
+              <Text style={[
+                styles.headerTitle,
+                !isGroup && { textDecorationLine: 'underline' }
+              ]}>
+                {otherUserName || 'Chat'}
+              </Text>
+            </TouchableOpacity>
             <Text style={styles.headerSubtitle}>
               {isGroup ? 'Group chat' : 'Direct message'}
             </Text>

@@ -65,10 +65,10 @@ export default function ProfileScreen() {
       try {
         let userJoinRequestsCount = 0;
         for (const toki of state.tokis) {
-          if (!toki.isHostedByUser && 
-              toki.joinStatus && 
-              toki.joinStatus !== 'not_joined' && 
-              (toki.joinStatus === 'pending' || toki.joinStatus === 'approved')) {
+          if (!toki.isHostedByUser &&
+            toki.joinStatus &&
+            toki.joinStatus !== 'not_joined' &&
+            (toki.joinStatus === 'pending' || toki.joinStatus === 'approved')) {
             userJoinRequestsCount++;
           }
         }
@@ -80,7 +80,7 @@ export default function ProfileScreen() {
 
       console.log('🔔 Total notifications count:', totalNotifications);
       setUnreadNotifications(totalNotifications);
-      
+
     } catch (error) {
       console.error('❌ Failed to load notifications count:', error);
       setUnreadNotifications(0);
@@ -102,24 +102,24 @@ export default function ProfileScreen() {
     try {
       console.log('🖼️ Starting profile image update:', newImageUrl);
       console.log('🖼️ Current avatar before update:', state.currentUser.avatar);
-      
+
       // Update the current user's avatar in the state directly
       dispatch({
         type: 'UPDATE_CURRENT_USER',
         payload: { avatar: newImageUrl }
       });
-      
+
       console.log('🖼️ Profile image updated in state:', newImageUrl);
       console.log('🖼️ Current avatar after update:', state.currentUser.avatar);
-      
+
       // Force a re-render by updating local state
       setForceUpdate(prev => prev + 1);
-      
+
       // Refresh user data from backend to ensure consistency
       console.log('🔄 Refreshing user data from backend...');
       await loadUserData();
       console.log('✅ User data refreshed from backend');
-      
+
       // Debug: Check what we got from backend
       console.log('🔍 [AFTER REFRESH] Current user avatar:', state.currentUser.avatar);
       console.log('🔍 [AFTER REFRESH] Expected avatar:', newImageUrl);
@@ -164,10 +164,10 @@ export default function ProfileScreen() {
       console.log('🔐 Checking authentication status...');
       const isAuthenticated = await actions.checkAuthStatus();
       console.log('🔐 Authentication status:', isAuthenticated);
-      
+
       if (!isAuthenticated) {
         Alert.alert(
-          'Session Expired', 
+          'Session Expired',
           'Your session has expired. Please log in again.',
           [
             {
@@ -178,20 +178,20 @@ export default function ProfileScreen() {
         );
         return;
       }
-      
+
       // Load current user profile first (don't clear data unnecessarily)
       console.log('👤 Loading current user...');
       await actions.loadCurrentUser();
       console.log('👤 Current user loaded, current state:', state.currentUser.name);
-      console.log('📊 Current user stats after load:', { 
-        tokisCreated: state.currentUser.tokisCreated, 
-        tokisJoined: state.currentUser.tokisJoined, 
-        connections: state.currentUser.connections 
+      console.log('📊 Current user stats after load:', {
+        tokisCreated: state.currentUser.tokisCreated,
+        tokisJoined: state.currentUser.tokisJoined,
+        connections: state.currentUser.connections
       });
-      
+
       // Debug: Log the raw user data to see what we're getting
       console.log('🔍 [PROFILE] Raw user data from backend:', state.currentUser);
-      
+
       // Then refresh other data
       await refreshUserData();
       console.log('✅ Profile data loaded successfully');
@@ -199,7 +199,7 @@ export default function ProfileScreen() {
       console.error('❌ Failed to load profile data:', error);
       if (error instanceof Error && error.message?.includes('Authentication failed')) {
         Alert.alert(
-          'Authentication Error', 
+          'Authentication Error',
           'Please log in again to continue.',
           [
             {
@@ -273,17 +273,17 @@ export default function ProfileScreen() {
           onPress: () => {
             if (state.blockedUsers.length === 0) {
               Alert.alert(
-                'Block List', 
+                'Block List',
                 'You haven\'t blocked any users yet.\n\nTo block a user:\n• Go to their profile\n• Tap the three dots menu\n• Select "Block User"'
               );
             } else {
               Alert.alert(
-                'Block List', 
+                'Block List',
                 `You have ${state.blockedUsers.length} blocked user${state.blockedUsers.length !== 1 ? 's' : ''}:\n\n${state.blockedUsers.map(user => `• ${user.blockedUser.name}`).join('\n')}\n\nTo unblock: Go to their profile and tap "Unblock User"`,
                 [
                   { text: 'OK', style: 'default' },
-                  { 
-                    text: 'Refresh Block List', 
+                  {
+                    text: 'Refresh Block List',
                     onPress: () => actions.loadBlockedUsers()
                   }
                 ]
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
         {
           text: 'Data & Privacy',
           onPress: () => Alert.alert(
-            'Data & Privacy', 
+            'Data & Privacy',
             'Control your data sharing and visibility:\n\n• Profile visibility settings\n• Location sharing preferences\n• Data export options\n• Account deletion\n• Third-party app permissions\n\nYour data is encrypted and secure.'
           )
         },
@@ -336,7 +336,7 @@ export default function ProfileScreen() {
       };
 
       const result = await Share.share(shareContent);
-      
+
       if (result.action === Share.sharedAction) {
         if (result.activityType) {
           Alert.alert('Shared Successfully!', `Invitation sent via ${result.activityType}`);
@@ -353,7 +353,7 @@ export default function ProfileScreen() {
             text: 'Copy Link',
             onPress: () => {
               Alert.alert(
-                'Link Copied!', 
+                'Link Copied!',
                 `Share this personalized link:\nhttps://toki.app/invite/${state.currentUser.name.toLowerCase().replace(' ', '-')}\n\nYour friends will get bonus points when they join!`
               );
             }
@@ -385,7 +385,7 @@ export default function ProfileScreen() {
         {
           text: 'FAQ',
           onPress: () => Alert.alert(
-            'Frequently Asked Questions', 
+            'Frequently Asked Questions',
             'Common questions and answers:\n\n• How do I create a Toki?\n• How do join requests work?\n• What are the safety guidelines?\n• How do I report someone?\n• How do I change my location?\n• How do I delete my account?\n\nFind detailed answers in our help center.'
           )
         },
@@ -425,12 +425,12 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     console.log('🔘 Logout button pressed - starting logout process');
-    
+
     try {
       // Logout using AppContext (clears tokens and data)
       console.log('🔄 Calling actions.logout()...');
       await actions.logout();
-      
+
       console.log('✅ Logout successful, navigating to login');
       // Navigate to login screen
       router.replace('/login');
@@ -444,8 +444,8 @@ export default function ProfileScreen() {
     setNotificationsEnabled(value);
     Alert.alert(
       'Notification Settings Updated',
-      value 
-        ? 'Push notifications are now enabled. You\'ll receive updates about your Tokis, messages, and new connections.' 
+      value
+        ? 'Push notifications are now enabled. You\'ll receive updates about your Tokis, messages, and new connections.'
         : 'Push notifications are now disabled. You can still check updates manually in the app.'
     );
   };
@@ -454,8 +454,8 @@ export default function ProfileScreen() {
     setLocationEnabled(value);
     Alert.alert(
       'Location Settings Updated',
-      value 
-        ? 'Location services are now enabled. We\'ll show you nearby Tokis and help others discover your events.' 
+      value
+        ? 'Location services are now enabled. We\'ll show you nearby Tokis and help others discover your events.'
         : 'Location services are now disabled. You can still use Toki, but location-based features will be limited.'
     );
   };
@@ -477,7 +477,7 @@ export default function ProfileScreen() {
 
   const handleSocialPress = (platform: keyof typeof state.currentUser.socialLinks, username?: string) => {
     if (!username) return;
-    
+
     let url = '';
     switch (platform) {
       case 'instagram':
@@ -493,7 +493,7 @@ export default function ProfileScreen() {
         url = `https://tiktok.com/@${username.replace('@', '')}`;
         break;
     }
-    
+
     if (url) {
       Linking.openURL(url).catch(() => {
         Alert.alert('Cannot open link', `Unable to open ${platform} profile. Please check if the app is installed.`);
@@ -517,9 +517,9 @@ export default function ProfileScreen() {
 
   const formatMemberSince = () => {
     if (!state.currentUser.memberSince) return 'Recently';
-    return new Date(state.currentUser.memberSince).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short' 
+    return new Date(state.currentUser.memberSince).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short'
     });
   };
 
@@ -573,12 +573,12 @@ export default function ProfileScreen() {
   const renderStatCard = (type: string, number: string | number, label: string, subtext: string, onPress?: () => void) => {
     const colors = getStatCardColor(type);
     const CardComponent = onPress ? TouchableOpacity : View;
-    
+
     return (
-      <CardComponent 
+      <CardComponent
         style={[
-          styles.statCard, 
-          { 
+          styles.statCard,
+          {
             backgroundColor: colors.bg,
             borderWidth: 1,
             borderColor: colors.border
@@ -604,30 +604,33 @@ export default function ProfileScreen() {
         <View style={styles.headerContent}>
           <Text style={styles.title}>Profile</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity 
-              style={styles.settingsButton} 
+            <TouchableOpacity
+              style={styles.settingsButton}
               onPress={loadUserData}
               disabled={isRefreshing || state.loading}
             >
               <RefreshCw size={20} color={isRefreshing || state.loading ? "#CCCCCC" : "#1C1C1C"} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingsButton} onPress={handleEditProfile}>
-              <Edit3 size={20} color="#1C1C1C" />
+            <TouchableOpacity style={styles.settingsButton} onPress={handleEditProfile} >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-[30px]" style={{ width: '20px', height: '20px' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.settingsButton} 
+            <TouchableOpacity
+              style={styles.settingsButton}
               onPress={handleSignOut}
             >
               <LogOut size={20} color="#EF4444" />
             </TouchableOpacity>
           </View>
         </View>
-        
+
         {/* Connection Status */}
         <View style={styles.connectionStatus}>
           <View style={[styles.connectionDot, { backgroundColor: state.isConnected ? '#10B981' : '#EF4444' }]} />
           <Text style={styles.connectionText}>
-            {state.isConnected ? 'Online' : 'Offline'} • Last sync: {state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleTimeString() : 'Never'}
+            {state.isConnected ? 'Online' : 'Offline'} 
           </Text>
         </View>
       </LinearGradient>
@@ -662,15 +665,15 @@ export default function ProfileScreen() {
                 <Text style={styles.locationText}>{state.currentUser.location}</Text>
               </View>
               <Text style={styles.memberSince}>
-                Member since {state.currentUser.memberSince ? 
-                  new Date(state.currentUser.memberSince).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long' 
-                  }) : 
+                Member since {state.currentUser.memberSince ?
+                  new Date(state.currentUser.memberSince).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long'
+                  }) :
                   'Recently'
                 }
               </Text>
-              
+
               {/* Social Media Links */}
               {Object.keys(state.currentUser.socialLinks).length > 0 && (
                 <View style={styles.socialLinksContainer}>
@@ -709,8 +712,8 @@ export default function ProfileScreen() {
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
-                {typeof state.currentUser.rating === 'number' && !isNaN(state.currentUser.rating) 
-                  ? state.currentUser.rating.toFixed(1) 
+                {typeof state.currentUser.rating === 'number' && !isNaN(state.currentUser.rating)
+                  ? state.currentUser.rating.toFixed(1)
                   : '0.0'}
               </Text>
               <Text style={styles.statLabel}>Rating</Text>
@@ -792,8 +795,8 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.section}>
-            <TouchableOpacity 
-              style={styles.logoutButton} 
+            <TouchableOpacity
+              style={styles.logoutButton}
               onPress={handleSignOut}
             >
               <LogOut size={20} color="#EF4444" />
@@ -803,7 +806,7 @@ export default function ProfileScreen() {
 
           <View style={styles.bottomSpacing} />
         </View>
-        </ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }

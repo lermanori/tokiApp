@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, TextInput, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, MessageCircle, Users, Clock, RefreshCw } from 'lucide-react-native';
+import { Search, MessageCircle, Users, Clock, RefreshCw, X } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
@@ -37,6 +37,9 @@ interface TokiGroupChat {
 export default function MessagesScreen() {
   const { state, actions } = useApp();
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [filteredChats, setFilteredChats] = useState<any[]>([]);
   
   // Get conversations and toki group chats from global state
   const conversations = state.conversations || [];
@@ -120,27 +123,32 @@ export default function MessagesScreen() {
 
   // Combine and sort all chats by last message timestamp
   const getAllChats = () => {
-    const allChats = [
-      // Individual conversations
-      ...conversations.map(conv => ({
-        ...conv,
-        type: 'individual' as const,
-        sortKey: conv.last_message_time || conv.updated_at
-      })),
-      // Toki group chats
-      ...tokiGroupChats.map(toki => ({
-        ...toki,
-        type: 'group' as const,
-        sortKey: toki.last_message_time || toki.updated_at
-      }))
-    ];
+    try {
+      const allChats = [
+        // Individual conversations
+        ...(conversations || []).map(conv => ({
+          ...conv,
+          type: 'individual' as const,
+          sortKey: conv.last_message_time || conv.updated_at
+        })),
+        // Toki group chats
+        ...(tokiGroupChats || []).map(toki => ({
+          ...toki,
+          type: 'group' as const,
+          sortKey: toki.last_message_time || toki.updated_at
+        }))
+      ];
 
-    // Sort by last message timestamp (most recent first)
-    return allChats.sort((a, b) => {
-      const timeA = new Date(a.sortKey).getTime();
-      const timeB = new Date(b.sortKey).getTime();
-      return timeB - timeA; // Descending order (newest first)
-    });
+      // Sort by last message timestamp (most recent first)
+      return allChats.sort((a, b) => {
+        const timeA = new Date(a.sortKey || 0).getTime();
+        const timeB = new Date(b.sortKey || 0).getTime();
+        return timeB - timeA; // Descending order (newest first)
+      });
+    } catch (error) {
+      console.error('❌ Error in getAllChats:', error);
+      return [];
+    }
   };
 
   const handleConversationPress = (conversation: Conversation) => {
@@ -155,6 +163,7 @@ export default function MessagesScreen() {
       pathname: '/chat',
       params: { 
         conversationId: conversation.id,
+        otherUserId: conversation.other_user_id,
         otherUserName: conversation.other_user_name,
         isGroup: 'false'
       }
@@ -190,6 +199,97 @@ export default function MessagesScreen() {
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  // Search function to filter chats
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setFilteredChats([]);
+      // setIsSearching(false);
+      return;
+    }
+    
+    setIsSearching(true);
+    
+    try {
+      const filtered = getAllChats().filter(chat => {
+        const searchTerm = query.toLowerCase();
+        
+        if (chat.type === 'individual') {
+          const conversation = chat as Conversation;
+          return (
+            (conversation.other_user_name && conversation.other_user_name.toLowerCase().includes(searchTerm)) ||
+            (conversation.last_message && conversation.last_message.toLowerCase().includes(searchTerm))
+          );
+        } else {
+          const tokiChat = chat as TokiGroupChat;
+          return (
+            (tokiChat.title && tokiChat.title.toLowerCase().includes(searchTerm)) ||
+            (tokiChat.description && tokiChat.description.toLowerCase().includes(searchTerm)) ||
+            (tokiChat.last_message && tokiChat.last_message.toLowerCase().includes(searchTerm))
+          );
+        }
+      });
+      
+      setFilteredChats(filtered);
+    } catch (error) {
+      console.error('❌ Search error:', error);
+      console.error('❌ Chat data:', getAllChats());
+      setFilteredChats([]);
+    }
+  };
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  // Get chats to display (either filtered or all)
+  const getDisplayChats = () => {
+    if (isSearching && searchQuery.trim()) {
+      return filteredChats;
+    }
+    return getAllChats();
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery('');
+    setFilteredChats([]);
+    setIsSearching(false);
+    Keyboard.dismiss();
+  };
+
+  // Dismiss search
+  const dismissSearch = () => {
+    setIsSearching(false);
+    setSearchQuery('');
+    setFilteredChats([]);
+    Keyboard.dismiss();
+  };
+
+    // Highlight search text in results
+  const highlightText = (text: string | null | undefined, query: string) => {
+    if (!query.trim() || !text) return text || '';
+    
+    const regex = new RegExp(`(${query})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => {
+      if (regex.test(part)) {
+        return (
+          <Text key={index} style={styles.highlightedText}>
+            {part}
+          </Text>
+        );
+      }
+      return part;
+    });
+  };
 
 
   return (
@@ -204,17 +304,78 @@ export default function MessagesScreen() {
             <TouchableOpacity style={styles.refreshButton} onPress={refreshAllData}>
               <RefreshCw size={20} color="#B49AFF" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.searchButton}>
-              <Search size={20} color="#B49AFF" />
+            <TouchableOpacity 
+              style={[styles.searchButton, isSearching && styles.searchButtonActive]} 
+              onPress={() => isSearching ? dismissSearch() : setIsSearching(true)}
+            >
+              <Search size={20} color={isSearching ? "#8B5CF6" : "#B49AFF"} />
             </TouchableOpacity>
           </View>
         </View>
+        
+        {/* Search Input */}
+        {isSearching && (
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search conversations..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={true}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+                  <X size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {searchQuery.length > 0 && (
+              <Text style={styles.searchResultsCount}>
+                {filteredChats.length} result{filteredChats.length !== 1 ? 's' : ''}
+              </Text>
+            )}
+          </View>
+        )}
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => {
+          if (isSearching) {
+            Keyboard.dismiss();
+          }
+        }}
+      >
+        {/* Search Summary Header */}
+        {isSearching && searchQuery.trim() && filteredChats.length > 0 && (
+          <View style={styles.searchSummaryHeader}>
+            <Text style={styles.searchSummaryText}>
+              Found {filteredChats.length} conversation{filteredChats.length !== 1 ? 's' : ''} for "{searchQuery}"
+            </Text>
+            <TouchableOpacity onPress={clearSearch} style={styles.clearSearchButton}>
+              <Text style={styles.clearSearchText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
         {isLoading ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Loading conversations...</Text>
+          </View>
+        ) : isSearching && searchQuery.trim() && filteredChats.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Search size={48} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>No search results</Text>
+            <Text style={styles.emptyDescription}>
+              No conversations found for "{searchQuery}"
+            </Text>
           </View>
         ) : conversations.length === 0 && tokiGroupChats.length === 0 ? (
           <View style={styles.emptyState}>
@@ -226,7 +387,7 @@ export default function MessagesScreen() {
           </View>
         ) : (
           <View style={styles.conversationsList}>
-            {getAllChats().map((chat) => (
+            {getDisplayChats().map((chat) => (
               <TouchableOpacity
                 key={`${chat.type}-${chat.id}`}
                 style={styles.conversationItem}
@@ -250,10 +411,15 @@ export default function MessagesScreen() {
                 <View style={styles.conversationContent}>
                   <View style={styles.conversationHeader}>
                     <Text style={styles.conversationTitle} numberOfLines={1}>
-                      {chat.type === 'individual' 
-                        ? (chat as Conversation).other_user_name
-                        : (chat as TokiGroupChat).title
-                      }
+                      {isSearching && searchQuery.trim() ? (
+                        chat.type === 'individual' 
+                          ? highlightText((chat as Conversation).other_user_name, searchQuery)
+                          : highlightText((chat as TokiGroupChat).title, searchQuery)
+                      ) : (
+                        chat.type === 'individual' 
+                          ? (chat as Conversation).other_user_name || 'Unknown User'
+                          : (chat as TokiGroupChat).title || 'Untitled Toki'
+                      )}
                     </Text>
                     <View style={styles.headerRight}>
                       <Text style={styles.timestamp}>
@@ -264,7 +430,11 @@ export default function MessagesScreen() {
 
                   <View style={styles.conversationFooter}>
                     <Text style={styles.lastMessage} numberOfLines={1}>
-                      {chat.last_message || 'Start a conversation...'}
+                      {isSearching && searchQuery.trim() && chat.last_message ? (
+                        highlightText(chat.last_message, searchQuery)
+                      ) : (
+                        chat.last_message || 'Start a conversation...'
+                      )}
                     </Text>
                     <View style={styles.conversationMeta}>
                       {chat.unread_count > 0 && (
@@ -322,6 +492,81 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 3,
+  },
+  searchButtonActive: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+  },
+  searchContainer: {
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1F2937',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  searchResultsCount: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  highlightedText: {
+    backgroundColor: '#FEF3C7',
+    color: '#92400E',
+    fontWeight: 'bold',
+  },
+  searchSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  searchSummaryText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Inter-Medium',
+  },
+  clearSearchButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  clearSearchText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Inter-Medium',
   },
   headerButtons: {
     flexDirection: 'row',

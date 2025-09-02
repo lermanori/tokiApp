@@ -865,8 +865,8 @@ router.put('/users/:userId/verify', authenticateToken, async (req: Request, res:
   }
 });
 
-// Search users
-router.get('/users/search', authenticateToken, async (req: Request, res: Response) => {
+// Search users (public endpoint) - MUST COME BEFORE /users/:userId
+router.get('/users/search', async (req: Request, res: Response) => {
   try {
     const { 
       q, 
@@ -875,6 +875,8 @@ router.get('/users/search', authenticateToken, async (req: Request, res: Respons
       verified,
       hasConnections 
     } = req.query;
+    
+    console.log('🔍 [AUTH SEARCH] Search request:', { q, page, limit, verified, hasConnections });
 
     const pageNum = parseInt(page as string) || 1;
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
@@ -888,22 +890,17 @@ router.get('/users/search', authenticateToken, async (req: Request, res: Respons
         COALESCE(ROUND(AVG(ur.rating), 1), 0) as rating,
         COUNT(DISTINCT uc.id) as connections_count,
         COUNT(DISTINCT t.id) as tokis_created,
-        CASE WHEN EXISTS (
-          SELECT 1 FROM user_connections 
-          WHERE status = 'accepted' 
-            AND ((requester_id = $1 AND recipient_id = u.id) 
-                 OR (requester_id = u.id AND recipient_id = $1))
-        ) THEN true ELSE false END as is_connected
+        false as is_connected
       FROM users u
       LEFT JOIN user_ratings ur ON ur.rated_user_id = u.id
       LEFT JOIN user_connections uc ON (uc.requester_id = u.id OR uc.recipient_id = u.id) 
         AND uc.status = 'accepted'
       LEFT JOIN tokis t ON t.host_id = u.id AND t.status = 'active'
-      WHERE u.id != $1
+      WHERE 1=1
     `;
 
-    const queryParams: any[] = [req.user!.id];
-    let paramCount = 1;
+    const queryParams: any[] = [];
+    let paramCount = 0;
 
     // Add search term
     if (q && typeof q === 'string') {
@@ -920,7 +917,7 @@ router.get('/users/search', authenticateToken, async (req: Request, res: Respons
     }
 
     // Group by user
-    query += ` GROUP BY u.id, u.name, u.bio, u.location, u.avatar_url, u.verified, u.member_since`;
+    query += ` GROUP BY u.id, u.name, u.bio, u.location, u.avatar_url, u.verified, u.member_since, u.created_at`;
 
     // Add connections filter
     if (hasConnections === 'true') {
@@ -937,7 +934,12 @@ router.get('/users/search', authenticateToken, async (req: Request, res: Respons
     query += ` LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
     queryParams.push(limitNum, offset);
 
+    console.log('🔍 [AUTH SEARCH] Executing query with params:', queryParams);
+    console.log('🔍 [AUTH SEARCH] Query:', query);
+    
     const result = await pool.query(query, queryParams);
+    
+    console.log('🔍 [AUTH SEARCH] Query result rows:', result.rows.length);
 
     const users = result.rows.map(row => ({
       id: row.id,
@@ -972,6 +974,107 @@ router.get('/users/search', authenticateToken, async (req: Request, res: Respons
       success: false,
       error: 'Server error',
       message: 'Failed to search users'
+    });
+  }
+});
+
+// Get user profile by ID (public profile) - MUST COME AFTER /users/search
+router.get('/users/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    console.log('🔍 [AUTH] Getting profile for userId:', userId);
+
+    // Get user profile
+    const userResult = await pool.query(
+      `SELECT 
+        u.id, u.name, u.bio, u.location, u.avatar_url, 
+        u.verified, u.member_since, u.created_at,
+        COALESCE(ROUND(AVG(ur.rating), 1), 0) as rating,
+        COUNT(DISTINCT ur.id) as total_ratings
+      FROM users u
+      LEFT JOIN user_ratings ur ON ur.rated_user_id = u.id
+      WHERE u.id = $1
+      GROUP BY u.id, u.name, u.bio, u.location, u.avatar_url, u.verified, u.member_since, u.created_at`,
+      [userId]
+    );
+
+    console.log('🔍 [AUTH] Database query result rows:', userResult.rows.length);
+    if (userResult.rows.length === 0) {
+      console.log('❌ [AUTH] User not found in database for userId:', userId);
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'The specified user does not exist'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Get user statistics
+    // Tokis created count
+    const createdResult = await pool.query(
+      'SELECT COUNT(*) as count FROM tokis WHERE host_id = $1 AND status = $2',
+      [userId, 'active']
+    );
+
+    // Tokis joined count (as participant)
+    const joinedResult = await pool.query(
+      `SELECT COUNT(DISTINCT tp.toki_id) as count 
+       FROM toki_participants tp
+       JOIN tokis t ON tp.toki_id = t.id
+       WHERE tp.user_id = $1 
+         AND tp.status IN ('approved', 'joined')
+         AND t.host_id != $1
+         AND t.status = 'active'`,
+      [userId]
+    );
+
+    // Connections count
+    const connectionsResult = await pool.query(
+      `SELECT COUNT(*) as count FROM user_connections 
+       WHERE status = 'accepted' 
+         AND (requester_id = $1 OR recipient_id = $1)`,
+      [userId]
+    );
+
+    // Get social links
+    const socialLinksResult = await pool.query(
+      'SELECT platform, username FROM user_social_links WHERE user_id = $1',
+      [userId]
+    );
+    const socialLinks = socialLinksResult.rows.reduce((acc: any, link: any) => {
+      acc[link.platform] = link.username;
+      return acc;
+    }, {});
+
+    const userProfile = {
+      id: user.id,
+      name: user.name,
+      bio: user.bio,
+      location: user.location,
+      avatar: user.avatar_url,
+      verified: user.verified,
+      rating: parseFloat(user.rating),
+      totalRatings: parseInt(user.total_ratings),
+      memberSince: user.member_since,
+      createdAt: user.created_at,
+      tokisCreated: parseInt(createdResult.rows[0].count),
+      tokisJoined: parseInt(joinedResult.rows[0].count),
+      connections: parseInt(connectionsResult.rows[0].count),
+      socialLinks
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: userProfile
+    });
+
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve user profile'
     });
   }
 });

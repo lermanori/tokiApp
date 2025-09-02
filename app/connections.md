@@ -7,6 +7,9 @@ This file implements a unified Connections page that combines existing connectio
 - **problem**: Fragmented user experience requiring navigation between Connections and Find People pages
 - **solution**: Implemented unified search that shows mixed results (existing connections + new people + pending requests) in one place
 
+- **problem**: Tapping Message created a conversation immediately via `startConversation`.
+- **solution**: Changed to navigate to `/chat` with `otherUserId` only. Conversation is created on first message send in `chat.tsx`.
+
 - **problem**: No visual distinction between different user types (friends vs new people vs pending)
 - **solution**: Added colored badges positioned at bottom-right of user cards with different colors for each type
 
@@ -15,6 +18,7 @@ This file implements a unified Connections page that combines existing connectio
 
 ### How Fixes Were Implemented
 - **Unified Interface**: Created `UnifiedUser` interface that handles all user types (friend, new, pending, blocked)
+- **Defer Conversation Creation**: Replaced `actions.startConversation(user.id)` with `router.push('/chat', { otherUserId, otherUserName, isGroup: 'false' })` so that chat screen creates the conversation only after the first message is sent.
 - **Smart Search**: Implemented `getUnifiedResults()` function that combines connections, search results, and pending requests with existing connections prioritized first
 - **Dynamic Actions**: Added `getActionButtons()` function that shows appropriate buttons based on user type (Message/Block for friends, Connect/View for new people, Accept/Decline for pending)
 - **Visual Badges**: Implemented `getUserBadge()` function with bottom-right positioned badges using different colors:
