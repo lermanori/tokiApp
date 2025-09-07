@@ -319,7 +319,7 @@ export default function MessagesScreen() {
             <View style={styles.searchInputWrapper}>
               <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
               <TextInput
-                style={styles.searchInput}
+                style={{outline: 'none',...styles.searchInput}}
                 placeholder="Search conversations..."
                 placeholderTextColor="#9CA3AF"
                 value={searchQuery}

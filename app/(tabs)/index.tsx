@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, TextInput, Modal, Animated, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, TextInput, Animated, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Filter, MapPin, Clock, Users, Heart, X } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
+import TokiFilters from '@/components/TokiFilters';
 import { useApp } from '@/contexts/AppContext';
 
 const { width } = Dimensions.get('window');
@@ -17,17 +18,17 @@ export default function ExploreScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedFilters, setSelectedFilters] = useState({
     visibility: 'all',
     category: 'all',
     distance: 'all',
     availability: 'all',
+    participants: 'all',
   });
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const allTags = ['sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
+  const categories = ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
 
   // Refresh Tokis when screen comes into focus (e.g., after creating a new Toki)
   useFocusEffect(
@@ -45,11 +46,6 @@ export default function ExploreScreen() {
     setRefreshing(false);
   };
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-    );
-  };
 
   const clearSearch = () => {
     setSearchQuery('');
@@ -60,14 +56,19 @@ export default function ExploreScreen() {
     setShowFilterModal(false);
   };
 
+  const handleFilterChange = (filterType: string, value: string) => {
+    setSelectedFilters(prev => ({ ...prev, [filterType]: value }));
+  };
+
   const clearAllFilters = () => {
     setSelectedFilters({
       visibility: 'all',
       category: 'all',
       distance: 'all',
       availability: 'all',
+      participants: 'all',
     });
-    setSelectedTags([]);
+    setSelectedCategory('all');
     setSearchQuery('');
     setShowSearch(false);
   };
@@ -75,7 +76,7 @@ export default function ExploreScreen() {
   const handleEventPress = (toki: any) => {
     router.push({
       pathname: '/toki-details',
-      params: { 
+      params: {
         tokiId: toki.id,
         tokiData: JSON.stringify(toki)
       }
@@ -83,29 +84,59 @@ export default function ExploreScreen() {
   };
 
   const filteredTokis = state.tokis.filter(toki => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       toki.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       toki.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       toki.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
       toki.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
       toki.host.name.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesTags = selectedTags.length === 0 || 
-      toki.tags.some(tag => selectedTags.includes(tag));
 
-    const matchesVisibility = selectedFilters.visibility === 'all' || 
+    const matchesCategory = (selectedCategory === 'all' || toki.category === selectedCategory) &&
+                           (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
+
+    const matchesVisibility = selectedFilters.visibility === 'all' ||
       toki.visibility === selectedFilters.visibility;
 
-    const matchesCategory = selectedFilters.category === 'all' || 
-      toki.category === selectedFilters.category;
-    
-    return matchesSearch && matchesTags && matchesVisibility && matchesCategory;
+    const matchesDistance = selectedFilters.distance === 'all' ||
+      (() => {
+        // This would need actual distance calculation in a real app
+        // For now, just return true as we don't have distance data
+        return true;
+      })();
+
+    const matchesAvailability = selectedFilters.availability === 'all' ||
+      (() => {
+        const attendees = toki.attendees || 0;
+        const maxAttendees = toki.maxAttendees || 10;
+        const spotsLeft = maxAttendees - attendees;
+        
+        switch (selectedFilters.availability) {
+          case 'spots available': return spotsLeft > 0;
+          case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
+          case 'waitlist': return spotsLeft <= 0;
+          default: return true;
+        }
+      })();
+
+    const matchesParticipants = selectedFilters.participants === 'all' ||
+      (() => {
+        const attendees = toki.attendees || 0;
+        switch (selectedFilters.participants) {
+          case '1-10': return attendees >= 1 && attendees <= 10;
+          case '10-50': return attendees >= 10 && attendees <= 50;
+          case '50-100': return attendees >= 50 && attendees <= 100;
+          case '100+': return attendees >= 100;
+          default: return true;
+        }
+      })();
+
+    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
   });
 
   const handleTokiPress = (toki: any) => {
     router.push({
       pathname: '/toki-details',
-      params: { 
+      params: {
         tokiId: toki.id,
         tokiData: JSON.stringify(toki)
       }
@@ -114,7 +145,7 @@ export default function ExploreScreen() {
 
   const getJoinStatusText = (toki: any) => {
     if (toki.isHostedByUser) return 'Hosting';
-    
+
     switch (toki.joinStatus) {
       case 'not_joined': return 'I want to join';
       case 'pending': return 'Request pending';
@@ -126,7 +157,7 @@ export default function ExploreScreen() {
 
   const getJoinStatusColor = (toki: any) => {
     if (toki.isHostedByUser) return '#B49AFF';
-    
+
     switch (toki.joinStatus) {
       case 'not_joined': return '#4DC4AA';
       case 'pending': return '#F9E79B';
@@ -157,135 +188,11 @@ export default function ExploreScreen() {
     }
   };
 
-  const FilterModal = () => (
-    <Modal
-      visible={showFilterModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowFilterModal(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-            <X size={24} color="#1C1C1C" />
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Filters</Text>
-          <TouchableOpacity onPress={clearAllFilters}>
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.modalContent}>
-          {/* Visibility Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Visibility</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'public', 'connections', 'friends'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.visibility === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, visibility: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.visibility === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Category Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Category</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'sports', 'work', 'music', 'wellness', 'art'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.category === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, category: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.category === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Distance Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Distance</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'under 1km', '1-3km', '3-5km', '5km+'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.distance === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, distance: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.distance === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Availability Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Availability</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'spots available', 'almost full', 'waitlist'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.availability === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, availability: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.availability === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
-            <Text style={styles.applyButtonText}>Apply Filters</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <Animated.ScrollView 
-        style={styles.content} 
+      <Animated.ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -309,18 +216,19 @@ export default function ExploreScreen() {
               </View>
             )}
           </View>
-          
+
           <View style={styles.searchContainer}>
             {showSearch ? (
               <View style={styles.searchInputContainer}>
                 <Search size={20} color="#666666" />
                 <TextInput
-                  style={styles.searchInput}
+                  style={{outline: 'none',...styles.searchInput}}
                   placeholder="Search activities, locations, hosts..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholderTextColor="#999999"
                   autoFocus
+
                 />
                 <TouchableOpacity onPress={clearSearch}>
                   <X size={20} color="#666666" />
@@ -338,26 +246,26 @@ export default function ExploreScreen() {
           </View>
         </LinearGradient>
 
-        <View style={styles.tagsContainer}>
+        <View style={styles.categoriesContainer}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tagsScroll}
+            contentContainerStyle={styles.categoriesScroll}
           >
-            {allTags.map((tag) => (
+            {categories.map((category) => (
               <TouchableOpacity
-                key={tag}
+                key={category}
                 style={[
-                  styles.tag,
-                  selectedTags.includes(tag) && styles.tagSelected
+                  styles.categoryButton,
+                  selectedCategory === category && styles.categoryButtonActive
                 ]}
-                onPress={() => toggleTag(tag)}
+                onPress={() => setSelectedCategory(category)}
               >
                 <Text style={[
-                  styles.tagText,
-                  selectedTags.includes(tag) && styles.tagTextSelected
+                  styles.categoryText,
+                  selectedCategory === category && styles.categoryTextActive
                 ]}>
-                  {tag}
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -371,7 +279,7 @@ export default function ExploreScreen() {
               <Text style={styles.searchResultText}> for "{searchQuery}"</Text>
             )}
           </Text>
-          
+
           {state.loading && (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Loading Tokis...</Text>
@@ -381,31 +289,31 @@ export default function ExploreScreen() {
           {state.error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{state.error}</Text>
-                      <TouchableOpacity style={styles.retryButton} onPress={async () => {
-          await actions.checkConnection();
-          await actions.loadTokis();
-        }}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+              <TouchableOpacity style={styles.retryButton} onPress={async () => {
+                await actions.checkConnection();
+                await actions.loadTokis();
+              }}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
             </View>
           )}
-          
+
           {!state.loading && filteredTokis.length === 0 ? (
             <View style={styles.emptyState}>
               <Search size={48} color="#D1D5DB" />
               <Text style={styles.emptyTitle}>No Tokis found</Text>
               <Text style={styles.emptyDescription}>
-                {searchQuery 
+                {searchQuery
                   ? `No results found for "${searchQuery}". Try adjusting your search or filters.`
                   : 'No Tokis match your selected filters. Try removing some filters.'
                 }
               </Text>
-              {(searchQuery || selectedTags.length > 0) && (
-                <TouchableOpacity 
+              {(searchQuery || selectedCategory !== 'all') && (
+                <TouchableOpacity
                   style={styles.clearFiltersButton}
                   onPress={() => {
                     setSearchQuery('');
-                    setSelectedTags([]);
+                    setSelectedCategory('all');
                     setShowSearch(false);
                   }}
                 >
@@ -437,7 +345,14 @@ export default function ExploreScreen() {
         </View>
       </Animated.ScrollView>
 
-      <FilterModal />
+      <TokiFilters
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        selectedFilters={selectedFilters}
+        onFilterChange={handleFilterChange}
+        onClearAll={clearAllFilters}
+        onApply={applyFilters}
+      />
     </SafeAreaView>
   );
 }
@@ -525,17 +440,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 3,
+    outline: 'none',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#1C1C1C',
+    color: '#1C1C1C'
   },
   searchPlaceholder: {
     color: '#999999',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
+    outline: 'none',
   },
   filterButton: {
     backgroundColor: '#FFFFFF',
@@ -549,34 +466,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 3,
-  },
-  tagsContainer: {
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  tagsScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  tag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
-  },
-  tagSelected: {
-    backgroundColor: '#B49AFF',
-    borderColor: '#B49AFF',
-  },
-  tagText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#666666',
-  },
-  tagTextSelected: {
-    color: '#FFFFFF',
   },
   tokisContainer: {
     paddingHorizontal: 20,
@@ -737,6 +626,36 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+  },
+  categoriesContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEAEA',
+  },
+  categoriesScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  categoryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  categoryButtonActive: {
+    backgroundColor: '#B49AFF',
+    borderColor: '#B49AFF',
+  },
+  categoryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#666666',
+  },
+  categoryTextActive: {
     color: '#FFFFFF',
   },
 });

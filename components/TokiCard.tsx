@@ -174,12 +174,12 @@ const formatLocationDisplay = (fullLocation: string): string => {
 
     if (parts.length >= 2) {
         // Try to extract city and landmark/area name
-        const city = parts[parts.length - 2]; // Usually the city is second to last
+        const city = parts[5]; // Usually the city is second to last
         const landmark = parts[0]; // First part is usually the landmark/area name
 
         // If we have a city and landmark, format as "City, Landmark"
         if (city && landmark && city !== landmark) {
-            return `${city}, ${landmark}`;
+            return `${landmark}, ${city}`;
         }
 
         // Fallback: just show first two meaningful parts
@@ -247,7 +247,7 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
                 const day = date.getDate().toString().padStart(2, '0');
                 const month = (date.getMonth() + 1).toString().padStart(2, '0');
                 const year = date.getFullYear().toString().slice(-2);
-                return `${day}/${month} ${timeString}`;
+                return `${day}/${month}`;
             }
         } catch (error) {
             // Fallback to original time if parsing fails

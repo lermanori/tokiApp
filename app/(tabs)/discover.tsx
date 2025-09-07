@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput, Dimensions, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Dimensions, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Filter, Plus, Minus, X, Search, RefreshCw, Navigation, Crosshair, Clock, Users } from 'lucide-react-native';
+import { MapPin, Filter, Plus, Minus, Search, RefreshCw, Navigation, Crosshair, Clock, Users } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
+import TokiFilters from '@/components/TokiFilters';
 import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 
@@ -89,7 +90,7 @@ const formatAttendees = (attendees: number, maxAttendees: number) => {
 //   };
 // };
 
-const categories = ['all', 'sports', 'work', 'music', 'wellness', 'art'];
+const categories = ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
 
 export default function DiscoverScreen() {
   const { state, actions } = useApp();
@@ -99,14 +100,14 @@ export default function DiscoverScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState({
+    visibility: 'all',
     category: 'all',
     distance: 'all',
     availability: 'all',
+    participants: 'all',
     dateFrom: '',
     dateTo: '',
-    radius: '10',
-    sortBy: 'created_at',
-    sortOrder: 'desc'
+    radius: '10'
   });
 
   // Map and location state
@@ -287,8 +288,6 @@ export default function DiscoverScreen() {
     if (selectedFilters.dateFrom) queryParams.dateFrom = selectedFilters.dateFrom;
     if (selectedFilters.dateTo) queryParams.dateTo = selectedFilters.dateTo;
     if (selectedFilters.radius !== '10') queryParams.radius = selectedFilters.radius;
-    if (selectedFilters.sortBy !== 'created_at') queryParams.sortBy = selectedFilters.sortBy;
-    if (selectedFilters.sortOrder !== 'desc') queryParams.sortOrder = selectedFilters.sortOrder;
     
     // Add user location for radius search
     if (userLocation) {
@@ -306,16 +305,20 @@ export default function DiscoverScreen() {
     actions.loadTokisWithFilters(queryParams);
   };
 
+  const handleFilterChange = (filterType: string, value: string) => {
+    setSelectedFilters(prev => ({ ...prev, [filterType]: value }));
+  };
+
   const clearAllFilters = () => {
     setSelectedFilters({
+      visibility: 'all',
       category: 'all',
       distance: 'all',
       availability: 'all',
+      participants: 'all',
       dateFrom: '',
       dateTo: '',
-      radius: '10',
-      sortBy: 'created_at',
-      sortOrder: 'desc'
+      radius: '10'
     });
     setSelectedCategory('all');
     setSearchQuery('');
@@ -358,7 +361,43 @@ export default function DiscoverScreen() {
     const matchesCategory = (selectedCategory === 'all' || event.category === selectedCategory) &&
                            (selectedFilters.category === 'all' || event.category === selectedFilters.category);
     
-    return matchesSearch && matchesCategory;
+    const matchesVisibility = selectedFilters.visibility === 'all' ||
+      event.visibility === selectedFilters.visibility;
+    
+    const matchesDistance = selectedFilters.distance === 'all' ||
+      (() => {
+        // This would need actual distance calculation in a real app
+        // For now, just return true as we don't have distance data
+        return true;
+      })();
+
+    const matchesAvailability = selectedFilters.availability === 'all' ||
+      (() => {
+        const attendees = event.attendees || 0;
+        const maxAttendees = event.maxAttendees || 10;
+        const spotsLeft = maxAttendees - attendees;
+        
+        switch (selectedFilters.availability) {
+          case 'spots available': return spotsLeft > 0;
+          case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
+          case 'waitlist': return spotsLeft <= 0;
+          default: return true;
+        }
+      })();
+    
+    const matchesParticipants = selectedFilters.participants === 'all' ||
+      (() => {
+        const attendees = event.attendees || 0;
+        switch (selectedFilters.participants) {
+          case '1-10': return attendees >= 1 && attendees <= 10;
+          case '10-50': return attendees >= 10 && attendees <= 50;
+          case '50-100': return attendees >= 50 && attendees <= 100;
+          case '100+': return attendees >= 100;
+          default: return true;
+        }
+      })();
+    
+    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
   });
 
   const getJoinStatusText = (event: TokiEvent) => {
@@ -546,227 +585,6 @@ export default function DiscoverScreen() {
     );
   };
 
-  const FilterModal = () => (
-    <Modal
-      visible={showFilterModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowFilterModal(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-            <X size={24} color="#1C1C1C" />
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Filters</Text>
-          <TouchableOpacity onPress={clearAllFilters}>
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.modalContent}>
-          {/* Search */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Search</Text>
-            <View style={styles.searchInputContainer}>
-              <Search size={20} color="#666666" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search events..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholderTextColor="#999999"
-              />
-            </View>
-          </View>
-
-          {/* Category Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Category</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'sports', 'work', 'music', 'wellness', 'art'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.category === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, category: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.category === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Distance Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Distance</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'under 1km', '1-3km', '3-5km', '5km+'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.distance === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, distance: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.distance === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Availability Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Availability</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'spots available', 'almost full', 'waitlist'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.filterOption,
-                    selectedFilters.availability === option && styles.filterOptionSelected
-                  ]}
-                  onPress={() => setSelectedFilters(prev => ({ ...prev, availability: option }))}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedFilters.availability === option && styles.filterOptionTextSelected
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Date Range Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Date Range</Text>
-            <View style={styles.dateInputContainer}>
-              <View style={styles.dateInputWrapper}>
-                <Text style={styles.dateInputLabel}>From:</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="YYYY-MM-DD"
-                  value={selectedFilters.dateFrom}
-                  onChangeText={(text) => setSelectedFilters(prev => ({ ...prev, dateFrom: text }))}
-                  placeholderTextColor="#999999"
-                />
-              </View>
-              <View style={styles.dateInputWrapper}>
-                <Text style={styles.dateInputLabel}>To:</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="YYYY-MM-DD"
-                  value={selectedFilters.dateTo}
-                  onChangeText={(text) => setSelectedFilters(prev => ({ ...prev, dateTo: text }))}
-                  placeholderTextColor="#999999"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Radius Filter */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Search Radius</Text>
-            <View style={styles.radiusContainer}>
-              <Text style={styles.radiusLabel}>Within {selectedFilters.radius} km</Text>
-              <View style={styles.radiusSliderContainer}>
-                <Text style={styles.radiusMin}>1km</Text>
-                <View style={styles.radiusSlider}>
-                  <View style={[styles.radiusSliderTrack, { width: '100%' }]}>
-                    <View style={[styles.radiusSliderFill, { width: `${(parseInt(selectedFilters.radius) / 50) * 100}%` }]} />
-                  </View>
-                  <TouchableOpacity
-                    style={styles.radiusSliderThumb}
-                    onPress={() => {
-                      // Simple radius selection - in a real app you'd use a proper slider
-                      const currentRadius = parseInt(selectedFilters.radius);
-                      const newRadius = currentRadius >= 50 ? 1 : currentRadius + 10;
-                      setSelectedFilters(prev => ({ ...prev, radius: newRadius.toString() }));
-                    }}
-                  />
-                </View>
-                <Text style={styles.radiusMax}>50km</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Sorting Options */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Sort By</Text>
-            <View style={styles.sortContainer}>
-              <View style={styles.sortRow}>
-                <Text style={styles.sortLabel}>Field:</Text>
-                <View style={styles.sortOptions}>
-                  {['created_at', 'title', 'location', 'current_attendees', 'distance'].map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.sortOption,
-                        selectedFilters.sortBy === option && styles.sortOptionSelected
-                      ]}
-                      onPress={() => setSelectedFilters(prev => ({ ...prev, sortBy: option }))}
-                    >
-                      <Text style={[
-                        styles.sortOptionText,
-                        selectedFilters.sortBy === option && styles.sortOptionTextSelected
-                      ]}>
-                        {option === 'created_at' ? 'Date Created' : 
-                         option === 'current_attendees' ? 'Attendees' :
-                         option.charAt(0).toUpperCase() + option.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.sortRow}>
-                <Text style={styles.sortLabel}>Order:</Text>
-                <View style={styles.sortOrderOptions}>
-                  {['asc', 'desc'].map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.sortOrderOption,
-                        selectedFilters.sortOrder === option && styles.sortOrderOptionSelected
-                      ]}
-                      onPress={() => setSelectedFilters(prev => ({ ...prev, sortOrder: option }))}
-                    >
-                      <Text style={[
-                        styles.sortOrderOptionText,
-                        selectedFilters.sortOrder === option && styles.sortOrderOptionTextSelected
-                      ]}>
-                        {option === 'asc' ? 'Ascending' : 'Descending'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <TouchableOpacity style={styles.applyButton} onPress={applyFilters}>
-            <Text style={styles.applyButtonText}>Apply Filters</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
 
   const handleEventPress = (event: TokiEvent) => {
     router.push({
@@ -892,7 +710,15 @@ export default function DiscoverScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
-      <FilterModal />
+      <TokiFilters
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        selectedFilters={selectedFilters}
+        onFilterChange={handleFilterChange}
+        onClearAll={clearAllFilters}
+        onApply={applyFilters}
+        showAdvancedFilters={false}
+      />
     </SafeAreaView>
   );
 }

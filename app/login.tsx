@@ -23,6 +23,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false); // New state for data loading
+  const [errorMessage, setErrorMessage] = useState(''); // New state for error messages
   const { dispatch } = useApp();
   const router = useRouter();
 
@@ -33,6 +34,7 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    setErrorMessage(''); // Clear any previous error messages
     try {
       if (isLogin) {
         const response = await apiService.login({ email, password });
@@ -109,7 +111,7 @@ export default function LoginScreen() {
             setLoadingData(false);
           }
         } else {
-          Alert.alert('Error', response.message || 'Login failed');
+          setErrorMessage(response.message || 'Login failed');
         }
       } else {
         const response = await apiService.register({ name, email, password });
@@ -129,12 +131,28 @@ export default function LoginScreen() {
           // For registration, redirect immediately (user won't have data yet)
           router.replace('/(tabs)');
         } else {
-          Alert.alert('Error', response.message || 'Registration failed');
+          setErrorMessage(response.message || 'Registration failed');
         }
       }
     } catch (error) {
       console.error('Auth error:', error);
-      Alert.alert('Error', 'Authentication failed. Please try again.');
+      
+      // Check if it's a 401 error (incorrect credentials)
+      if (error && typeof error === 'object' && 'status' in error && (error as any).status === 401) {
+        setErrorMessage('Incorrect email or password. Please check your credentials and try again.');
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        // Check if the error message indicates authentication failure
+        const errorMsg = (error as any).message.toLowerCase();
+        if (errorMsg.includes('invalid credentials') || 
+            errorMsg.includes('authentication failed') ||
+            errorMsg.includes('unauthorized')) {
+          setErrorMessage('Incorrect email or password. Please check your credentials and try again.');
+        } else {
+          setErrorMessage((error as any).message || 'Authentication failed. Please try again.');
+        }
+      } else {
+        setErrorMessage('Authentication failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -188,6 +206,12 @@ export default function LoginScreen() {
                   autoComplete="password"
                 />
 
+                {errorMessage ? (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                  </View>
+                ) : null}
+
                 <TouchableOpacity
                   style={[styles.button, (loading || loadingData) && styles.buttonDisabled]}
                   onPress={handleAuth}
@@ -213,6 +237,7 @@ export default function LoginScreen() {
                     setName('');
                     setEmail('');
                     setPassword('');
+                    setErrorMessage(''); // Clear error message when switching modes
                   }}
                 >
                   <Text style={styles.switchText}>
@@ -336,5 +361,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
     opacity: 0.8,
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
   },
 }); 
