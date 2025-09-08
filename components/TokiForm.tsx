@@ -655,7 +655,7 @@ export default function TokiForm({
           <View style={styles.locationInputContainer}>
             <MapPin size={20} color="#B49AFF" style={styles.locationIcon} />
             <TextInput
-              style={styles.locationInput}
+              style={{outline: 'none', ...styles.locationInput}}
               value={location}
               placeholder="e.g., Rothschild Boulevard, Gordon Beach..."
               placeholderTextColor="#999999"
@@ -701,7 +701,7 @@ export default function TokiForm({
                 <View style={styles.dateTimeInputContainer}>
                   
                   <TextInput
-                    style={styles.dateTimeInput}
+                    style={{outline: 'none', ...styles.dateTimeInput}}
                     value={customDateTime ? customDateTime.split(' ')[0] : ''}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor="#999999"
@@ -724,7 +724,7 @@ export default function TokiForm({
                 <Text style={styles.dateTimeLabel}>Time:</Text>
                 <View style={styles.dateTimeInputContainer}>
                   <TextInput
-                    style={styles.dateTimeInput}
+                    style={{outline: 'none', ...styles.dateTimeInput}}
                     value={customDateTime ? customDateTime.split(' ')[1] : ''}
                     placeholder="HH:MM"
                     placeholderTextColor="#999999"
@@ -876,7 +876,7 @@ export default function TokiForm({
           <View style={styles.attendeesInputContainer}>
             <Users size={20} color="#B49AFF" style={styles.attendeesIcon} />
             <TextInput
-              style={styles.attendeesInput}
+              style={{outline: 'none', ...styles.attendeesInput}}
               placeholder="10"
               value={maxAttendees}
               onChangeText={setMaxAttendees}
@@ -891,7 +891,7 @@ export default function TokiForm({
           <View style={styles.tagInputContainer}>
             <Tag size={20} color="#B49AFF" style={styles.tagIcon} />
             <TextInput
-              style={styles.tagInput}
+              style={{outline: 'none', ...styles.tagInput}}
               placeholder="Add custom tags..."
               value={currentTag}
               onChangeText={setCurrentTag}
@@ -1043,8 +1043,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
+    borderWidth: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -1056,6 +1055,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#1C1C1C',
+    borderWidth: 0,
   },
   locationHint: {
     fontSize: 12,
@@ -1157,12 +1157,14 @@ const styles = StyleSheet.create({
   },
   dateTimeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
   dateTimeInputGroup: {
     flex: 1,
     marginRight: 12,
+    minWidth: 200,
   },
   dateTimeLabel: {
     fontSize: 14,
