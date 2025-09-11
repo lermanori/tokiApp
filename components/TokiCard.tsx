@@ -92,11 +92,11 @@ const getJoinStatusText = (toki: TokiCardProps['toki']) => {
     if (toki.isHostedByUser) return 'Hosting';
 
     switch (toki.joinStatus) {
-        case 'not_joined': return 'I want to join';
-        case 'pending': return 'Request pending';
-        case 'approved': return 'Approved - Join chat';
+        case 'not_joined': return 'Join';
+        case 'pending': return 'Pending';
+        case 'approved': return 'Chat';
         case 'joined': return 'You\'re in!';
-        default: return 'I want to join';
+        default: return 'Join';
     }
 };
 
@@ -329,18 +329,18 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                     }}
                     style={styles.headerImage}
                 />
-                <View style={styles.headerImageOverlay} />
+                {/* <View style={styles.headerImageOverlay} /> */}
             </View>
 
             <View style={styles.eventContent}>
                 <View style={styles.eventHeader}>
                     <View style={styles.titleRow}>
-                        <TokiIcon
+                        {/* <TokiIcon
                             category={toki.category}
                             size={20}
                             backgroundColor={getCategoryColor(toki.category)}
                             style={styles.tokiIcon}
-                        />
+                        /> */}
                         <Text style={styles.eventTitle}>{toki.title}</Text>
                     </View>
                     <View style={styles.headerActions}>
@@ -359,14 +359,9 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                 </View>
 
 
-
-                <Text style={styles.eventDescription}>{toki.description}</Text>
-
-
-
                 <View style={styles.eventInfo}>
                     <View style={styles.infoItem}>
-                        <MapPin size={14} color="#666666" />
+                        {/* <MapPin size={14} color="#666666" /> */}
                         <Text style={styles.infoText}>{formatLocationDisplay(toki.location)}</Text>
                     </View>
                     <View style={styles.infoItem}>
@@ -375,15 +370,39 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                             {formatTimeDisplay(toki.time, toki.scheduledTime)}
                         </Text>
                     </View>
-                    <View style={styles.infoItem}>
-                        <Users size={14} color="#666666" />
-                        <Text style={styles.infoText}>
-                            {formatAttendees(toki.attendees, toki.maxAttendees)}
-                        </Text>
-                    </View>
+                </View>
+
+
+
+                <View style={styles.eventInfo}>
+
+
                 </View>
 
                 <View style={styles.eventFooter}>
+
+
+
+                </View>
+
+                <View style={styles.eventInfo}>
+
+                    <View style={styles.tagsRow}>
+                        {toki.tags && toki.tags.slice(0, 3).map((tag: string) => (
+                            <View key={tag} style={styles.tag}>
+                                <Text style={styles.tagText}>{tag}</Text>
+                            </View>
+                        ))}
+                    </View>
+                    <View style={styles.infoItem}>
+                        <Text style={styles.distance}>
+                            {toki.distance ? formatDistanceDisplay(toki.distance) : ''} away
+                        </Text>
+                    </View>
+
+
+                </View>
+                <View style={styles.eventInfo}>
                     <View style={styles.hostInfo}>
                         {toki.host.avatar ? (
                             <Image
@@ -397,7 +416,7 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                                 </Text>
                             </View>
                         )}
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             onPress={() => {
                                 if (!toki.isHostedByUser) {
                                     router.push({
@@ -416,31 +435,20 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                             </Text>
                         </TouchableOpacity>
                     </View>
+                    <View style={{ justifyContent: 'center' }}>
 
-                    <Text style={styles.distance}>
-                        {toki.distance ? formatDistanceDisplay(toki.distance) : ''} away
-                    </Text>
-                </View>
-
-                <View style={styles.eventActions}>
-                    <View style={styles.tagsRow}>
-                        {toki.tags && toki.tags.slice(0, 3).map((tag: string) => (
-                            <View key={tag} style={styles.tag}>
-                                <Text style={styles.tagText}>{tag}</Text>
+                        {/* Status Badge - Show user's relationship to this Toki */}
+                        {toki.isHostedByUser || toki.joinStatus ? (
+                            <View style={[
+                                styles.statusBadge,
+                                { backgroundColor: getJoinStatusColor(toki) }
+                            ]}>
+                                <Text style={styles.statusBadgeText}>
+                                    {getJoinStatusText(toki)}
+                                </Text>
                             </View>
-                        ))}
+                        ) : null}
                     </View>
-                    {/* Status Badge - Show user's relationship to this Toki */}
-                    {toki.isHostedByUser || toki.joinStatus ? (
-                        <View style={[
-                            styles.statusBadge,
-                            { backgroundColor: getJoinStatusColor(toki) }
-                        ]}>
-                            <Text style={styles.statusBadgeText}>
-                                {getJoinStatusText(toki)}
-                            </Text>
-                        </View>
-                    ) : null}
                 </View>
             </View>
         </TouchableOpacity>
@@ -452,6 +460,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         marginBottom: 16,
+        width: '100%',
         shadowColor: '#000',
         shadowOffset: {
             width: 0,
@@ -465,12 +474,12 @@ const styles = StyleSheet.create({
     },
     headerImageContainer: {
         position: 'relative',
-        height: 120,
         width: '100%',
     },
     headerImage: {
         width: '100%',
-        height: '100%',
+        // height: '100%',
+        aspectRatio: 16/9,
         resizeMode: 'cover',
     },
     headerImageOverlay: {
@@ -499,7 +508,7 @@ const styles = StyleSheet.create({
         marginRight: 12,
     },
     eventTitle: {
-        fontSize: 18,
+        fontSize: 22,
         fontFamily: 'Inter-SemiBold',
         color: '#1C1C1C',
         flex: 1,
@@ -595,7 +604,6 @@ const styles = StyleSheet.create({
     hostInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
         gap: 8,
     },
     hostAvatar: {

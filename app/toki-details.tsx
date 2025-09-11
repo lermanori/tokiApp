@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle } from 'lucide-react-native';
@@ -79,33 +79,33 @@ const getActivityLabel = (category: string): string => {
 // Helper function to format location for compact display
 const formatLocationDisplay = (fullLocation: string): string => {
   if (!fullLocation) return '';
-  
+
   // Split by commas and clean up
   const parts = fullLocation.split(',').map(part => part.trim());
-  
+
   if (parts.length >= 2) {
     // Try to extract city and landmark/area name
     const city = parts[parts.length - 2]; // Usually the city is second to last
     const landmark = parts[0]; // First part is usually the landmark/area name
-    
+
     // If we have a city and landmark, format as "City, Landmark"
     if (city && landmark && city !== landmark) {
       return `${city}, ${landmark}`;
     }
-    
+
     // Fallback: just show first two meaningful parts
-    const meaningfulParts = parts.filter(part => 
-      part && 
-      !part.includes('Subdistrict') && 
+    const meaningfulParts = parts.filter(part =>
+      part &&
+      !part.includes('Subdistrict') &&
       !part.includes('District') &&
       part.length > 2
     );
-    
+
     if (meaningfulParts.length >= 2) {
       return `${meaningfulParts[0]}, ${meaningfulParts[1]}`;
     }
   }
-  
+
   // If all else fails, just show the first meaningful part
   return parts[0] || fullLocation;
 };
@@ -273,6 +273,7 @@ export default function TokiDetailsScreen() {
   const [isCompleting, setIsCompleting] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const lastProcessedTokiId = useRef<string | null>(null);
+  const [showHostOnlyConfirm, setShowHostOnlyConfirm] = useState(false);
 
   // Function to format time display smartly
   const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): string => {
@@ -284,16 +285,16 @@ export default function TokiDetailsScreen() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        
+
         // Format time as HH:MM
         const timeString = date.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true
         });
-        
+
         // Check if it's today, tomorrow, or later
         if (eventDate.getTime() === today.getTime()) {
           return `today at ${timeString}`;
@@ -311,22 +312,22 @@ export default function TokiDetailsScreen() {
         return time || 'Time TBD';
       }
     }
-    
+
     // If no scheduled time, handle the time parameter safely
     if (!time) {
       return 'Time TBD';
     }
-    
+
     // For relative time slots, show as is
     if (['Now', '30 min', '1 hour', '2 hours', '3 hours', 'Tonight', 'Tomorrow'].includes(time)) {
       return time;
     }
-    
+
     // For specific time slots like "9:00 AM", show as is
     if (time.includes(':')) {
       return time;
     }
-    
+
     // For generic slots like "morning", "afternoon", "evening"
     return time;
   };
@@ -351,9 +352,9 @@ export default function TokiDetailsScreen() {
 
   const handleSaveToggle = async () => {
     if (isSaving || !params.tokiId) return;
-    
+
     console.log('💝 Toggling save status for Toki:', params.tokiId, 'Current state:', isLiked);
-    
+
     try {
       setIsSaving(true);
       if (isLiked) {
@@ -381,7 +382,7 @@ export default function TokiDetailsScreen() {
 
   const loadTokiData = async (tokiId: string, retryCount = 0) => {
     if (!tokiId) return;
-    
+
     setIsLoading(true);
     try {
       const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
@@ -390,11 +391,11 @@ export default function TokiDetailsScreen() {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const tokiData = data.data;
-        
+
         // Transform backend data to match our interface
         const transformedToki: TokiDetails = {
           id: tokiData.id,
@@ -421,7 +422,7 @@ export default function TokiDetailsScreen() {
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
           participants: tokiData.participants || [], // Ensure participants are loaded
         };
-        
+
         console.log('🔍 Ownership check:', {
           hostId: tokiData.host?.id,
           currentUserId: state.currentUser?.id,
@@ -429,12 +430,12 @@ export default function TokiDetailsScreen() {
           hasCurrentUser: !!state.currentUser?.id,
           hasHostId: !!tokiData.host?.id
         });
-        
+
         setToki(transformedToki);
-        
+
         // Check saved status after Toki data is loaded
         checkSavedStatus();
-        
+
         // If this is a newly created Toki and it doesn't have images yet, retry after a delay
         // This handles the case where images are still being uploaded
         if (!tokiData.imageUrl && retryCount < 3) {
@@ -470,7 +471,7 @@ export default function TokiDetailsScreen() {
   // Load data when component mounts or tokiId changes
   useEffect(() => {
     const tokiId = params.tokiId as string;
-    
+
     if (tokiId && tokiId !== lastProcessedTokiId.current) {
       lastProcessedTokiId.current = tokiId;
       // Ensure current user is loaded before loading Toki data
@@ -496,7 +497,7 @@ export default function TokiDetailsScreen() {
 
   const handleJoinRequest = async () => {
     if (!toki) return;
-    
+
     if (toki.isHostedByUser) {
       Alert.alert('Your Event', 'This is your event! You can manage it from your profile.');
       return;
@@ -522,11 +523,11 @@ export default function TokiDetailsScreen() {
             Alert.alert('Error', 'Failed to send join request. Please try again.');
           }
           break;
-        
+
         case 'pending':
           Alert.alert('Request Pending', 'Your join request is waiting for host approval.');
           break;
-        
+
         case 'approved':
           // Join the event using the backend
           const success = await actions.joinToki(toki.id);
@@ -536,19 +537,19 @@ export default function TokiDetailsScreen() {
               ...prev,
               joinStatus: 'joined',
             }) : null);
-            
+
             // Refresh data from backend to get accurate attendee count
             setTimeout(() => {
               loadTokiData(toki.id);
             }, 500);
-            
+
             Alert.alert('Welcome!', 'You\'ve joined the event! You can now access the group chat.');
             console.log('✅ Successfully joined Toki:', toki.id);
           } else {
             Alert.alert('Error', 'Failed to join the event. Please try again.');
           }
           break;
-        
+
         case 'joined':
           Alert.alert('Already Joined', 'You\'re already part of this event!');
           break;
@@ -563,12 +564,12 @@ export default function TokiDetailsScreen() {
 
   const handleChatPress = () => {
     if (!toki) return;
-    
+
     // Only allow chat access if user is approved or joined
     if (toki.joinStatus === 'approved' || toki.joinStatus === 'joined' || toki.isHostedByUser) {
       router.push({
         pathname: '/chat',
-        params: { 
+        params: {
           tokiId: toki.id,
           otherUserName: toki.title,
           isGroup: 'true'
@@ -576,7 +577,7 @@ export default function TokiDetailsScreen() {
       });
     } else {
       Alert.alert(
-        'Chat Access Restricted', 
+        'Chat Access Restricted',
         'You need to be approved by the host to access the group chat. Please send a join request first.'
       );
     }
@@ -588,21 +589,21 @@ export default function TokiDetailsScreen() {
 
   const handleEditPress = () => {
     if (!toki) return;
-    
+
     console.log('Edit Toki pressed for:', toki.id);
     router.push(`/edit-toki?tokiId=${toki.id}`);
   };
 
   const handleDeletePress = () => {
     if (!toki) return;
-    
+
     console.log('🗑️ Delete button pressed for Toki:', toki.id);
     setShowDeleteConfirm(true);
   };
 
   const handleConfirmDelete = async () => {
     if (!toki) return;
-    
+
     console.log('🗑️ User confirmed delete for Toki:', toki.id);
     try {
       console.log('🗑️ Calling deleteTokiBackend...');
@@ -647,7 +648,7 @@ export default function TokiDetailsScreen() {
       avatar?: string;
       isHost: boolean;
     }> = [];
-    
+
     // Add other participants from the Toki (exclude current user)
     if (toki.participants && Array.isArray(toki.participants)) {
       console.log('🎯 Participants from backend:', toki.participants);
@@ -664,9 +665,9 @@ export default function TokiDetailsScreen() {
     } else {
       console.log('⚠️ No participants data from backend:', toki.participants);
     }
-    
+
     console.log('🎯 Final participants for rating:', participants);
-    
+
     // Check if all participants are already rated
     if (participants.length > 0) {
       try {
@@ -674,10 +675,10 @@ export default function TokiDetailsScreen() {
         if (ratingsCheck.success && ratingsCheck.data) {
           const alreadyRatedIds = ratingsCheck.data.data.alreadyRatedUserIds || [];
           const unratedParticipants = participants.filter(p => !alreadyRatedIds.includes(p.id));
-          
+
           console.log('🎯 Already rated participants:', alreadyRatedIds);
           console.log('🎯 Unrated participants:', unratedParticipants.map(p => p.id));
-          
+
           if (unratedParticipants.length === 0) {
             // All participants are already rated, complete event immediately
             console.log('🎯 All participants already rated, completing event directly');
@@ -708,25 +709,25 @@ export default function TokiDetailsScreen() {
 
   const completeEventAfterRatings = async () => {
     if (!toki) return;
-    
+
     console.log('🚀 Starting completeEventAfterRatings for Toki:', toki.id);
     setIsJoining(true);
-    
+
     try {
       console.log('🚀 Calling actions.completeToki...');
       const success = await actions.completeToki(toki.id);
       console.log('🚀 completeToki result:', success);
-      
+
       if (success) {
         console.log('🚀 Updating local state...');
         setToki(prev => prev ? ({
           ...prev,
           joinStatus: 'completed',
         }) : null);
-        
+
         console.log('🚀 Showing success alert...');
         Alert.alert(
-          'Event Completed', 
+          'Event Completed',
           'Your event has been marked as completed!',
           [
             {
@@ -739,7 +740,7 @@ export default function TokiDetailsScreen() {
             }
           ]
         );
-        
+
         // Also add a fallback navigation in case the alert doesn't work
         setTimeout(() => {
           console.log('🚀 Fallback navigation to explore page...');
@@ -761,7 +762,7 @@ export default function TokiDetailsScreen() {
   const getJoinButtonText = () => {
     if (!toki) return 'Join';
     if (toki.isHostedByUser) return 'Your Event';
-    
+
     switch (toki.joinStatus) {
       case 'not_joined': return 'I want to join';
       case 'pending': return 'Request Pending';
@@ -774,7 +775,7 @@ export default function TokiDetailsScreen() {
   const getJoinButtonColor = () => {
     if (!toki) return '#4DC4AA';
     if (toki.isHostedByUser) return '#B49AFF';
-    
+
     switch (toki.joinStatus) {
       case 'not_joined': return '#4DC4AA'; // I want to join - pastel green
       case 'pending': return '#F9E79B'; // Request pending - soft yellow
@@ -820,13 +821,13 @@ export default function TokiDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{...styles.content,width: '100%', maxWidth: 1000, alignSelf: 'center'}} showsVerticalScrollIndicator={false}>
         <View style={styles.imageContainer}>
-          <Image 
-            source={{ 
-              uri: toki.image || getActivityPhoto(toki.category || 'social') 
-            }} 
-            style={styles.headerImage} 
+          <Image
+            source={{
+              uri: toki.image || getActivityPhoto(toki.category || 'social')
+            }}
+            style={styles.headerImage}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent']}
@@ -853,10 +854,10 @@ export default function TokiDetailsScreen() {
                   <Text style={styles.loadingText}>...</Text>
                 </View>
               ) : (
-                <Heart 
-                  size={20} 
-                  color={isLiked ? "#8B5CF6" : "#FFFFFF"} 
-                  fill={isLiked ? "#8B5CF6" : "transparent"} 
+                <Heart
+                  size={20}
+                  color={isLiked ? "#8B5CF6" : "#FFFFFF"}
+                  fill={isLiked ? "#8B5CF6" : "transparent"}
                 />
               )}
             </TouchableOpacity>
@@ -897,9 +898,9 @@ export default function TokiDetailsScreen() {
                 {toki.participants.map((participant, index) => (
                   <View key={participant.id} style={styles.participantItem}>
                     {participant.avatar ? (
-                      <Image 
-                        source={{ uri: participant.avatar }} 
-                        style={styles.participantAvatar} 
+                      <Image
+                        source={{ uri: participant.avatar }}
+                        style={styles.participantAvatar}
                       />
                     ) : (
                       <View style={[styles.participantAvatar, styles.participantFallbackAvatar]}>
@@ -909,7 +910,7 @@ export default function TokiDetailsScreen() {
                       </View>
                     )}
                     <View style={styles.participantInfo}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={() => {
                           if (participant.id !== state.currentUser?.id) {
                             router.push({
@@ -965,7 +966,7 @@ export default function TokiDetailsScreen() {
                 </View>
               )}
               <View style={styles.hostDetails}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => {
                     if (!toki.isHostedByUser) {
                       router.push({
@@ -987,10 +988,10 @@ export default function TokiDetailsScreen() {
                   <Text style={styles.hostBio}>{toki.host.bio}</Text>
                 )}
               </View>
-              
+
               {/* Chat with host button - only show if not hosting yourself */}
               {!toki.isHostedByUser && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.hostChatButton}
                   onPress={async () => {
                     try {
@@ -999,7 +1000,7 @@ export default function TokiDetailsScreen() {
                       if (hostId) {
                         router.push({
                           pathname: '/chat',
-                          params: { 
+                          params: {
                             otherUserId: hostId,
                             otherUserName: toki.host.name,
                             isGroup: 'false'
@@ -1025,12 +1026,12 @@ export default function TokiDetailsScreen() {
               <UserPlus size={20} color="#B49AFF" />
               <Text style={styles.inviteText}>Invite</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={[
                 styles.chatButton,
                 !canAccessChat() && styles.chatButtonDisabled
-              ]} 
+              ]}
               onPress={handleChatPress}
             >
               <MessageCircle size={20} color={canAccessChat() ? "#666666" : "#9CA3AF"} />
@@ -1052,12 +1053,27 @@ export default function TokiDetailsScreen() {
                     <Edit size={20} color="#4DC4AA" />
                     <Text style={styles.editText}>Edit</Text>
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity style={styles.completeButton} onPress={handleCompleteEvent}>
+
+                  <TouchableOpacity
+                    style={styles.completeButton}
+                    onPress={() => {
+                      try {
+                        const otherParticipantsCount = Array.isArray(toki.participants)
+                          ? toki.participants.filter(p => !p.isHost).length
+                          : Math.max((toki.attendees || 0) - 1, 0);
+                        const isHostOnlyEvent = !!toki.isHostedByUser && otherParticipantsCount === 0;
+                        if (isHostOnlyEvent) {
+                          setShowHostOnlyConfirm(true);
+                          return;
+                        }
+                      } catch {}
+                      handleCompleteEvent();
+                    }}
+                  >
                     <CheckCircle size={20} color="#10B981" />
-                    <Text style={styles.completeText}>Complete Event</Text>
+                    <Text style={styles.completeText}>Complete</Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePress}>
                     <Trash2 size={20} color="#EF4444" />
                     <Text style={styles.deleteText}>Delete</Text>
@@ -1068,7 +1084,7 @@ export default function TokiDetailsScreen() {
                   <TouchableOpacity style={styles.cancelButton} onPress={handleCancelDelete}>
                     <Text style={styles.cancelText}>Cancel</Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity style={styles.confirmDeleteButton} onPress={handleConfirmDelete}>
                     <Trash2 size={20} color="#FFFFFF" />
                     <Text style={styles.confirmDeleteText}>Confirm Delete</Text>
@@ -1080,11 +1096,42 @@ export default function TokiDetailsScreen() {
         </View>
       </ScrollView>
 
+      {/* Host-only confirmation modal */}
+      <Modal
+        transparent
+        visible={showHostOnlyConfirm}
+        animationType="fade"
+        onRequestClose={() => setShowHostOnlyConfirm(false)}
+      >
+        <View style={styles.pickerBackdrop}>
+          <View style={styles.confirmModalContainer}>
+            <Text style={styles.confirmTitle}>Complete event?</Text>
+            <Text style={styles.confirmSubtitle}>
+              Only you are listed as a participant. Are you sure you want to mark this Toki as completed?
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowHostOnlyConfirm(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={() => {
+                  setShowHostOnlyConfirm(false);
+                  handleCompleteEvent();
+                }}
+              >
+                <Text style={styles.confirmButtonText}>Complete Anyway</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.footer}>
         <TouchableOpacity
           style={[
-            styles.joinButton, 
-            { 
+            styles.joinButton,
+            {
               backgroundColor: getJoinButtonColor(),
               opacity: isJoining ? 0.6 : 1
             }
@@ -1155,11 +1202,16 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: 'relative',
-    height: 300,
+    width: '100%',
+    maxWidth: 1200,       // cap on wide screens
+    alignSelf: 'center',
   },
   headerImage: {
     width: '100%',
-    height: '100%',
+    // height: '100%',
+    aspectRatio: 16 / 9,
+    resizeMode: 'cover',
+    maxHeight: 600,
   },
   fallbackHeaderImage: {
     backgroundColor: '#F9FAFB',
@@ -1219,7 +1271,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    marginTop: -20,
+    // marginTop: -20,
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 100,
@@ -1552,6 +1604,41 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  confirmModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    maxWidth: 420,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+    marginBottom: 8,
+  },
+  confirmSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666666',
+    marginBottom: 16,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  confirmButton: {
+    backgroundColor: '#B49AFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
   },
 
 });

@@ -92,7 +92,7 @@ export default function ExploreScreen() {
       toki.host.name.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory = (selectedCategory === 'all' || toki.category === selectedCategory) &&
-                           (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
+      (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
 
     const matchesVisibility = selectedFilters.visibility === 'all' ||
       toki.visibility === selectedFilters.visibility;
@@ -109,7 +109,7 @@ export default function ExploreScreen() {
         const attendees = toki.attendees || 0;
         const maxAttendees = toki.maxAttendees || 10;
         const spotsLeft = maxAttendees - attendees;
-        
+
         switch (selectedFilters.availability) {
           case 'spots available': return spotsLeft > 0;
           case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
@@ -222,7 +222,7 @@ export default function ExploreScreen() {
               <View style={styles.searchInputContainer}>
                 <Search size={20} color="#666666" />
                 <TextInput
-                  style={{outline: 'none',...styles.searchInput}}
+                  style={{ outline: 'none', ...styles.searchInput }}
                   placeholder="Search activities, locations, hosts..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -272,7 +272,7 @@ export default function ExploreScreen() {
           </ScrollView>
         </View>
 
-        <View style={styles.tokisContainer}>
+        <View>
           <Text style={styles.sectionTitle}>
             {filteredTokis.length} Toki{filteredTokis.length !== 1 ? 's' : ''} nearby
             {searchQuery && (
@@ -297,6 +297,9 @@ export default function ExploreScreen() {
               </TouchableOpacity>
             </View>
           )}
+        </View>
+        <View style={styles.tokisContainer}>
+
 
           {!state.loading && filteredTokis.length === 0 ? (
             <View style={styles.emptyState}>
@@ -323,23 +326,24 @@ export default function ExploreScreen() {
             </View>
           ) : (
             filteredTokis.map((toki) => (
-              <TokiCard
-                key={toki.id}
-                toki={toki}
-                onPress={() => handleTokiPress(toki)}
-                onHostPress={() => {
-                  if (toki.host.id && toki.host.id !== state.currentUser?.id) {
-                    router.push({
-                      pathname: '/chat',
-                      params: {
-                        otherUserId: toki.host.id,
-                        otherUserName: toki.host.name,
-                        isGroup: 'false'
-                      }
-                    });
-                  }
-                }}
-              />
+              <View key={toki.id} style={styles.cardWrapper}>
+                <TokiCard
+                  toki={toki}
+                  onPress={() => handleTokiPress(toki)}
+                  onHostPress={() => {
+                    if (toki.host.id && toki.host.id !== state.currentUser?.id) {
+                      router.push({
+                        pathname: '/chat',
+                        params: {
+                          otherUserId: toki.host.id,
+                          otherUserName: toki.host.name,
+                          isGroup: 'false'
+                        }
+                      });
+                    }
+                  }}
+                />
+              </View>
             ))
           )}
         </View>
@@ -468,14 +472,27 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tokisContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  cardWrapper: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 360,
+    maxWidth: 520,
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 20,
     fontFamily: 'Inter-SemiBold',
     color: '#1C1C1C',
     marginBottom: 16,
+    marginTop: 16,
+    marginLeft: 20,
   },
   searchResultText: {
     fontSize: 16,

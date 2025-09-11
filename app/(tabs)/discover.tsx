@@ -142,9 +142,9 @@ export default function DiscoverScreen() {
         },
         image: toki.image || getActivityPhoto(toki.category),
         tags: toki.tags || [toki.category],
-        coordinate: { 
-          latitude: toki.latitude || 32.0853, 
-          longitude: toki.longitude || 34.7818 
+        coordinate: {
+          latitude: toki.latitude || 32.0853,
+          longitude: toki.longitude || 34.7818
         },
         isHostedByUser: toki.isHostedByUser || false,
         joinStatus: toki.joinStatus || 'not_joined',
@@ -218,7 +218,7 @@ export default function DiscoverScreen() {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        
+
         setUserLocation(location);
         setMapRegion({
           latitude: location.coords.latitude,
@@ -226,7 +226,7 @@ export default function DiscoverScreen() {
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         });
-        
+
         console.log('📍 User location obtained:', location.coords);
       } catch (error) {
         console.error('📍 Error getting location:', error);
@@ -245,7 +245,7 @@ export default function DiscoverScreen() {
       link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
       link.crossOrigin = '';
       document.head.appendChild(link);
-      
+
       // Add custom CSS for markers
       const style = document.createElement('style');
       style.textContent = `
@@ -266,7 +266,7 @@ export default function DiscoverScreen() {
         }
       `;
       document.head.appendChild(style);
-      
+
       return () => {
         if (document.head.contains(link)) {
           document.head.removeChild(link);
@@ -280,15 +280,15 @@ export default function DiscoverScreen() {
 
   const applyFilters = () => {
     setShowFilterModal(false);
-    
+
     // Build query parameters for advanced search
     const queryParams: any = {};
-    
+
     if (selectedFilters.category !== 'all') queryParams.category = selectedFilters.category;
     if (selectedFilters.dateFrom) queryParams.dateFrom = selectedFilters.dateFrom;
     if (selectedFilters.dateTo) queryParams.dateTo = selectedFilters.dateTo;
     if (selectedFilters.radius !== '10') queryParams.radius = selectedFilters.radius;
-    
+
     // Add user location for radius search
     if (userLocation) {
       queryParams.userLatitude = userLocation.coords.latitude.toString();
@@ -298,9 +298,9 @@ export default function DiscoverScreen() {
       queryParams.userLatitude = '32.0853';
       queryParams.userLongitude = '34.7818';
     }
-    
+
     console.log('🔍 [DISCOVER] Applying advanced filters:', queryParams);
-    
+
     // Call the backend with advanced filters
     actions.loadTokisWithFilters(queryParams);
   };
@@ -352,18 +352,18 @@ export default function DiscoverScreen() {
   };
 
   const filteredEvents = events.filter(event => {
-    const matchesSearch = searchQuery === '' || 
+    const matchesSearch = searchQuery === '' ||
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
+
     const matchesCategory = (selectedCategory === 'all' || event.category === selectedCategory) &&
-                           (selectedFilters.category === 'all' || event.category === selectedFilters.category);
-    
+      (selectedFilters.category === 'all' || event.category === selectedFilters.category);
+
     const matchesVisibility = selectedFilters.visibility === 'all' ||
       event.visibility === selectedFilters.visibility;
-    
+
     const matchesDistance = selectedFilters.distance === 'all' ||
       (() => {
         // This would need actual distance calculation in a real app
@@ -376,7 +376,7 @@ export default function DiscoverScreen() {
         const attendees = event.attendees || 0;
         const maxAttendees = event.maxAttendees || 10;
         const spotsLeft = maxAttendees - attendees;
-        
+
         switch (selectedFilters.availability) {
           case 'spots available': return spotsLeft > 0;
           case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
@@ -384,7 +384,7 @@ export default function DiscoverScreen() {
           default: return true;
         }
       })();
-    
+
     const matchesParticipants = selectedFilters.participants === 'all' ||
       (() => {
         const attendees = event.attendees || 0;
@@ -396,13 +396,13 @@ export default function DiscoverScreen() {
           default: return true;
         }
       })();
-    
+
     return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
   });
 
   const getJoinStatusText = (event: TokiEvent) => {
     if (event.isHostedByUser) return 'Hosting';
-    
+
     switch (event.joinStatus) {
       case 'not_joined': return 'I want to join';
       case 'pending': return 'Request pending';
@@ -414,7 +414,7 @@ export default function DiscoverScreen() {
 
   const getJoinStatusColor = (event: TokiEvent) => {
     if (event.isHostedByUser) return '#B49AFF'; // Hosting - soft purple
-    
+
     switch (event.joinStatus) {
       case 'not_joined': return '#4DC4AA'; // I want to join - pastel green
       case 'pending': return '#F9E79B'; // Request pending - soft yellow
@@ -447,7 +447,7 @@ export default function DiscoverScreen() {
     }
   };
 
-    const renderInteractiveMap = () => {
+  const renderInteractiveMap = () => {
     // Web platform with Leaflet
     if (isWeb) {
       return (
@@ -462,10 +462,10 @@ export default function DiscoverScreen() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              
+
               {/* User location marker */}
               {userLocation && (
-                <Marker 
+                <Marker
                   position={[userLocation.coords.latitude, userLocation.coords.longitude]}
                   icon={L.divIcon({
                     className: 'user-location-marker',
@@ -505,7 +505,7 @@ export default function DiscoverScreen() {
               {filteredEvents.map((event) => {
                 if (event.coordinate.latitude && event.coordinate.longitude) {
                   return (
-                    <Marker 
+                    <Marker
                       key={event.id}
                       position={[event.coordinate.latitude, event.coordinate.longitude]}
                       icon={L.divIcon({
@@ -539,10 +539,10 @@ export default function DiscoverScreen() {
                       <Popup>
                         <div style={styles.leafletPopup}>
                           <strong>{event.title}</strong><br />
-                          <span style={{color: '#B49AFF'}}>{event.category}</span><br />
+                          <span style={{ color: '#B49AFF' }}>{event.category}</span><br />
                           {event.location}<br />
                           {formatAttendees(event.attendees, event.maxAttendees)}<br />
-                          <button 
+                          <button
                             style={styles.leafletButton}
                             onClick={() => handleEventPress(event)}
                           >
@@ -556,7 +556,7 @@ export default function DiscoverScreen() {
                 return null;
               })}
             </MapContainer>
-            
+
             {/* Map Controls Overlay */}
             <div style={styles.webMapControls}>
               <button style={styles.webMapControlButton} onClick={centerOnUserLocation}>
@@ -589,7 +589,7 @@ export default function DiscoverScreen() {
   const handleEventPress = (event: TokiEvent) => {
     router.push({
       pathname: '/toki-details',
-      params: { 
+      params: {
         tokiId: event.id,
         tokiData: JSON.stringify(event)
       }
@@ -609,8 +609,8 @@ export default function DiscoverScreen() {
         <View style={styles.headerContent}>
           <Text style={styles.title}>Discover</Text>
           <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={styles.headerButton} 
+            <TouchableOpacity
+              style={styles.headerButton}
               onPress={handleRefresh}
               disabled={state.loading}
             >
@@ -631,32 +631,35 @@ export default function DiscoverScreen() {
         {showMap ? renderInteractiveMap() : (
           <View style={styles.listViewContainer}>
             <Text style={styles.listViewTitle}>Activities Near You</Text>
-            {filteredEvents.map((event) => (
-              <TokiCard
-                key={event.id}
-                toki={event}
-                onPress={() => handleEventPress(event)}
-                onHostPress={() => {
-                  if (event.host.id && event.host.id !== state.currentUser?.id) {
-                    router.push({
-                      pathname: '/chat',
-                      params: {
-                        otherUserId: event.host.id,
-                        otherUserName: event.host.name,
-                        isGroup: 'false'
+            <View style={styles.eventsContainer}>
+              {filteredEvents.map((event) => (
+                <View key={event.id} style={styles.cardWrapper}>
+                  <TokiCard
+                    toki={event}
+                    onPress={() => handleEventPress(event)}
+                    onHostPress={() => {
+                      if (event.host.id && event.host.id !== state.currentUser?.id) {
+                        router.push({
+                          pathname: '/chat',
+                          params: {
+                            otherUserId: event.host.id,
+                            otherUserName: event.host.name,
+                            isGroup: 'false'
+                          }
+                        });
                       }
-                    });
-                  }
-                }}
-              />
-            ))}
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
         {/* Categories */}
         <View style={styles.categoriesContainer}>
-          <ScrollView 
-            horizontal 
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesScroll}
           >
@@ -679,34 +682,36 @@ export default function DiscoverScreen() {
             ))}
           </ScrollView>
         </View>
-
-        {/* Events List */}
-        <View style={styles.eventsContainer}>
+        <View>
           <Text style={styles.sectionTitle}>
             {filteredEvents.length} Toki{filteredEvents.length !== 1 ? 's' : ''} nearby
           </Text>
-          
+        </View>
+        {/* Events List */}
+        <View style={styles.eventsContainer}>
+
           {filteredEvents.map((event) => (
-            <TokiCard
-              key={event.id}
-              toki={event}
-              onPress={() => handleEventPress(event)}
-              onHostPress={() => {
-                if (event.host.id && event.host.id !== state.currentUser?.id) {
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      otherUserId: event.host.id,
-                      otherUserName: event.host.name,
-                      isGroup: 'false'
-                    }
-                  });
-                }
-              }}
-            />
+            <View key={event.id} style={styles.cardWrapper}>
+              <TokiCard
+                toki={event}
+                onPress={() => handleEventPress(event)}
+                onHostPress={() => {
+                  if (event.host.id && event.host.id !== state.currentUser?.id) {
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        otherUserId: event.host.id,
+                        otherUserName: event.host.name,
+                        isGroup: 'false'
+                      }
+                    });
+                  }
+                }}
+              />
+            </View>
           ))}
         </View>
-        
+
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
@@ -965,14 +970,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   eventsContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  cardWrapper: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 360,
+    maxWidth: 520,
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 20,
     fontFamily: 'Inter-SemiBold',
     color: '#1C1C1C',
     marginBottom: 16,
+    marginTop: 16,
+    marginLeft: 20,
   },
   eventCard: {
     backgroundColor: '#FFFFFF',
