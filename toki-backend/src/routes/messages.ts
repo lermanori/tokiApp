@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -101,7 +102,7 @@ router.get('/conversations', authenticateToken, async (req: Request, res: Respon
       }
     });
   } catch (error) {
-    console.error('Error fetching conversations:', error);
+    logger.error('Error fetching conversations:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -194,7 +195,7 @@ router.post('/conversations', authenticateToken, async (req: Request, res: Respo
       }
     });
   } catch (error) {
-    console.error('Error starting conversation:', error);
+    logger.error('Error starting conversation:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -270,7 +271,7 @@ router.get('/conversations/:conversationId/messages', authenticateToken, async (
       }
     });
   } catch (error) {
-    console.error('Error fetching conversation messages:', error);
+    logger.error('Error fetching conversation messages:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -331,7 +332,7 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
     // Store messages in pure UTC timezone
     const utcTimestamp = new Date().toISOString();
     
-    console.log('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
+    logger.debug('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
     
     const result = await pool.query(
       `INSERT INTO messages (conversation_id, sender_id, content, message_type, media_url, created_at)
@@ -369,20 +370,20 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
     // Emit WebSocket event
     const io = req.app.get('io');
     if (io) {
-      console.log('📤 [BACKEND] SENDING EVENT: message-received');
-      console.log('📤 [BACKEND] Room: conversation-', conversationId);
-      console.log('📤 [BACKEND] Sender ID:', req.user!.id);
-      console.log('📤 [BACKEND] Message data:', messageData);
+      logger.info('📤 [BACKEND] SENDING EVENT: message-received');
+      logger.info('📤 [BACKEND] Room: conversation-', conversationId);
+      logger.debug('📤 [BACKEND] Sender ID:', req.user!.id);
+      logger.debug('📤 [BACKEND] Message data:', messageData);
       
       // Get room members for logging
       const roomName = `conversation-${conversationId}`;
       const roomMembers = io.sockets.adapter.rooms.get(roomName);
-      console.log('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
+      logger.debug('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
       
       io.to(roomName).emit('message-received', messageData);
-      console.log('✅ [BACKEND] Event message-received sent to room:', roomName);
+      logger.info('✅ [BACKEND] Event message-received sent to room:', roomName);
     } else {
-      console.log('❌ [BACKEND] WebSocket io instance not found!');
+      logger.warn('❌ [BACKEND] WebSocket io instance not found!');
     }
 
     return res.json({
@@ -394,7 +395,7 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
       }
     });
   } catch (error) {
-    console.error('Error sending message:', error);
+    logger.error('Error sending message:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -473,7 +474,7 @@ router.post('/conversations/:id/read', authenticateToken, async (req: Request, r
         user_id: req.user!.id,
         last_read_at: new Date().toISOString()
       });
-      console.log('📤 [BACKEND] Emitted read:update event for conversation:', conversationId);
+      logger.info('📤 [BACKEND] Emitted read:update event for conversation:', conversationId);
     }
 
     return res.json({
@@ -486,7 +487,7 @@ router.post('/conversations/:id/read', authenticateToken, async (req: Request, r
     });
 
   } catch (error) {
-    console.error('Error marking conversation as read:', error);
+    logger.error('Error marking conversation as read:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -563,7 +564,7 @@ router.get('/tokis/:tokiId/messages', authenticateToken, async (req: Request, re
       }
     });
   } catch (error) {
-    console.error('Error fetching Toki messages:', error);
+    logger.error('Error fetching Toki messages:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -625,7 +626,7 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
     // Store messages in pure UTC timezone
     const utcTimestamp = new Date().toISOString();
     
-    console.log('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
+    logger.debug('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
     
     const result = await pool.query(
       `INSERT INTO messages (toki_id, sender_id, content, message_type, media_url, created_at)
@@ -635,14 +636,14 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
     );
 
     // Debug timestamp
-    console.log('🕐 DEBUG: Node.js UTC timestamp:', utcTimestamp);
-    console.log('🕐 DEBUG: Raw DB timestamp:', result.rows[0].created_at);
-    console.log('🕐 DEBUG: Timestamp type:', typeof result.rows[0].created_at);
-    console.log('🕐 DEBUG: Current server time:', new Date().toISOString());
-    console.log('🕐 DEBUG: Server local time:', new Date().toLocaleString());
-    console.log('🕐 DEBUG: Server timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
-    console.log('🕐 DEBUG: Expected UTC hour:', new Date().getUTCHours());
-    console.log('🕐 DEBUG: Expected local hour:', new Date().getHours());
+    logger.debug('🕐 DEBUG: Node.js UTC timestamp:', utcTimestamp);
+    logger.debug('🕐 DEBUG: Raw DB timestamp:', result.rows[0].created_at);
+    logger.debug('🕐 DEBUG: Timestamp type:', typeof result.rows[0].created_at);
+    logger.debug('🕐 DEBUG: Current server time:', new Date().toISOString());
+    logger.debug('🕐 DEBUG: Server local time:', new Date().toLocaleString());
+    logger.debug('🕐 DEBUG: Server timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    logger.debug('🕐 DEBUG: Expected UTC hour:', new Date().getUTCHours());
+    logger.debug('🕐 DEBUG: Expected local hour:', new Date().getHours());
 
     // Get sender info for WebSocket emission
     const senderResult = await pool.query(
@@ -665,20 +666,20 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
     // Emit WebSocket event
     const io = req.app.get('io');
     if (io) {
-      console.log('📤 [BACKEND] SENDING EVENT: toki-message-received');
-      console.log('📤 [BACKEND] Room: toki-', tokiId);
-      console.log('📤 [BACKEND] Sender ID:', req.user!.id);
-      console.log('📤 [BACKEND] Message data:', messageData);
+      logger.info('📤 [BACKEND] SENDING EVENT: toki-message-received');
+      logger.info('📤 [BACKEND] Room: toki-', tokiId);
+      logger.debug('📤 [BACKEND] Sender ID:', req.user!.id);
+      logger.debug('📤 [BACKEND] Message data:', messageData);
       
       // Get room members for logging
       const roomName = `toki-${tokiId}`;
       const roomMembers = io.sockets.adapter.rooms.get(roomName);
-      console.log('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
+      logger.debug('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
       
       io.to(roomName).emit('toki-message-received', messageData);
-      console.log('✅ [BACKEND] Event toki-message-received sent to room:', roomName);
+      logger.info('✅ [BACKEND] Event toki-message-received sent to room:', roomName);
     } else {
-      console.log('❌ [BACKEND] WebSocket io instance not found!');
+      logger.warn('❌ [BACKEND] WebSocket io instance not found!');
     }
 
     return res.json({
@@ -690,7 +691,7 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
       }
     });
   } catch (error) {
-    console.error('Error sending Toki message:', error);
+    logger.error('Error sending Toki message:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -749,7 +750,7 @@ router.post('/:messageId/report', authenticateToken, async (req: Request, res: R
       [messageId, reporterId, reason.trim()]
     );
 
-    console.log(`🚨 [MESSAGES] Message ${messageId} reported by user ${reporterId} for reason: ${reason}`);
+    logger.info(`🚨 [MESSAGES] Message ${messageId} reported by user ${reporterId} for reason: ${reason}`);
 
     return res.json({
       success: true,
@@ -759,7 +760,7 @@ router.post('/:messageId/report', authenticateToken, async (req: Request, res: R
       }
     });
   } catch (error) {
-    console.error('Error reporting message:', error);
+    logger.error('Error reporting message:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to report message'
@@ -805,7 +806,7 @@ router.delete('/messages/:messageId', authenticateToken, async (req: Request, re
       message: 'Message deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting message:', error);
+    logger.error('Error deleting message:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -893,7 +894,7 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
       }
     });
   } catch (error) {
-    console.error('Error fetching Toki group chats:', error);
+    logger.error('Error fetching Toki group chats:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -973,7 +974,7 @@ router.post('/tokis/:id/read', authenticateToken, async (req: Request, res: Resp
         user_id: req.user!.id,
         last_read_at: new Date().toISOString()
       });
-      console.log('📤 [BACKEND] Emitted read:update event for Toki:', tokiId);
+      logger.info('📤 [BACKEND] Emitted read:update event for Toki:', tokiId);
     }
 
     return res.json({
@@ -986,7 +987,7 @@ router.post('/tokis/:id/read', authenticateToken, async (req: Request, res: Resp
     });
 
   } catch (error) {
-    console.error('Error marking Toki as read:', error);
+    logger.error('Error marking Toki as read:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

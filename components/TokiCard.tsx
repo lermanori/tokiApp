@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
-import { MapPin, Users, Heart, Clock } from 'lucide-react-native';
+import { MapPin, Users, Heart, Clock, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import TokiIcon from './TokiIcon';
 import { useApp } from '@/contexts/AppContext';
@@ -31,6 +31,7 @@ export interface TokiCardProps {
         isHostedByUser?: boolean; // Added for status badge
         joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined'; // Added for status badge
         scheduledTime?: string; // Added for actual scheduled time display
+        visibility?: 'public' | 'private' | 'connections' | 'friends';
     };
     onPress: () => void;
     onHostPress?: () => void;
@@ -343,6 +344,12 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                         /> */}
                         <Text style={styles.eventTitle}>{toki.title}</Text>
                     </View>
+                    {toki.visibility === 'private' && (
+                        <View style={[styles.categoryBadge, { backgroundColor: '#111827' }] }>
+                            <Lock size={12} color="#FFFFFF" />
+                            <Text style={[styles.categoryBadgeText, { color: '#FFFFFF' }]}>Private</Text>
+                        </View>
+                    )}
                     <View style={styles.headerActions}>
                         <TouchableOpacity
                             style={styles.saveButton}

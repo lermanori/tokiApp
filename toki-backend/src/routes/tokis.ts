@@ -3,6 +3,7 @@ import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { uploadSingleImage, handleUploadError } from '../middleware/upload';
 import { calculateDistance, formatDistance } from '../utils/distance';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate visibility
-    const validVisibility = ['public', 'connections', 'friends'];
+    const validVisibility = ['public', 'connections', 'friends', 'private'];
     if (visibility && !validVisibility.includes(visibility)) {
       return res.status(400).json({
         success: false,
@@ -110,7 +111,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         for (const image of images) {
           try {
             if (image.publicId && image.publicId.startsWith('temp_')) {
-              console.log(`Processing temporary image: ${image.publicId}`);
+              logger.debug(`Processing temporary image: ${image.publicId}`);
               
               // For temporary images, store the local URI for now
               // The frontend can handle uploading them to Cloudinary later
@@ -122,7 +123,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
               imagePublicIds.push(image.publicId);
             }
           } catch (error) {
-            console.error(`Error processing image: ${error}`);
+            logger.warn(`Error processing image: ${error}`);
             // Continue with other images
           }
         }
@@ -171,12 +172,79 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
   } catch (error) {
-    console.error('Create Toki error:', error);
+    logger.error('Create Toki error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
       message: 'Failed to create Toki'
     });
+  }
+});
+
+// Hide users (host only)
+router.post('/:id/hide', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body as { userId: string };
+    const requester = (req as any).user.id;
+
+    if (!userId) return res.status(400).json({ success: false, error: 'Missing userId' });
+
+    const hostCheck = await pool.query('SELECT host_id FROM tokis WHERE id = $1 AND status = $2', [id, 'active']);
+    if (hostCheck.rows.length === 0) return res.status(404).json({ success: false, error: 'Toki not found' });
+    if (hostCheck.rows[0].host_id !== requester) return res.status(403).json({ success: false, error: 'Only host can hide users' });
+    if (userId === requester) return res.status(400).json({ success: false, error: 'Cannot hide host' });
+
+    const result = await pool.query(
+      `INSERT INTO toki_hidden_users (toki_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (toki_id, user_id) DO NOTHING
+       RETURNING *`,
+      [id, userId]
+    );
+
+    return res.status(201).json({ success: true, data: { hidden: result.rows[0] || null } });
+  } catch (error) {
+    logger.error('Hide user error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+router.get('/:id/hide', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const requester = (req as any).user.id;
+    const hostCheck = await pool.query('SELECT host_id FROM tokis WHERE id = $1', [id]);
+    if (hostCheck.rows.length === 0) return res.status(404).json({ success: false, error: 'Toki not found' });
+    if (hostCheck.rows[0].host_id !== requester) return res.status(403).json({ success: false, error: 'Only host can view hidden list' });
+
+    const result = await pool.query(
+      `SELECT hu.*, u.name, u.avatar_url FROM toki_hidden_users hu
+       JOIN users u ON u.id = hu.user_id
+       WHERE hu.toki_id = $1
+       ORDER BY hu.created_at DESC`,
+      [id]
+    );
+    return res.status(200).json({ success: true, data: { hiddenUsers: result.rows } });
+  } catch (error) {
+    logger.error('List hidden users error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+router.delete('/:id/hide/:userId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id, userId } = req.params;
+    const requester = (req as any).user.id;
+    const hostCheck = await pool.query('SELECT host_id FROM tokis WHERE id = $1', [id]);
+    if (hostCheck.rows.length === 0) return res.status(404).json({ success: false, error: 'Toki not found' });
+    if (hostCheck.rows[0].host_id !== requester) return res.status(403).json({ success: false, error: 'Only host can unhide users' });
+
+    await pool.query('DELETE FROM toki_hidden_users WHERE toki_id = $1 AND user_id = $2', [id, userId]);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error('Unhide user error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
 
@@ -200,7 +268,7 @@ router.get('/categories', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Get categories error:', error);
+    logger.error('Get categories error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -281,7 +349,7 @@ router.get('/tags/search', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Search tags error:', error);
+    logger.error('Search tags error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -360,6 +428,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         WHERE (ub.blocker_id = $${paramCount + 1} AND ub.blocked_user_id = t.host_id)
         OR (ub.blocker_id = t.host_id AND ub.blocked_user_id = $${paramCount + 1})
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM toki_hidden_users hu
+        WHERE hu.toki_id = t.id AND hu.user_id = $${paramCount + 1}
+      )
     `;
     paramCount++;
     queryParams.push(userId);
@@ -367,11 +439,27 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // TODO: Implement radius filtering in next iteration
     // For now, just log the parameters for debugging
     if (radius && userLatitude && userLongitude) {
-      console.log('🔍 [BACKEND] Radius filtering requested:', { radius, userLatitude, userLongitude });
+      logger.debug('🔍 [BACKEND] Radius filtering requested:', { radius, userLatitude, userLongitude });
       // query += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
       // queryParams.push(lat, lng);
       // paramCount += 2;
     }
+
+    // Hide private tokis unless requester is host or participant/invitee
+    query += ` AND (
+      t.visibility <> 'private'
+      OR t.host_id = $${paramCount + 1}
+      OR EXISTS (
+        SELECT 1 FROM toki_participants p
+        WHERE p.toki_id = t.id AND p.user_id = $${paramCount + 1} AND p.status IN ('approved','joined')
+      )
+      OR EXISTS (
+        SELECT 1 FROM toki_invites ti
+        WHERE ti.toki_id = t.id AND ti.invited_user_id = $${paramCount + 1} AND ti.status IN ('invited','accepted')
+      )
+    )`;
+    paramCount++;
+    queryParams.push(userId);
 
     // Add filters
     if (category) {
@@ -420,7 +508,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // TODO: Implement radius filtering in next iteration
     // Add radius-based filtering if coordinates provided
     if (radius && userLatitude && userLongitude) {
-      console.log('🔍 [BACKEND] Radius filtering in main query:', { radius, userLatitude, userLongitude });
+      logger.debug('🔍 [BACKEND] Radius filtering in main query:', { radius, userLatitude, userLongitude });
       // const lat = parseFloat(userLatitude as string);
       // const lng = parseFloat(userLongitude as string);
       // const radiusKm = Math.min(parseFloat(radius as string) || 10, 100);
@@ -524,7 +612,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // TODO: Implement radius filtering in count query in next iteration
     // Add radius-based filtering to count query if coordinates provided
     if (radius && userLatitude && userLongitude) {
-      console.log('🔍 [BACKEND] Radius filtering in count query:', { radius, userLatitude, userLongitude });
+      logger.debug('🔍 [BACKEND] Radius filtering in count query:', { radius, userLatitude, userLongitude });
       // countQuery += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
       // countParams.push(lat, lng, radiusKm);
       // countParamCount += 3;
@@ -744,7 +832,7 @@ router.get('/nearby', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Nearby search error:', error);
+    logger.error('Nearby search error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -771,8 +859,24 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       WHERE t.id = $1 AND t.status = 'active'
+        AND (
+          t.visibility <> 'private'
+          OR t.host_id = $2
+          OR EXISTS (
+            SELECT 1 FROM toki_participants p
+            WHERE p.toki_id = t.id AND p.user_id = $2 AND p.status IN ('approved','joined')
+          )
+          OR EXISTS (
+            SELECT 1 FROM toki_invites ti
+            WHERE ti.toki_id = t.id AND ti.invited_user_id = $2 AND ti.status IN ('invited','accepted')
+          )
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM toki_hidden_users hu
+          WHERE hu.toki_id = t.id AND hu.user_id = $2
+        )
       GROUP BY t.id, u.name, u.avatar_url, u.bio, u.location`,
-      [id]
+      [id, userId]
     );
 
     if (result.rows.length === 0) {
@@ -864,7 +968,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Get Toki error:', error);
+    logger.error('Get Toki error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -927,7 +1031,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     // Validate visibility if provided
     if (visibility) {
-      const validVisibility = ['public', 'connections', 'friends'];
+      const validVisibility = ['public', 'connections', 'friends', 'private'];
       if (!validVisibility.includes(visibility)) {
         return res.status(400).json({
           success: false,
@@ -1093,12 +1197,113 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     }
 
   } catch (error) {
-    console.error('Update Toki error:', error);
+    logger.error('Update Toki error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
       message: 'Failed to update Toki'
     });
+  }
+});
+
+// Create an invite (host only)
+router.post('/:id/invites', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { invitedUserId } = req.body as { invitedUserId: string };
+    const userId = (req as any).user.id;
+
+    if (!invitedUserId) {
+      return res.status(400).json({ success: false, error: 'Missing invitedUserId' });
+    }
+
+    // Ensure requester is host
+    const hostCheck = await pool.query('SELECT host_id, visibility FROM tokis WHERE id = $1 AND status = $2', [id, 'active']);
+    if (hostCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Toki not found' });
+    }
+    if (hostCheck.rows[0].host_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Only host can invite users' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO toki_invites (toki_id, invited_user_id, invited_by, status)
+       VALUES ($1, $2, $3, 'invited')
+       ON CONFLICT (toki_id, invited_user_id) DO UPDATE SET status = 'invited', created_at = NOW()
+       RETURNING *`,
+      [id, invitedUserId, userId]
+    );
+
+    return res.status(201).json({ success: true, data: { invite: result.rows[0] } });
+  } catch (error) {
+    logger.error('Create invite error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// List invites (host sees all; invited user sees own)
+router.get('/:id/invites', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    const hostRow = await pool.query('SELECT host_id FROM tokis WHERE id = $1', [id]);
+    if (hostRow.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Toki not found' });
+    }
+    const isHost = hostRow.rows[0].host_id === userId;
+
+    const result = isHost
+      ? await pool.query(
+          `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
+           FROM toki_invites ti
+           JOIN users u ON u.id = ti.invited_user_id
+           WHERE ti.toki_id = $1
+           ORDER BY ti.created_at DESC`,
+          [id]
+        )
+      : await pool.query(
+          `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
+           FROM toki_invites ti
+           JOIN users u ON u.id = ti.invited_user_id
+           WHERE ti.toki_id = $1 AND ti.invited_user_id = $2
+           ORDER BY ti.created_at DESC`,
+          [id, userId]
+        );
+
+    return res.status(200).json({ success: true, data: { invites: result.rows } });
+  } catch (error) {
+    logger.error('List invites error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Respond to an invite (invited user)
+router.post('/:id/invites/:inviteId/respond', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id, inviteId } = req.params;
+    const { action } = req.body as { action: 'accept' | 'decline' };
+    const userId = (req as any).user.id;
+
+    if (!['accept', 'decline'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
+    }
+
+    const inviteRow = await pool.query('SELECT * FROM toki_invites WHERE id = $1 AND toki_id = $2', [inviteId, id]);
+    if (inviteRow.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Invite not found' });
+    }
+    if (inviteRow.rows[0].invited_user_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Not your invite' });
+    }
+
+    const newStatus = action === 'accept' ? 'accepted' : 'declined';
+    const updated = await pool.query('UPDATE toki_invites SET status = $1 WHERE id = $2 RETURNING *', [newStatus, inviteId]);
+
+    return res.status(200).json({ success: true, data: { invite: updated.rows[0] } });
+  } catch (error) {
+    logger.error('Respond invite error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
 
@@ -1142,7 +1347,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
     });
 
   } catch (error) {
-    console.error('Delete Toki error:', error);
+    logger.error('Delete Toki error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

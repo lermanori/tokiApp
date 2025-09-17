@@ -220,21 +220,21 @@ class ApiService {
 
   private async loadTokens() {
     try {
-      console.log('🔍 [API] Attempting to load stored tokens...');
+      console.debug('🔍 [API] Attempting to load stored tokens...');
       const tokens = await AsyncStorage.getItem('auth_tokens');
-      console.log('🔍 [API] Raw tokens from storage:', tokens);
+      console.debug('🔍 [API] Raw tokens from storage:', tokens);
       
       if (tokens) {
         const { accessToken, refreshToken } = JSON.parse(tokens);
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
-        console.log('✅ [API] Tokens loaded successfully:', {
+        console.debug('✅ [API] Tokens loaded successfully:', {
           hasAccessToken: !!accessToken,
           hasRefreshToken: !!refreshToken,
           accessTokenLength: accessToken?.length || 0
         });
       } else {
-        console.log('⚠️ [API] No tokens found in storage');
+        console.info('⚠️ [API] No tokens found in storage');
       }
     } catch (error) {
       console.error('❌ [API] Error loading tokens:', error);
@@ -292,31 +292,31 @@ class ApiService {
     };
 
     try {
-      console.log(`🌐 [API] Making request to: ${endpoint}`);
+      console.debug(`🌐 [API] Making request to: ${endpoint}`);
       const response = await fetch(url, config);
       const data = await response.json();
 
       if (!response.ok) {
-        console.log(`❌ [API] Request failed: ${response.status} ${response.statusText}`);
+        console.error(`❌ [API] Request failed: ${response.status} ${response.statusText}`);
         
         if (response.status === 401 && this.refreshToken) {
-          console.log('🔄 [API] Attempting token refresh...');
+          console.info('🔄 [API] Attempting token refresh...');
           // Try to refresh token
           const refreshed = await this.refreshAccessToken();
           if (refreshed) {
-            console.log('✅ [API] Token refresh successful, retrying request...');
+            console.info('✅ [API] Token refresh successful, retrying request...');
             // Retry the original request
             config.headers = this.getHeaders();
             const retryResponse = await fetch(url, config);
             const retryData = await retryResponse.json();
             
             if (!retryResponse.ok) {
-              console.log(`❌ [API] Retry request failed: ${retryResponse.status}`);
+              console.error(`❌ [API] Retry request failed: ${retryResponse.status}`);
               throw new Error(retryData.message || 'Request failed after token refresh');
             }
             return retryData;
           } else {
-            console.log('❌ [API] Token refresh failed');
+            console.error('❌ [API] Token refresh failed');
             // Token refresh failed, clear tokens and throw authentication error
             await this.clearTokens();
             throw new Error('Authentication failed. Please log in again.');
@@ -331,7 +331,7 @@ class ApiService {
         throw error;
       }
 
-      console.log(`✅ [API] Request successful: ${endpoint}`);
+      console.debug(`✅ [API] Request successful: ${endpoint}`);
       return data;
     } catch (error) {
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);
@@ -521,6 +521,41 @@ class ApiService {
       body: JSON.stringify(updates),
     });
     return response.data;
+  }
+
+  // Invites
+  async createInvite(tokiId: string, invitedUserId: string): Promise<{ success: boolean; data: any }> {
+    return this.makeRequest(`/tokis/${tokiId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ invitedUserId }),
+    });
+  }
+
+  async listInvites(tokiId: string): Promise<{ success: boolean; data: { invites: any[] } }> {
+    return this.makeRequest(`/tokis/${tokiId}/invites`);
+  }
+
+  async respondToInvite(tokiId: string, inviteId: string, action: 'accept' | 'decline') {
+    return this.makeRequest(`/tokis/${tokiId}/invites/${inviteId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  }
+
+  // Hide (deny list)
+  async hideUser(tokiId: string, userId: string) {
+    return this.makeRequest(`/tokis/${tokiId}/hide`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+  }
+
+  async listHiddenUsers(tokiId: string) {
+    return this.makeRequest(`/tokis/${tokiId}/hide`);
+  }
+
+  async unhideUser(tokiId: string, userId: string) {
+    return this.makeRequest(`/tokis/${tokiId}/hide/${userId}`, { method: 'DELETE' });
   }
 
   async deleteToki(id: string): Promise<{ success: boolean; message?: string }> {

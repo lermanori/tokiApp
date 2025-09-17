@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
 import { X } from 'lucide-react-native';
+import DateTimePicker from 'react-native-ui-datepicker';
+import dayjs from 'dayjs';
 
 export interface TokiFiltersProps {
   visible: boolean;
@@ -32,6 +34,38 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
   onApply,
   showAdvancedFilters = false,
 }) => {
+  const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
+
+  const currentTimeOption = useMemo<'all' | 'today' | 'tomorrow' | 'custom'>(() => {
+    const { dateFrom, dateTo } = selectedFilters || {};
+    if (!dateFrom || !dateTo) return 'all';
+    const start = dayjs(dateFrom).startOf('day');
+    const end = dayjs(dateTo).endOf('day');
+    const todayStart = dayjs().startOf('day');
+    const todayEnd = dayjs().endOf('day');
+    const tomorrowStart = dayjs().add(1, 'day').startOf('day');
+    const tomorrowEnd = dayjs().add(1, 'day').endOf('day');
+    if (start.isSame(todayStart) && end.isSame(todayEnd)) return 'today';
+    if (start.isSame(tomorrowStart) && end.isSame(tomorrowEnd)) return 'tomorrow';
+    return 'custom';
+  }, [selectedFilters?.dateFrom, selectedFilters?.dateTo]);
+
+  const setDayRange = (d: dayjs.Dayjs) => {
+    onFilterChange('dateFrom', d.startOf('day').toISOString());
+    onFilterChange('dateTo', d.endOf('day').toISOString());
+  };
+
+  const handleTimeSelect = (opt: 'all' | 'today' | 'tomorrow' | 'custom') => {
+    if (opt === 'all') {
+      onFilterChange('dateFrom', '');
+      onFilterChange('dateTo', '');
+      return;
+    }
+    if (opt === 'today') return setDayRange(dayjs());
+    if (opt === 'tomorrow') return setDayRange(dayjs().add(1, 'day'));
+    if (opt === 'custom') setIsDatePickerVisible(true);
+  };
+
   const basicFilterSections = [
     {
       title: 'Visibility',
@@ -57,6 +91,11 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
       title: 'Participants',
       key: 'participants',
       options: ['all', '1-10', '10-50', '50-100', '100+'],
+    },
+    {
+      title: 'Time',
+      key: 'time',
+      options: ['all', 'today', 'tomorrow', 'custom'],
     },
   ];
 
@@ -94,23 +133,33 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     <View key={section.key} style={styles.filterSection}>
       <Text style={styles.filterSectionTitle}>{section.title}</Text>
       <View style={styles.filterOptions}>
-        {section.options.map((option) => (
-          <TouchableOpacity
-            key={option}
-            style={[
-              styles.filterOption,
-              selectedFilters[section.key as keyof typeof selectedFilters] === option && styles.filterOptionSelected
-            ]}
-            onPress={() => onFilterChange(section.key, option)}
-          >
-            <Text style={[
-              styles.filterOptionText,
-              selectedFilters[section.key as keyof typeof selectedFilters] === option && styles.filterOptionTextSelected
-            ]}>
-              {getOptionLabel(option, section.key)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {section.options.map((option) => {
+          const isSelected =
+            section.key === 'time'
+              ? currentTimeOption === (option as any)
+              : (selectedFilters as any)[section.key] === option;
+          return (
+            <TouchableOpacity
+              key={option}
+              style={[
+                styles.filterOption,
+                isSelected && styles.filterOptionSelected
+              ]}
+              onPress={() =>
+                section.key === 'time'
+                  ? handleTimeSelect(option as any)
+                  : onFilterChange(section.key, option)
+              }
+            >
+              <Text style={[
+                styles.filterOptionText,
+                isSelected && styles.filterOptionTextSelected
+              ]}>
+                {getOptionLabel(option, section.key)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -136,6 +185,41 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
         <ScrollView style={styles.modalContent}>
           {filterSections.map(renderFilterSection)}
         </ScrollView>
+
+        {isDatePickerVisible && (
+          <Modal
+            transparent
+            visible={isDatePickerVisible}
+            animationType="fade"
+            onRequestClose={() => setIsDatePickerVisible(false)}
+          >
+            <View style={styles.pickerBackdrop}>
+              <View style={styles.pickerContainer}>
+                <DateTimePicker
+                  mode="single"
+                  date={
+                    selectedFilters?.dateFrom
+                      ? dayjs(selectedFilters.dateFrom).toDate()
+                      : new Date()
+                  }
+                  styles={{
+                    selected: { backgroundColor: '#B49AFF' },
+                    selected_label: { color: '#FFFFFF' },
+                  }}
+                  onChange={(params: any) => {
+                    try {
+                      const picked: Date = params.date;
+                      setDayRange(dayjs(picked));
+                    } catch {}
+                  }}
+                />
+                <TouchableOpacity style={styles.pickerCloseButton} onPress={() => setIsDatePickerVisible(false)}>
+                  <Text style={styles.pickerCloseText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
 
         <View style={styles.modalFooter}>
           <TouchableOpacity style={styles.applyButton} onPress={onApply}>
@@ -209,6 +293,33 @@ const styles = StyleSheet.create({
   },
   filterOptionTextSelected: {
     color: '#FFFFFF',
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    width: '100%',
+    maxWidth: 420,
+  },
+  pickerCloseButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    backgroundColor: '#B49AFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  pickerCloseText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
   },
   modalFooter: {
     padding: 20,

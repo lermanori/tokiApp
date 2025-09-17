@@ -1,3 +1,16 @@
+# File: toki-backend/src/routes/tokis.ts
+
+### Summary
+Tokis CRUD and listing. Radius and image-processing logs are now debug-only; errors unchanged.
+
+### Fixes Applied log
+- problem: Repeated informational logs for radius and image processing cluttered output.
+- solution: Demoted them to `debug`; kept warnings for image processing failures and errors as-is.
+
+### How Fixes Were Implemented
+- Imported `utils/logger` and swapped `console.log` for `logger.debug` where appropriate.
+- Converted `console.error` to `logger.error` and retained meaningful `warn`s.
+
 # File: tokis.ts (Backend Routes)
 
 ### Summary

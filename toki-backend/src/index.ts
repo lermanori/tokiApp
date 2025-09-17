@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import logger from './utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -129,15 +130,15 @@ app.use(errorHandler);
 
 // WebSocket event handlers
 io.on('connection', (socket) => {
-  console.log('🔌 User connected:', socket.id);
+  logger.info('🔌 User connected:', socket.id);
 
   // Join user to their personal room
   socket.on('join-user', (userId: string) => {
     const roomName = `user-${userId}`;
     socket.join(roomName);
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
-    console.log(`👤 [BACKEND] User ${userId} (socket: ${socket.id}) joined room: ${roomName}`);
-    console.log(`👤 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
+    logger.debug(`👤 [BACKEND] User ${userId} (socket: ${socket.id}) joined room: ${roomName}`);
+    logger.debug(`👤 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
   });
 
   // Join conversation room
@@ -145,8 +146,8 @@ io.on('connection', (socket) => {
     const roomName = `conversation-${conversationId}`;
     socket.join(roomName);
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
-    console.log(`💬 [BACKEND] User (socket: ${socket.id}) joined conversation room: ${roomName}`);
-    console.log(`💬 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
+    logger.debug(`💬 [BACKEND] User (socket: ${socket.id}) joined conversation room: ${roomName}`);
+    logger.debug(`💬 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
   });
 
   // Join Toki group chat
@@ -154,30 +155,30 @@ io.on('connection', (socket) => {
     const roomName = `toki-${tokiId}`;
     socket.join(roomName);
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
-    console.log(`🏷️ [BACKEND] User (socket: ${socket.id}) joined Toki chat room: ${roomName}`);
-    console.log(`🏷️ [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
+    logger.debug(`🏷️ [BACKEND] User (socket: ${socket.id}) joined Toki chat room: ${roomName}`);
+    logger.debug(`🏷️ [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
   });
 
   // Leave a specific room
   socket.on('leave-room', (roomName: string) => {
     socket.leave(roomName);
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
-    console.log(`🚪 [BACKEND] User (socket: ${socket.id}) left room: ${roomName}`);
-    console.log(`🚪 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
+    logger.debug(`🚪 [BACKEND] User (socket: ${socket.id}) left room: ${roomName}`);
+    logger.debug(`🚪 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
   });
 
   socket.on('disconnect', () => {
-    console.log('🔌 User disconnected:', socket.id);
+    logger.info('🔌 User disconnected:', socket.id);
   });
 });
 
 // Start server
 server.listen(PORT, async () => {
-  console.log(`🚀 Toki Backend Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API base: http://localhost:${PORT}/api`);
-  console.log(`🔌 WebSocket server ready`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+  logger.info(`🚀 Toki Backend Server running on port ${PORT}`);
+  logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+  logger.info(`🔗 API base: http://localhost:${PORT}/api`);
+  logger.info(`🔌 WebSocket server ready`);
+  logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
   
   // Test database connection and set timezone
   await testDatabaseConnection();

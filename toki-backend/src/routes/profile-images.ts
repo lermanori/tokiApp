@@ -3,6 +3,7 @@ import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { ImageService } from '../services/imageService';
 import multer from 'multer';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -66,22 +67,22 @@ router.post('/upload', authenticateToken, upload.single('image'), async (req: Re
 
     // Update database with new image URL and public ID
     // Also update avatar_url to maintain compatibility with existing frontend
-    console.log('🔄 Updating database with new image URL:', uploadResult.url);
+    logger.debug('🔄 Updating database with new image URL:', uploadResult.url);
     const updateResult = await pool.query(
       `UPDATE users 
        SET profile_image_url = $1, profile_image_public_id = $2, avatar_url = $3, updated_at = NOW()
        WHERE id = $4`,
       [uploadResult.url, uploadResult.publicId, uploadResult.url, userId]
     );
-    console.log('✅ Database update result:', updateResult.rowCount, 'rows affected');
+    logger.debug('✅ Database update result:', updateResult.rowCount, 'rows affected');
     
     // Verify the update worked by checking the database
     const verifyResult = await pool.query(
       'SELECT avatar_url, profile_image_url FROM users WHERE id = $1',
       [userId]
     );
-    console.log('🔍 Verification - avatar_url:', verifyResult.rows[0]?.avatar_url);
-    console.log('🔍 Verification - profile_image_url:', verifyResult.rows[0]?.profile_image_url);
+    logger.debug('🔍 Verification - avatar_url:', verifyResult.rows[0]?.avatar_url);
+    logger.debug('🔍 Verification - profile_image_url:', verifyResult.rows[0]?.profile_image_url);
 
     // Delete old image from Cloudinary if it exists
     if (currentPublicId) {
@@ -105,7 +106,7 @@ router.post('/upload', authenticateToken, upload.single('image'), async (req: Re
     });
 
   } catch (error) {
-    console.error('Profile image upload error:', error);
+    logger.error('Profile image upload error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -139,7 +140,7 @@ router.delete('/remove', authenticateToken, async (req: Request, res: Response) 
     const deleteResult = await ImageService.deleteImage(currentPublicId);
     
     if (!deleteResult) {
-      console.warn(`Failed to delete image from Cloudinary: ${currentPublicId}`);
+      logger.warn(`Failed to delete image from Cloudinary: ${currentPublicId}`);
     }
 
     // Update database to remove image references
@@ -166,7 +167,7 @@ router.delete('/remove', authenticateToken, async (req: Request, res: Response) 
     });
 
   } catch (error) {
-    console.error('Profile image removal error:', error);
+    logger.error('Profile image removal error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -205,7 +206,7 @@ router.get('/info', authenticateToken, async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Profile image info error:', error);
+    logger.error('Profile image info error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authenticateToken } from '../middleware/auth';
 import { ImageService } from '../services/imageService';
 import { pool } from '../config/database';
+import logger from '../utils/logger';
 
 const router = express.Router();
 
@@ -98,7 +99,7 @@ router.post('/upload/:tokiId', authenticateToken, upload.single('image'), async 
     });
 
   } catch (error) {
-    console.error('Toki image upload error:', error);
+    logger.error('Toki image upload error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -151,7 +152,7 @@ router.delete('/delete/:tokiId/:publicId', authenticateToken, async (req: Reques
     const deleteResult = await ImageService.deleteImage(publicId);
     
     if (!deleteResult) {
-      console.warn(`Failed to delete image from Cloudinary: ${publicId}`);
+      logger.warn(`Failed to delete image from Cloudinary: ${publicId}`);
     }
 
     // Remove image from database arrays
@@ -173,7 +174,7 @@ router.delete('/delete/:tokiId/:publicId', authenticateToken, async (req: Reques
     });
 
   } catch (error) {
-    console.error('Toki image deletion error:', error);
+    logger.error('Toki image deletion error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -217,7 +218,7 @@ router.get('/info/:tokiId', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Get Toki images info error:', error);
+    logger.error('Get Toki images info error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

@@ -24,7 +24,7 @@ class SocketService {
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
         const wsUrl = getWebSocketUrl();
-        console.log('🔌 [FRONTEND] Attempting to connect to WebSocket at:', wsUrl);
+        console.info('🔌 [FRONTEND] Attempting to connect to WebSocket at:', wsUrl);
         
         // For now, connect without authentication to test
         this.socket = io(wsUrl, {
@@ -36,9 +36,9 @@ class SocketService {
         });
 
         this.socket.on('connect', () => {
-          console.log('🔌 [FRONTEND] WebSocket connected, socket ID:', this.socket?.id);
-          console.log('🔌 [FRONTEND] Connection URL:', wsUrl);
-          console.log('🔌 [FRONTEND] Connection state:', this.socket?.connected);
+          console.info('🔌 [FRONTEND] WebSocket connected, socket ID:', this.socket?.id);
+          console.debug('🔌 [FRONTEND] Connection URL:', wsUrl);
+          console.debug('🔌 [FRONTEND] Connection state:', this.socket?.connected);
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
@@ -48,8 +48,8 @@ class SocketService {
         });
 
         this.socket.on('disconnect', (reason) => {
-          console.log('🔌 [FRONTEND] WebSocket disconnected, reason:', reason);
-          console.log('🔌 [FRONTEND] Current rooms at disconnect:', Array.from(this.currentRooms));
+          console.info('🔌 [FRONTEND] WebSocket disconnected, reason:', reason);
+          console.debug('🔌 [FRONTEND] Current rooms at disconnect:', Array.from(this.currentRooms));
           this.isConnected = false;
           
           if (this.connectionPromise) {
@@ -68,7 +68,7 @@ class SocketService {
         });
 
         this.socket.on('reconnect', (attemptNumber) => {
-          console.log('🔌 [FRONTEND] WebSocket reconnected after', attemptNumber, 'attempts');
+          console.info('🔌 [FRONTEND] WebSocket reconnected after', attemptNumber, 'attempts');
           this.isConnected = true;
           // Rejoin rooms after reconnection
           this.rejoinRooms();
@@ -126,7 +126,7 @@ class SocketService {
       const roomName = `user-${userId}`;
       this.socket.emit('join-user', userId);
       this.currentRooms.add(roomName);
-      console.log('👤 [FRONTEND] Joined user room:', userId);
+      console.debug('👤 [FRONTEND] Joined user room:', userId);
     }
   }
 
@@ -134,18 +134,18 @@ class SocketService {
   async joinConversation(conversationId: string) {
     await this.ensureConnected();
     
-    console.log('🔌 [FRONTEND] Attempting to join conversation:', conversationId);
-    console.log('🔌 [FRONTEND] Socket connected:', this.isConnected);
-    console.log('🔌 [FRONTEND] Socket instance:', !!this.socket);
+    console.debug('🔌 [FRONTEND] Attempting to join conversation:', conversationId);
+    console.debug('🔌 [FRONTEND] Socket connected:', this.isConnected);
+    console.debug('🔌 [FRONTEND] Socket instance:', !!this.socket);
     
     if (this.socket && this.isConnected) {
       const roomName = `conversation-${conversationId}`;
       this.socket.emit('join-conversation', conversationId);
       this.currentRooms.add(roomName);
-      console.log('👤 [FRONTEND] Joined conversation room:', roomName);
-      console.log('👤 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
+      console.debug('👤 [FRONTEND] Joined conversation room:', roomName);
+      console.debug('👤 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
     } else {
-      console.log('❌ [FRONTEND] Cannot join conversation - socket not connected');
+      console.warn('❌ [FRONTEND] Cannot join conversation - socket not connected');
     }
   }
 
@@ -153,21 +153,21 @@ class SocketService {
   async joinToki(tokiId: string) {
     await this.ensureConnected();
     
-    console.log('🏷️ [FRONTEND] Attempting to join Toki:', tokiId);
-    console.log('🏷️ [FRONTEND] Socket connected:', this.isConnected);
-    console.log('🏷️ [FRONTEND] Socket instance:', !!this.socket);
-    console.log('🏷️ [FRONTEND] Socket ID:', this.socket?.id);
+    console.debug('🏷️ [FRONTEND] Attempting to join Toki:', tokiId);
+    console.debug('🏷️ [FRONTEND] Socket connected:', this.isConnected);
+    console.debug('🏷️ [FRONTEND] Socket instance:', !!this.socket);
+    console.debug('🏷️ [FRONTEND] Socket ID:', this.socket?.id);
     
     if (this.socket && this.isConnected) {
       const roomName = `toki-${tokiId}`;
-      console.log('🏷️ [FRONTEND] Emitting join-toki event for room:', roomName);
+      console.debug('🏷️ [FRONTEND] Emitting join-toki event for room:', roomName);
       this.socket.emit('join-toki', tokiId);
       this.currentRooms.add(roomName);
-      console.log('🏷️ [FRONTEND] Successfully joined Toki chat room:', roomName);
-      console.log('🏷️ [FRONTEND] Current rooms:', Array.from(this.currentRooms));
+      console.debug('🏷️ [FRONTEND] Successfully joined Toki chat room:', roomName);
+      console.debug('🏷️ [FRONTEND] Current rooms:', Array.from(this.currentRooms));
     } else {
-      console.log('❌ [FRONTEND] Cannot join Toki - socket not connected');
-      console.log('❌ [FRONTEND] Socket status:', {
+      console.warn('❌ [FRONTEND] Cannot join Toki - socket not connected');
+      console.debug('❌ [FRONTEND] Socket status:', {
         socket: !!this.socket,
         isConnected: this.isConnected,
         socketId: this.socket?.id
@@ -180,7 +180,7 @@ class SocketService {
     if (this.socket && this.isConnected) {
       this.socket.emit('leave-room', roomName);
       this.currentRooms.delete(roomName);
-      console.log('🚪 [FRONTEND] Left room:', roomName);
+      console.debug('🚪 [FRONTEND] Left room:', roomName);
     }
   }
 
@@ -198,7 +198,7 @@ class SocketService {
 
   // Rejoin all rooms after reconnection
   private async rejoinRooms() {
-    console.log('🔄 [FRONTEND] Rejoining rooms after reconnection...');
+    console.debug('🔄 [FRONTEND] Rejoining rooms after reconnection...');
     const roomsToRejoin = Array.from(this.currentRooms);
     
     for (const roomName of roomsToRejoin) {
@@ -218,36 +218,36 @@ class SocketService {
   // Listen for new messages in conversation
   onMessageReceived(callback: (message: any) => void) {
     if (this.socket) {
-      console.log('👂 [FRONTEND] Setting up message-received listener');
-      console.log('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
-      console.log('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
+      console.debug('👂 [FRONTEND] Setting up message-received listener');
+      console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
+      console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
       
       this.socket.on('message-received', (message) => {
-        console.log('📨 [FRONTEND] RECEIVED EVENT: message-received');
-        console.log('📨 [FRONTEND] Message data:', message);
-        console.log('📨 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
+        console.debug('📨 [FRONTEND] RECEIVED EVENT: message-received');
+        console.debug('📨 [FRONTEND] Message data:', message);
+        console.debug('📨 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
         callback(message);
       });
     } else {
-      console.log('❌ [FRONTEND] Cannot set up message-received listener - no socket');
+      console.warn('❌ [FRONTEND] Cannot set up message-received listener - no socket');
     }
   }
 
   // Listen for new messages in Toki group
   onTokiMessageReceived(callback: (message: any) => void) {
     if (this.socket) {
-      console.log('👂 [FRONTEND] Setting up toki-message-received listener');
-      console.log('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
-      console.log('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
+      console.debug('👂 [FRONTEND] Setting up toki-message-received listener');
+      console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
+      console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
       
       this.socket.on('toki-message-received', (message) => {
-        console.log('📨 [FRONTEND] RECEIVED EVENT: toki-message-received');
-        console.log('📨 [FRONTEND] Message data:', message);
-        console.log('📨 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
+        console.debug('📨 [FRONTEND] RECEIVED EVENT: toki-message-received');
+        console.debug('📨 [FRONTEND] Message data:', message);
+        console.debug('📨 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
         callback(message);
       });
     } else {
-      console.log('❌ [FRONTEND] Cannot set up toki-message-received listener - no socket');
+      console.warn('❌ [FRONTEND] Cannot set up toki-message-received listener - no socket');
     }
   }
 

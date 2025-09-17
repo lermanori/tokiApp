@@ -45,6 +45,7 @@ export default function EditTokiScreen() {
           activity: toki.category || null,
           time: toki.timeSlot || null,
           maxAttendees: toki.maxAttendees || 10,
+          visibility: toki.visibility || 'public',
           tags: toki.tags?.filter((tag: string) => tag !== toki.category) || [],
           // Convert scheduledTime to customDateTime format if available
           customDateTime: toki.scheduledTime ? 
@@ -86,7 +87,7 @@ export default function EditTokiScreen() {
         customDateTime: tokiData.customDateTime,
         category: tokiData.activity,
         maxAttendees: tokiData.maxAttendees,
-        visibility: 'public',
+        visibility: tokiData.visibility || 'public',
         tags: tokiData.tags,
       };
 

@@ -6,6 +6,7 @@ import { authenticateToken } from '../middleware/auth';
 import jwt from 'jsonwebtoken';
 import { sendEmail, generateVerificationEmail, generateWelcomeEmail, generatePasswordResetEmail } from '../utils/email';
 import crypto from 'crypto';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration error:', error);
     return res.status(500).json({
       success: false,
       error: 'Registration failed',
@@ -127,7 +128,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     return res.status(500).json({
       success: false,
       error: 'Login failed',
@@ -154,8 +155,8 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     const user = result.rows[0];
     
     // Debug: Check what avatar_url is in the database
-    console.log('🔍 [AUTH /me] User avatar_url from database:', user.avatar_url);
-    console.log('🔍 [AUTH /me] Full user object:', user);
+    logger.debug('🔍 [AUTH /me] User avatar_url from database:', user.avatar_url);
+    logger.debug('🔍 [AUTH /me] Full user object:', user);
     
     // Calculate user stats dynamically instead of querying user_stats table
     // Get Tokis created count
@@ -163,7 +164,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
       'SELECT COUNT(*) as count FROM tokis WHERE host_id = $1 AND status = $2',
       [user.id, 'active']
     );
-    console.log('🔍 [AUTH] Tokis created query result:', { userId: user.id, count: createdResult.rows[0].count });
+    logger.debug('🔍 [AUTH] Tokis created query result:', { userId: user.id, count: createdResult.rows[0].count });
 
     // Get Tokis joined count (as participant)
     // Count only unique Tokis where user is a participant (not the host)
@@ -177,7 +178,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
          AND t.status = 'active'`,
       [user.id]
     );
-    console.log('🔍 [AUTH] Tokis joined query result:', { userId: user.id, count: joinedResult.rows[0].count });
+    logger.debug('🔍 [AUTH] Tokis joined query result:', { userId: user.id, count: joinedResult.rows[0].count });
     
     // Debug: Check what toki_participants entries exist for this user
     const debugJoinedResult = await pool.query(
@@ -187,7 +188,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
        WHERE tp.user_id = $1`,
       [user.id]
     );
-    console.log('🔍 [AUTH] Debug: User toki_participants entries:', debugJoinedResult.rows);
+    logger.debug('🔍 [AUTH] Debug: User toki_participants entries:', debugJoinedResult.rows);
 
     // Get connections count
     const connectionsResult = await pool.query(
@@ -196,7 +197,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
          AND (requester_id = $1 OR recipient_id = $1)`,
       [user.id]
     );
-    console.log('🔍 [AUTH] Connections query result:', { userId: user.id, count: connectionsResult.rows[0].count });
+    logger.debug('🔍 [AUTH] Connections query result:', { userId: user.id, count: connectionsResult.rows[0].count });
 
     // Calculate user's rating dynamically from user_ratings table
     const ratingResult = await pool.query(
@@ -207,20 +208,20 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     );
     const calculatedRating = ratingResult.rows[0].average_rating;
     const totalRatings = parseInt(ratingResult.rows[0].total_ratings);
-    console.log('🔍 [AUTH] Rating calculation result:', { userId: user.id, calculatedRating, totalRatings });
+    logger.debug('🔍 [AUTH] Rating calculation result:', { userId: user.id, calculatedRating, totalRatings });
 
     const stats = {
       tokis_created: parseInt(createdResult.rows[0].count),
       tokis_joined: parseInt(joinedResult.rows[0].count),
       connections_count: parseInt(connectionsResult.rows[0].count)
     };
-    console.log('🔍 [AUTH] Final stats object:', stats);
+    logger.debug('🔍 [AUTH] Final stats object:', stats);
     
     // Debug: Check what Tokis exist in the database
     const debugResult = await pool.query(
       'SELECT id, host_id, title, status FROM tokis LIMIT 5'
     );
-    console.log('🔍 [AUTH] Debug: Sample Tokis in database:', debugResult.rows);
+    logger.debug('🔍 [AUTH] Debug: Sample Tokis in database:', debugResult.rows);
     
     const socialLinksResult = await pool.query(
       'SELECT platform, username FROM user_social_links WHERE user_id = $1',
@@ -251,7 +252,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to get profile',
@@ -305,7 +306,7 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error('Update profile error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to update profile',
@@ -352,7 +353,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       data: { tokens }
     });
   } catch (error) {
-    console.error('Refresh token error:', error);
+    logger.error('Refresh token error:', error);
     return res.status(401).json({
       success: false,
       error: 'Invalid refresh token',
@@ -403,7 +404,7 @@ router.post('/send-verification', authenticateToken, async (req: Request, res: R
       });
     }
   } catch (error) {
-    console.error('Send verification error:', error);
+    logger.error('Send verification error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to send verification email',
@@ -454,7 +455,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       message: 'Email verified successfully! Welcome to Toki!'
     });
   } catch (error) {
-    console.error('Verify email error:', error);
+    logger.error('Verify email error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to verify email',
@@ -507,7 +508,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to process request',
@@ -564,7 +565,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
       message: 'Password reset successfully'
     });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to reset password',
@@ -623,7 +624,7 @@ router.get('/me/stats', authenticateToken, async (req: Request, res: Response) =
     });
 
   } catch (error) {
-    console.error('Get user stats error:', error);
+    logger.error('Get user stats error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -799,7 +800,7 @@ router.put('/me/profile', authenticateToken, async (req: Request, res: Response)
     }
 
   } catch (error) {
-    console.error('Update profile error:', error);
+    logger.error('Update profile error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -856,7 +857,7 @@ router.put('/users/:userId/verify', authenticateToken, async (req: Request, res:
     });
 
   } catch (error) {
-    console.error('Verify user error:', error);
+    logger.error('Verify user error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -876,7 +877,7 @@ router.get('/users/search', async (req: Request, res: Response) => {
       hasConnections 
     } = req.query;
     
-    console.log('🔍 [AUTH SEARCH] Search request:', { q, page, limit, verified, hasConnections });
+    logger.debug('🔍 [AUTH SEARCH] Search request:', { q, page, limit, verified, hasConnections });
 
     const pageNum = parseInt(page as string) || 1;
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
@@ -934,12 +935,12 @@ router.get('/users/search', async (req: Request, res: Response) => {
     query += ` LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
     queryParams.push(limitNum, offset);
 
-    console.log('🔍 [AUTH SEARCH] Executing query with params:', queryParams);
-    console.log('🔍 [AUTH SEARCH] Query:', query);
+    logger.debug('🔍 [AUTH SEARCH] Executing query with params:', queryParams);
+    logger.debug('🔍 [AUTH SEARCH] Query:', query);
     
     const result = await pool.query(query, queryParams);
     
-    console.log('🔍 [AUTH SEARCH] Query result rows:', result.rows.length);
+    logger.debug('🔍 [AUTH SEARCH] Query result rows:', result.rows.length);
 
     const users = result.rows.map(row => ({
       id: row.id,
@@ -969,7 +970,7 @@ router.get('/users/search', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Search users error:', error);
+    logger.error('Search users error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -982,7 +983,7 @@ router.get('/users/search', async (req: Request, res: Response) => {
 router.get('/users/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    console.log('🔍 [AUTH] Getting profile for userId:', userId);
+    logger.debug('🔍 [AUTH] Getting profile for userId:', userId);
 
     // Get user profile
     const userResult = await pool.query(
@@ -998,9 +999,9 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
       [userId]
     );
 
-    console.log('🔍 [AUTH] Database query result rows:', userResult.rows.length);
+    logger.debug('🔍 [AUTH] Database query result rows:', userResult.rows.length);
     if (userResult.rows.length === 0) {
-      console.log('❌ [AUTH] User not found in database for userId:', userId);
+      logger.info('❌ [AUTH] User not found in database for userId:', userId);
       return res.status(404).json({
         success: false,
         error: 'User not found',
@@ -1070,7 +1071,7 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
     });
 
   } catch (error) {
-    console.error('Get user profile error:', error);
+    logger.error('Get user profile error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

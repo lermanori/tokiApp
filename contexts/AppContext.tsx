@@ -460,6 +460,16 @@ interface AppContextType {
     saveToki: (tokiId: string) => Promise<boolean>;
     unsaveToki: (tokiId: string) => Promise<boolean>;
     checkIfSaved: (tokiId: string) => Promise<boolean>;
+
+    // Invites
+    createInvite: (tokiId: string, invitedUserId: string) => Promise<boolean>;
+    listInvites: (tokiId: string) => Promise<any[]>;
+    respondToInvite: (tokiId: string, inviteId: string, action: 'accept' | 'decline') => Promise<boolean>;
+
+    // Hide / Unhide
+    hideUser: (tokiId: string, userId: string) => Promise<boolean>;
+    listHiddenUsers: (tokiId: string) => Promise<any[]>;
+    unhideUser: (tokiId: string, userId: string) => Promise<boolean>;
   };
 
 
@@ -1099,6 +1109,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('❌ Failed to update Toki:', error);
+      return false;
+    }
+  };
+
+  // Invites actions
+  const createInvite = async (tokiId: string, invitedUserId: string): Promise<boolean> => {
+    try {
+      const res = await apiService.createInvite(tokiId, invitedUserId);
+      return !!res;
+    } catch (e) {
+      console.error('❌ Failed to create invite:', e);
+      return false;
+    }
+  };
+
+  const listInvites = async (tokiId: string): Promise<any[]> => {
+    try {
+      const res = await apiService.listInvites(tokiId);
+      return res.data?.invites || [];
+    } catch (e) {
+      console.error('❌ Failed to list invites:', e);
+      return [];
+    }
+  };
+
+  const respondToInvite = async (tokiId: string, inviteId: string, action: 'accept' | 'decline'): Promise<boolean> => {
+    try {
+      await apiService.respondToInvite(tokiId, inviteId, action);
+      return true;
+    } catch (e) {
+      console.error('❌ Failed to respond to invite:', e);
+      return false;
+    }
+  };
+
+  // Hide actions
+  const hideUser = async (tokiId: string, userId: string): Promise<boolean> => {
+    try {
+      await apiService.hideUser(tokiId, userId);
+      return true;
+    } catch (e) {
+      console.error('❌ Failed to hide user:', e);
+      return false;
+    }
+  };
+
+  const listHiddenUsers = async (tokiId: string): Promise<any[]> => {
+    try {
+      const res = await apiService.listHiddenUsers(tokiId);
+      return res.data?.hiddenUsers || [];
+    } catch (e) {
+      console.error('❌ Failed to list hidden users:', e);
+      return [];
+    }
+  };
+
+  const unhideUser = async (tokiId: string, userId: string): Promise<boolean> => {
+    try {
+      await apiService.unhideUser(tokiId, userId);
+      return true;
+    } catch (e) {
+      console.error('❌ Failed to unhide user:', e);
       return false;
     }
   };
@@ -1975,6 +2047,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateTokiBackend,
     deleteTokiBackend,
     completeToki,
+    // Invites
+    createInvite,
+    listInvites,
+    respondToInvite,
+    // Hide
+    hideUser,
+    listHiddenUsers,
+    unhideUser,
     // Authentication actions
     checkAuthStatus,
     logout,

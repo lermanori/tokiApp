@@ -47,3 +47,8 @@ npm i react-native-ui-datepicker dayjs
 - **Visual Feedback**: Selected activities show purple background, disabled activities show gray with reduced opacity
 - **User Experience**: Clear counter and helpful error message when limit exceeded
 - **Data Structure**: Maintains backward compatibility with existing single-activity Tokis
+
+### Privacy Toggle Update
+- Added a Privacy toggle (Public / Private invite-only).
+- The toggle controls `visibility` sent on create/update (`'public'` or `'private'`).
+- In edit mode, the toggle initializes from `initialData.visibility` and stays in sync if the parent reloads data.

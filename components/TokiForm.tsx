@@ -11,7 +11,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
-import { MapPin, Clock, Users, Tag, Camera, X, Navigation, Calendar } from 'lucide-react-native';
+import { MapPin, Clock, Users, Tag, Camera, X, Navigation, Calendar, Lock } from 'lucide-react-native';
 import { useApp } from '@/contexts/AppContext';
 import { GeocodingResult, geocodingService } from '@/services/geocoding';
 import TokiImageUpload from './TokiImageUpload';
@@ -53,6 +53,7 @@ interface TokiFormProps {
     tags?: string[];
     customDateTime?: string; // Added missing field
     images?: Array<{ url: string; publicId: string }>; // Add images to initial data
+    visibility?: 'public' | 'private' | 'connections' | 'friends';
   };
   onSubmit: (data: any) => Promise<string | boolean | null>;
   onCancel: () => void;
@@ -91,6 +92,14 @@ export default function TokiForm({
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
   const [webTimeTemp, setWebTimeTemp] = useState<string>('');
+  const [isPrivate, setIsPrivate] = useState(!!initialData && initialData.visibility === 'private');
+
+  // Keep privacy toggle in sync when editing existing Toki
+  useEffect(() => {
+    if (initialData && typeof initialData.visibility === 'string') {
+      setIsPrivate(initialData.visibility === 'private');
+    }
+  }, [initialData?.visibility]);
 
   // Update tokiImages when initialData.images changes
   useEffect(() => {
@@ -497,6 +506,7 @@ export default function TokiForm({
         maxAttendees: parseInt(maxAttendees) || 10,
         tags: [...selectedActivities, ...customTags],
         category: selectedActivities[0], // Primary category
+        visibility: isPrivate ? 'private' : 'public',
         images: [], // No images initially
       };
 
@@ -539,6 +549,7 @@ export default function TokiForm({
         maxAttendees: parseInt(maxAttendees) || 10,
         tags: [...selectedActivities, ...customTags],
         category: selectedActivities[0], // Primary category
+        visibility: isPrivate ? 'private' : 'public',
         images: [], // No images
       };
 
@@ -870,6 +881,20 @@ export default function TokiForm({
             </View>
           </Modal>
         )}
+
+        {/* Privacy toggle */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Privacy</Text>
+          <TouchableOpacity
+            style={[styles.privacyToggle, isPrivate && styles.privacyToggleOn]}
+            onPress={() => setIsPrivate(!isPrivate)}
+          >
+            <Lock size={18} color={isPrivate ? '#FFFFFF' : '#B49AFF'} />
+            <Text style={[styles.privacyToggleText, isPrivate && styles.privacyToggleTextOn]}>
+              {isPrivate ? 'Private (invite-only)' : 'Public'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Max Attendees</Text>
@@ -1343,5 +1368,28 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  privacyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  privacyToggleOn: {
+    backgroundColor: '#B49AFF',
+    borderColor: '#B49AFF',
+  },
+  privacyToggleText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#666666',
+  },
+  privacyToggleTextOn: {
+    color: '#FFFFFF',
   },
 });

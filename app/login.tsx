@@ -204,6 +204,8 @@ export default function LoginScreen() {
                   onChangeText={setPassword}
                   secureTextEntry
                   autoComplete="password"
+                  onSubmitEditing={handleAuth}
+                  returnKeyType="done"
                 />
 
                 {errorMessage ? (

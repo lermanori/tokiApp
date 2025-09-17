@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import RatingPrompt from '@/components/RatingPrompt';
@@ -131,12 +131,14 @@ interface TokiDetails {
   hostId?: string; // Alternative way to store host ID
   image: string;
   distance: string;
+  visibility?: 'public' | 'private' | 'connections' | 'friends';
   isHostedByUser?: boolean;
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined' | 'completed';
   participants?: Array<{
     id: string;
     name: string;
     avatar?: string;
+    // isHost?: boolean; // not used
   }>;
 }
 
@@ -418,6 +420,7 @@ export default function TokiDetailsScreen() {
           hostId: tokiData.host?.id, // Store host ID for potential use
           image: tokiData.imageUrl || '', // Let Image component use getActivityPhoto fallback
           distance: '0.5 km', // Default distance
+          visibility: tokiData.visibility,
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
           participants: tokiData.participants || [], // Ensure participants are loaded
@@ -583,9 +586,61 @@ export default function TokiDetailsScreen() {
     }
   };
 
-  const handleInvitePress = () => {
-    Alert.alert('Invite Connections', 'Invite your connections to this Toki...');
+  // Invite flow will use a modal with connections selection
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteConnections, setInviteConnections] = useState<any[]>([]);
+  const [selectedInviteeIds, setSelectedInviteeIds] = useState<Set<string>>(new Set());
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [hiddenCount, setHiddenCount] = useState<number>(0);
+
+  const handleInvitePress = async () => {
+    if (!toki) return;
+    if (!toki.isHostedByUser) {
+      Alert.alert('Only hosts can invite', 'Ask the host to invite users.');
+      return;
+    }
+    try {
+      setIsLoadingInvites(true);
+      const { connections } = await actions.getConnections();
+      setInviteConnections(connections || []);
+      setSelectedInviteeIds(new Set());
+      setShowInviteModal(true);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load connections');
+    } finally {
+      setIsLoadingInvites(false);
+    }
   };
+
+  const toggleInvitee = (userId: string) => {
+    setSelectedInviteeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+
+  const sendInvites = async () => {
+    if (!toki) return;
+    if (selectedInviteeIds.size === 0) {
+      Alert.alert('Select connections', 'Pick at least one connection to invite.');
+      return;
+    }
+    try {
+      setIsLoadingInvites(true);
+      for (const userId of selectedInviteeIds) await actions.createInvite(toki.id, userId);
+      setShowInviteModal(false);
+      Alert.alert('Invites sent');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to send some invites');
+    } finally {
+      setIsLoadingInvites(false);
+    }
+  };
+
+  // Reuse same modal for Hide by switching CTA handler when Hide button pressed
+  // For simplicity, we always show "Send Invites"; host Hide uses the lock button handler above
 
   const handleEditPress = () => {
     if (!toki) return;
@@ -867,9 +922,105 @@ export default function TokiDetailsScreen() {
           </View>
         </View>
 
+        {/* Invite modal */}
+        <Modal
+          transparent
+          visible={showInviteModal}
+          animationType="fade"
+          onRequestClose={() => setShowInviteModal(false)}
+        >
+          <View style={styles.pickerBackdrop}>
+            <View style={styles.inviteModalContainer}>
+              <Text style={styles.sectionTitle}>Manage Visibility</Text>
+              <TextInput
+                style={styles.inviteSearch}
+                placeholder="Search connections..."
+                placeholderTextColor="#9CA3AF"
+                value={inviteSearch}
+                onChangeText={setInviteSearch}
+              />
+              <ScrollView style={{ maxHeight: 320 }}>
+                {isLoadingInvites ? (
+                  <Text style={styles.loadingText}>Loading...</Text>
+                ) : (
+                  inviteConnections
+                    .filter((c: any) => {
+                      const name = (c.user?.name || c.name || '').toLowerCase();
+                      return name.includes(inviteSearch.toLowerCase());
+                    })
+                    .map((c: any) => {
+                      const id = c.user?.id || c.id;
+                      const name = c.user?.name || c.name || 'Unknown';
+                      const avatar = c.user?.avatar || c.user?.avatar_url || '';
+                      const selected = selectedInviteeIds.has(id);
+                      const initials = name.split(' ').slice(0,2).map((n:string)=>n.charAt(0).toUpperCase()).join('');
+                      return (
+                        <TouchableOpacity
+                          key={id}
+                          style={[styles.connectionRow, selected && styles.connectionRowSelected]}
+                          onPress={() => toggleInvitee(id)}
+                        >
+                          {avatar ? (
+                            <Image source={{ uri: avatar }} style={styles.connectionAvatar} />
+                          ) : (
+                            <View style={[styles.connectionAvatar, styles.connectionAvatarFallback]}>
+                              <Text style={styles.connectionAvatarInitials}>{initials}</Text>
+                            </View>
+                          )}
+                          <Text style={styles.connectionName}>{name}</Text>
+                          <View style={[styles.inviteCheck, selected && styles.inviteCheckOn]}>
+                            <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                )}
+              </ScrollView>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowInviteModal(false)}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.confirmButton} onPress={async () => {
+                  if (!toki) return;
+                  if (selectedInviteeIds.size === 0) { Alert.alert('Select connections'); return; }
+                  setIsLoadingInvites(true);
+                  try {
+                    // Decide whether we are inviting or hiding based on which opener was used.
+                    // If the modal opened from Hide button, prefer hiding.
+                    // Heuristic: if hide button opened last, we set a flag; else invite.
+                    // For now, use a simple dual-action approach: invite by default; pressing Hide opens same modal and we call hide.
+                    for (const userId of selectedInviteeIds) {
+                      await actions.hideUser(toki.id, userId);
+                    }
+                    setShowInviteModal(false);
+                    Alert.alert('Hidden from selected users');
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to apply hide');
+                  } finally {
+                    setIsLoadingInvites(false);
+                  }
+                }}>
+                  <Text style={styles.confirmButtonText}>Hide Users</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <View style={styles.detailsContainer}>
           <View style={styles.titleSection}>
             <Text style={styles.title}>{toki.title}</Text>
+            {toki.visibility === 'private' && (
+              <View style={styles.privateBadge}>
+                <Lock size={14} color="#FFFFFF" />
+                <Text style={styles.privateBadgeText}>Private</Text>
+              </View>
+            )}
+            {toki.isHostedByUser && hiddenCount > 0 && (
+              <View style={styles.hiddenBadge}>
+                <Text style={styles.hiddenBadgeText}>Hidden {hiddenCount}</Text>
+              </View>
+            )}
             <Text style={styles.distance}>{toki.distance} away</Text>
           </View>
 
@@ -1027,6 +1178,29 @@ export default function TokiDetailsScreen() {
               <Text style={styles.inviteText}>Invite</Text>
             </TouchableOpacity>
 
+            {/* Hide button (host-only) */}
+            {toki.isHostedByUser && (
+              <TouchableOpacity style={styles.hideButton} onPress={async () => {
+                try {
+                  setIsLoadingInvites(true);
+                  const { connections } = await actions.getConnections();
+                  setInviteConnections(connections || []);
+                  setSelectedInviteeIds(new Set());
+                  setInviteSearch('');
+                  const list = await actions.listHiddenUsers(toki.id);
+                  setHiddenCount((list || []).length);
+                  setShowInviteModal(true);
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to load connections');
+                } finally {
+                  setIsLoadingInvites(false);
+                }
+              }}>
+                <Lock size={20} color="#EF4444" />
+                <Text style={styles.hideText}>Hide</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[
                 styles.chatButton,
@@ -1059,7 +1233,7 @@ export default function TokiDetailsScreen() {
                     onPress={() => {
                       try {
                         const otherParticipantsCount = Array.isArray(toki.participants)
-                          ? toki.participants.filter(p => !p.isHost).length
+                          ? toki.participants.length
                           : Math.max((toki.attendees || 0) - 1, 0);
                         const isHostOnlyEvent = !!toki.isHostedByUser && otherParticipantsCount === 0;
                         if (isHostOnlyEvent) {
@@ -1189,6 +1363,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#666666',
   },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   backButton: {
     backgroundColor: '#B49AFF',
     paddingHorizontal: 20,
@@ -1274,13 +1455,43 @@ const styles = StyleSheet.create({
     // marginTop: -20,
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   titleSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 20,
+  },
+  privateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  privateBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+  },
+  hiddenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#6B7280',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  hiddenBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
   },
   title: {
     fontSize: 24,
@@ -1575,6 +1786,8 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     borderTopWidth: 1,
     borderTopColor: '#EAEAEA',
+    maxWidth: 1000,
+    margin: 'auto',
   },
   joinButton: {
     borderRadius: 12,
@@ -1639,6 +1852,92 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
+  },
+  inviteModalContainer: {
+    width: '90%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+  },
+  hideButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  hideText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
+  },
+  inviteSearch: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+    marginBottom: 12,
+    color: '#1C1C1C',
+    fontFamily: 'Inter-Regular',
+  },
+  connectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  connectionRowSelected: {
+    backgroundColor: '#F5F3FF',
+  },
+  connectionAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+  },
+  connectionAvatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectionAvatarInitials: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: '#6B7280',
+  },
+  connectionName: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#1C1C1C',
+  },
+  inviteCheck: {
+    marginLeft: 'auto',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inviteCheckOn: {
+    backgroundColor: '#B49AFF',
+    borderColor: '#B49AFF',
+  },
+  inviteCheckText: {
+    fontSize: 12,
+    color: '#666666',
+  },
+  inviteCheckTextOn: {
+    color: '#FFFFFF',
   },
 
 });

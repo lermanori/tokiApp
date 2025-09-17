@@ -1,3 +1,17 @@
+# File: toki-backend/src/routes/messages.ts
+
+### Summary
+Message routes for conversations and Toki group chats. Emission logs are concise; payload dumps are debug-only.
+
+### Fixes Applied log
+- problem: Emission logs printed full payloads and room membership counts by default.
+- solution: Kept event/room at info; moved payloads, member counts, and timestamp diagnostics to debug; errors remain errors.
+
+### How Fixes Were Implemented
+- Replaced `console.*` with `logger.*`.
+- Standardized info-level to: sending event + room name + success confirmation.
+- Demoted timestamp spam and payload details to `debug`.
+
 # File: messages.ts
 
 ### Summary
