@@ -141,7 +141,7 @@ router.post('/login', async (req: Request, res: Response) => {
 router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, name, bio, location, avatar_url, verified, rating, member_since, created_at
+      `SELECT id, email, name, bio, location, avatar_url, verified, rating, member_since, created_at,latitude,longitude
        FROM users WHERE id = $1`,
       [req.user!.id]
     );
@@ -241,6 +241,8 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
           bio: user.bio,
           location: user.location,
           avatar: user.avatar_url,
+          latitude: user.latitude,
+          longitude: user.longitude,
           verified: user.verified,
           rating: calculatedRating,
           totalRatings: totalRatings,

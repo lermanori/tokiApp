@@ -4,25 +4,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Filter, Plus, Minus, Search, RefreshCw, Navigation, Crosshair, Clock, Users } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
-import * as Location from 'expo-location';
 import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
 import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
+import { geocodingService } from '@/services/geocoding';
+import DiscoverMap from '@/components/DiscoverMap';
 
 // Platform-specific map imports
 const isWeb = Platform.OS === 'web';
 
 // Web-only Leaflet imports
-let MapContainer: any, TileLayer: any, Marker: any, Popup: any, L: any;
+let MapContainer: any, TileLayer: any, LeafletMarker: any, LeafletPopup: any, L: any;
 if (isWeb) {
   const Leaflet = require('react-leaflet');
   const LeafletCore = require('leaflet');
   MapContainer = Leaflet.MapContainer;
   TileLayer = Leaflet.TileLayer;
-  Marker = Leaflet.Marker;
-  Popup = Leaflet.Popup;
+  LeafletMarker = Leaflet.Marker;
+  LeafletPopup = Leaflet.Popup;
   L = LeafletCore;
 }
 
@@ -37,6 +38,7 @@ interface TokiEvent {
   maxAttendees: number;
   category: string;
   distance: string;
+  visibility?: 'public' | 'connections' | 'friends';
   host: {
     id: string; // Add host.id for conversation functionality
     name: string;
@@ -111,7 +113,6 @@ export default function DiscoverScreen() {
   });
 
   // Map and location state
-  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [mapRegion, setMapRegion] = useState({
     latitude: 32.0853, // Default to Tel Aviv
     longitude: 34.7818,
@@ -205,36 +206,42 @@ export default function DiscoverScreen() {
     }
   };
 
-  // Get user location
+  // Center map from user's profile location (not device GPS)
   useEffect(() => {
-    const getUserLocation = async () => {
+    const setFromProfile = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('📍 Location permission denied');
-          return;
+        const profileLoc = state.currentUser?.location?.trim();
+        if (profileLoc) {
+          const results = await geocodingService.geocodeAddress(profileLoc, 0);
+          if (results && results[0]) {
+            const { latitude, longitude } = results[0];
+            setMapRegion({
+              latitude,
+              longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            });
+            return;
+          }
         }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        setUserLocation(location);
+        // fallback to Tel Aviv
         setMapRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: 32.0853,
+          longitude: 34.7818,
           latitudeDelta: 0.0922,
           longitudeDelta: 0.0421,
         });
-
-        console.log('📍 User location obtained:', location.coords);
       } catch (error) {
-        console.error('📍 Error getting location:', error);
+        setMapRegion({
+          latitude: 32.0853,
+          longitude: 34.7818,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        });
       }
     };
-
-    getUserLocation();
-  }, []);
+    setFromProfile();
+  }, [state.currentUser?.location]);
 
   // Add Leaflet CSS for web
   useEffect(() => {
@@ -289,14 +296,10 @@ export default function DiscoverScreen() {
     if (selectedFilters.dateTo) queryParams.dateTo = selectedFilters.dateTo;
     if (selectedFilters.radius !== '10') queryParams.radius = selectedFilters.radius;
 
-    // Add user location for radius search
-    if (userLocation) {
-      queryParams.userLatitude = userLocation.coords.latitude.toString();
-      queryParams.userLongitude = userLocation.coords.longitude.toString();
-    } else {
-      // Fallback to default Tel Aviv coordinates
-      queryParams.userLatitude = '32.0853';
-      queryParams.userLongitude = '34.7818';
+    // Use current map center for radius search
+    if (mapRegion?.latitude && mapRegion?.longitude) {
+      queryParams.userLatitude = mapRegion.latitude.toString();
+      queryParams.userLongitude = mapRegion.longitude.toString();
     }
 
     console.log('🔍 [DISCOVER] Applying advanced filters:', queryParams);
@@ -325,15 +328,21 @@ export default function DiscoverScreen() {
   };
 
   // Map control functions
-  const centerOnUserLocation = () => {
-    if (userLocation) {
-      setMapRegion({
-        latitude: userLocation.coords.latitude,
-        longitude: userLocation.coords.longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-      });
-    }
+  const centerOnProfileLocation = async () => {
+    const profileLoc = state.currentUser?.location?.trim();
+    if (!profileLoc) return;
+    try {
+      const results = await geocodingService.geocodeAddress(profileLoc, 0);
+      if (results && results[0]) {
+        const { latitude, longitude } = results[0];
+        setMapRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        });
+      }
+    } catch { }
   };
 
   const toggleMapType = () => {
@@ -452,60 +461,24 @@ export default function DiscoverScreen() {
     if (isWeb) {
       return (
         <View style={styles.mapContainer}>
-          <div style={styles.webMapContainer}>
+          <div style={styles.webMapContainer as any}>
             <MapContainer
               center={[mapRegion.latitude, mapRegion.longitude]}
               zoom={13}
-              style={styles.leafletMap}
+              style={styles.leafletMap as any}
             >
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              {/* User location marker */}
-              {userLocation && (
-                <Marker
-                  position={[userLocation.coords.latitude, userLocation.coords.longitude]}
-                  icon={L.divIcon({
-                    className: 'user-location-marker',
-                    html: `
-                      <div style="
-                        background-color: #4ECDC4;
-                        width: 20px;
-                        height: 20px;
-                        border-radius: 50%;
-                        border: 3px solid white;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        color: white;
-                        font-weight: bold;
-                        font-size: 10px;
-                        font-family: Inter, sans-serif;
-                      ">
-                        👤
-                      </div>
-                    `,
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
-                  })}
-                >
-                  <Popup>
-                    <div style={styles.leafletPopup}>
-                      <strong>Your Location</strong><br />
-                      You are here
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
+              {/* Center is driven by profile location; omit user marker */}
 
               {/* Toki markers */}
               {filteredEvents.map((event) => {
                 if (event.coordinate.latitude && event.coordinate.longitude) {
                   return (
-                    <Marker
+                    <LeafletMarker
                       key={event.id}
                       position={[event.coordinate.latitude, event.coordinate.longitude]}
                       icon={L.divIcon({
@@ -536,21 +509,21 @@ export default function DiscoverScreen() {
                         click: () => handleMapMarkerPress(event)
                       }}
                     >
-                      <Popup>
-                        <div style={styles.leafletPopup}>
+                      <LeafletPopup>
+                        <div style={styles.leafletPopup as any}>
                           <strong>{event.title}</strong><br />
                           <span style={{ color: '#B49AFF' }}>{event.category}</span><br />
                           {event.location}<br />
                           {formatAttendees(event.attendees, event.maxAttendees)}<br />
                           <button
-                            style={styles.leafletButton}
+                            style={styles.leafletButton as any}
                             onClick={() => handleEventPress(event)}
                           >
                             View Details
                           </button>
                         </div>
-                      </Popup>
-                    </Marker>
+                      </LeafletPopup>
+                    </LeafletMarker>
                   );
                 }
                 return null;
@@ -558,11 +531,11 @@ export default function DiscoverScreen() {
             </MapContainer>
 
             {/* Map Controls Overlay */}
-            <div style={styles.webMapControls}>
-              <button style={styles.webMapControlButton} onClick={centerOnUserLocation}>
+            <div style={styles.webMapControls as any}>
+              <button style={styles.webMapControlButton as any} onClick={centerOnProfileLocation}>
                 🎯
               </button>
-              <button style={styles.webMapControlButton} onClick={toggleMapView}>
+              <button style={styles.webMapControlButton as any} onClick={toggleMapView}>
                 📋
               </button>
             </div>
@@ -571,16 +544,17 @@ export default function DiscoverScreen() {
       );
     }
 
-    // Native platform map - will be implemented when needed
+    // Native platforms use extracted component to avoid web bundling native code
     return (
       <View style={styles.mapContainer}>
-        <View style={styles.nativeMapPlaceholder}>
-          <Text style={styles.nativeMapTitle}>Interactive Map</Text>
-          <Text style={styles.nativeMapSubtitle}>Loading map...</Text>
-          <TouchableOpacity style={styles.nativeMapButton} onPress={toggleMapView}>
-            <Text style={styles.nativeMapButtonText}>Switch to List View</Text>
-          </TouchableOpacity>
-        </View>
+        <DiscoverMap
+          region={mapRegion}
+          onRegionChange={(r: any) => setMapRegion(r)}
+          events={filteredEvents as any}
+          onEventPress={handleEventPress}
+          onMarkerPress={handleMapMarkerPress}
+          onToggleList={toggleMapView}
+        />
       </View>
     );
   };

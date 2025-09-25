@@ -1520,6 +1520,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tokisJoined: stats?.tokis_joined || 0,
         connections: stats?.connections_count || 0,
         rating: parseFloat(user.rating) || 0,
+        latitude: user.latitude,
+        longitude: user.longitude,
       };
 
       console.log('🔄 Dispatching UPDATE_CURRENT_USER with:', transformedUser);

@@ -69,10 +69,10 @@ export default function TokiForm({
   isSubmitting
 }: TokiFormProps) {
   const { state } = useApp();
-  
+
   console.log('TokiForm received initialData:', initialData);
   console.log('TokiForm mode:', mode);
-  
+
   const [title, setTitle] = useState(initialData.title || '');
   const [description, setDescription] = useState(initialData.description || '');
   const [location, setLocation] = useState(initialData.location || '');
@@ -87,6 +87,9 @@ export default function TokiForm({
   const [currentTag, setCurrentTag] = useState('');
   const [geocodingResults, setGeocodingResults] = useState<GeocodingResult[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [placesPredictions, setPlacesPredictions] = useState<Array<{ description: string; place_id: string; types?: string[]; structured?: { mainText?: string; secondaryText?: string } }>>([]);
+  const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [customDateTime, setCustomDateTime] = useState<string>('');
   const [tokiImages, setTokiImages] = useState<Array<{ url: string; publicId: string }>>(initialData.images || []);
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
@@ -124,7 +127,7 @@ export default function TokiForm({
   // Enhanced time slots
   const timeSlots = [
     'Now', '30 min', '1 hour', '2 hours', '3 hours', 'Tonight', 'Tomorrow',
-    '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', 
+    '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM',
     '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'
   ];
 
@@ -178,7 +181,7 @@ export default function TokiForm({
     }
   };
 
-  // Cleanup function to cancel any pending geocoding requests
+  // Cleanup function to cancel any pending geocoding requests (legacy fallback)
   useEffect(() => {
     return () => {
       geocodingService.cancelRequest(`${mode}-toki`);
@@ -212,7 +215,7 @@ export default function TokiForm({
   useEffect(() => {
     if (mode === 'edit' && initialData) {
       console.log('Updating form state with initialData:', initialData);
-      
+
       if (initialData.title) setTitle(initialData.title);
       if (initialData.description) setDescription(initialData.description);
       if (initialData.location) setLocation(initialData.location);
@@ -227,7 +230,7 @@ export default function TokiForm({
       if (initialData.maxAttendees) setMaxAttendees(initialData.maxAttendees.toString());
       if (initialData.tags) setCustomTags(initialData.tags);
       if (initialData.customDateTime) setCustomDateTime(initialData.customDateTime);
-      
+
       // If we have a custom date/time, mark the time as custom
       if (initialData.customDateTime && initialData.time) {
         // Check if the time is a specific time slot (like "10:00 AM")
@@ -235,7 +238,7 @@ export default function TokiForm({
           setSelectedTime('custom');
         }
       }
-      
+
       // Log the state after setting
       setTimeout(() => {
         console.log('Form state after update:', {
@@ -258,18 +261,18 @@ export default function TokiForm({
   const handleTimeSlotSelect = (timeSlot: string) => {
     console.log('Time slot selected:', timeSlot);
     setSelectedTime(timeSlot);
-    
+
     // Convert time slot to actual date/time and update custom input
     const scheduledTime = getScheduledTimeFromSlot(timeSlot);
     console.log('Scheduled time:', scheduledTime);
-    
+
     const dateStr = scheduledTime.toISOString().split('T')[0]; // YYYY-MM-DD
     const timeStr = scheduledTime.toTimeString().slice(0, 5); // HH:MM
     const formattedDateTime = `${dateStr} ${timeStr}`; // YYYY-MM-DD HH:MM
     console.log('Formatted date time:', formattedDateTime);
-    
+
     setCustomDateTime(formattedDateTime);
-    
+
     // If it's a specific time slot, also set selectedTime to 'custom' for the form
     if (timeSlot.includes(':') || timeSlot === 'Now' || timeSlot === 'Tonight' || timeSlot === 'Tomorrow') {
       setSelectedTime('custom');
@@ -279,7 +282,7 @@ export default function TokiForm({
   // Function to get scheduled time from time slot
   const getScheduledTimeFromSlot = (timeSlot: string): Date => {
     const now = new Date();
-    
+
     switch (timeSlot) {
       case 'Now':
         return now;
@@ -306,18 +309,18 @@ export default function TokiForm({
           const [time, period] = timeSlot.split(' ');
           const [hours, minutes] = time.split(':').map(Number);
           let hour24 = hours;
-          
+
           if (period === 'PM' && hours !== 12) hour24 += 12;
           if (period === 'AM' && hours === 12) hour24 = 0;
-          
+
           const scheduledTime = new Date(now);
           scheduledTime.setHours(hour24, minutes, 0, 0);
-          
+
           // If the time has passed today, schedule for tomorrow
           if (scheduledTime <= now) {
             scheduledTime.setDate(scheduledTime.getDate() + 1);
           }
-          
+
           return scheduledTime;
         }
         return now;
@@ -327,22 +330,22 @@ export default function TokiForm({
   // Function to format custom date/time for display
   const formatCustomDateTime = (dateString: string): string => {
     if (!dateString) return 'Select date & time';
-    
+
     try {
       const date = new Date(dateString);
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      
+
       const timeString = date.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true
       });
-      
+
       if (eventDate.getTime() === today.getTime()) {
         return `today at ${timeString}`;
       } else if (eventDate.getTime() === tomorrow.getTime()) {
@@ -363,7 +366,7 @@ export default function TokiForm({
     // Simple regex for YYYY-MM-DD HH:MM format
     const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
     if (!dateTimeRegex.test(dateString)) return false;
-    
+
     try {
       const date = new Date(dateString.replace(' ', 'T'));
       return !isNaN(date.getTime()) && date > new Date();
@@ -375,33 +378,33 @@ export default function TokiForm({
   // Function to format location for display (more compact)
   const formatLocationDisplay = (fullLocation: string): string => {
     if (!fullLocation) return '';
-    
+
     // Split by commas and clean up
     const parts = fullLocation.split(',').map(part => part.trim());
-    
+
     if (parts.length >= 2) {
       // Try to extract city and landmark/area name
       const city = parts[parts.length - 2]; // Usually the city is second to last
       const landmark = parts[0]; // First part is usually the landmark/area name
-      
+
       // If we have a city and landmark, format as "City, Landmark"
       if (city && landmark && city !== landmark) {
         return `${city}, ${landmark}`;
       }
-      
+
       // Fallback: just show first two meaningful parts
-      const meaningfulParts = parts.filter(part => 
-        part && 
-        !part.includes('Subdistrict') && 
+      const meaningfulParts = parts.filter(part =>
+        part &&
+        !part.includes('Subdistrict') &&
         !part.includes('District') &&
         part.length > 2
       );
-      
+
       if (meaningfulParts.length >= 2) {
         return `${meaningfulParts[0]}, ${meaningfulParts[1]}`;
       }
     }
-    
+
     // If all else fails, just show the first meaningful part
     return parts[0] || fullLocation;
   };
@@ -431,45 +434,84 @@ export default function TokiForm({
     }
   };
 
-  // Function to handle location input change
+  // Function to handle location input change (Google Places)
   const handleLocationChange = async (newLocation: string) => {
     setLocation(newLocation);
-    
+
     if (!newLocation.trim()) {
       setLatitude(null);
       setLongitude(null);
-      setGeocodingResults([]);
+      setGeocodingResults([]); // legacy list hidden
+      setPlacesPredictions([]);
+      setShowAutocomplete(false);
+      return;
+    }
+
+    // Only query after 2+ characters
+    if (newLocation.trim().length < 2) {
+      setPlacesPredictions([]);
       setShowAutocomplete(false);
       return;
     }
 
     try {
-      const results: GeocodingResult[] = await geocodingService.geocodeAddress(newLocation, 1000, `${mode}-toki`, 5);
-      setGeocodingResults(results);
-      
-      if (results.length > 0) {
-        setShowAutocomplete(true);
+      // Bias by profile coordinates if available
+      const biasLat = (state.currentUser as any)?.latitude;
+      const biasLng = (state.currentUser as any)?.longitude;
+      const params = new URLSearchParams({ input: newLocation.trim() });
+      if (biasLat && biasLng) {
+        params.append('lat', String(biasLat));
+        params.append('lng', String(biasLng));
+      }
+      if (placesSessionToken) params.append('sessiontoken', placesSessionToken);
+
+      const resp = await fetch(`${getBackendUrl()}/api/maps/places?${params.toString()}`);
+      const json = await resp.json();
+      if (json?.success) {
+        setPlacesPredictions(json.data?.predictions || []);
+        setPlacesSessionToken(json.data?.sessionToken || placesSessionToken);
+        setShowAutocomplete((json.data?.predictions || []).length > 0);
       } else {
+        setPlacesPredictions([]);
         setShowAutocomplete(false);
       }
     } catch (error) {
-      console.error('Geocoding failed:', error);
-      if (error instanceof Error && error.message !== 'Request was cancelled') {
-        setLatitude(null);
-        setLongitude(null);
-        setGeocodingResults([]);
-        setShowAutocomplete(false);
-      }
+      console.error('Places autocomplete failed:', error);
+      setPlacesPredictions([]);
+      setShowAutocomplete(false);
     }
   };
 
-  // Function to handle location selection from autocomplete
-  const handleLocationSelect = (result: GeocodingResult) => {
-    setLocation(result.displayName);
-    setLatitude(result.latitude);
-    setLongitude(result.longitude);
-    setShowAutocomplete(false);
-    setGeocodingResults([]);
+  // Handle selection of a Google Place prediction
+  const handlePredictionSelect = async (prediction: { description: string; place_id: string }) => {
+    try {
+      const params = new URLSearchParams({ placeId: prediction.place_id });
+      if (placesSessionToken) params.append('sessiontoken', placesSessionToken);
+      const resp = await fetch(`${getBackendUrl()}/api/maps/place-details?${params.toString()}`);
+      const json = await resp.json();
+      if (json?.success) {
+        const d = json.data;
+        const main = (prediction as any)?.structured?.mainText;
+        const secondary = (prediction as any)?.structured?.secondaryText;
+        const pickedLabel = main && secondary
+          ? `${main}, ${secondary}`
+          : (d.shortLabel || d.formatted_address || prediction.description);
+        setLocation(pickedLabel);
+        setLatitude(d.location?.lat ?? null);
+        setLongitude(d.location?.lng ?? null);
+        setSelectedPlaceId(d.placeId || prediction.place_id);
+      } else {
+        // Fallback to description only
+        setLocation(prediction.description);
+      }
+    } catch (error) {
+      console.error('Place details failed:', error);
+      setLocation(prediction.description);
+    } finally {
+      setShowAutocomplete(false);
+      setPlacesPredictions([]);
+      setGeocodingResults([]);
+    }
   };
 
 
@@ -491,7 +533,7 @@ export default function TokiForm({
 
     if (hasTempImages) {
       console.log('📸 [TOKI FORM] Creating Toki first, then uploading images...');
-      
+
       // Create Toki without images first
       const tokiDataWithoutImages = {
         title,
@@ -499,6 +541,7 @@ export default function TokiForm({
         location,
         latitude: latitude || null,
         longitude: longitude || null,
+        placeId: selectedPlaceId || null,
         activity: selectedActivities[0], // Primary activity (first selected)
         activities: selectedActivities, // All selected activities
         time: selectedTime,
@@ -515,17 +558,17 @@ export default function TokiForm({
         if (result && typeof result === 'string') {
           // Now upload the images to the created Toki
           console.log('📸 [TOKI FORM] Toki created, now uploading images...');
-          
+
           // Show loading state for image uploads
           Alert.alert(
             'Uploading Images',
             'Your Toki has been created! Now uploading your images...',
             [{ text: 'OK' }]
           );
-          
+
           await uploadImagesToToki(result, tempImages);
           console.log('📸 [TOKI FORM] All images uploaded successfully');
-          
+
           // Return the result only after images are uploaded
           return result;
         }
@@ -542,6 +585,7 @@ export default function TokiForm({
         location,
         latitude: latitude || null,
         longitude: longitude || null,
+        placeId: selectedPlaceId || null,
         activity: selectedActivities[0], // Primary activity (first selected)
         activities: selectedActivities, // All selected activities
         time: selectedTime,
@@ -569,11 +613,11 @@ export default function TokiForm({
     for (const image of tempImages) {
       try {
         console.log(`📸 [TOKI FORM] Uploading image: ${image.publicId}`);
-        
+
         // Convert the local URI to blob and upload
         const response = await fetch(image.url);
         const blob = await response.blob();
-        
+
         const formData = new FormData();
         formData.append('image', blob as any, 'toki-image.jpg');
 
@@ -666,7 +710,7 @@ export default function TokiForm({
           <View style={styles.locationInputContainer}>
             <MapPin size={20} color="#B49AFF" style={styles.locationIcon} />
             <TextInput
-              style={{outline: 'none', ...styles.locationInput}}
+              style={{ outline: 'none', ...styles.locationInput }}
               value={location}
               placeholder="e.g., Rothschild Boulevard, Gordon Beach..."
               placeholderTextColor="#999999"
@@ -674,19 +718,26 @@ export default function TokiForm({
               onFocus={() => setShowAutocomplete(true)}
             />
           </View>
-          
-          {showAutocomplete && geocodingResults.length > 0 && (
+
+          {showAutocomplete && placesPredictions.length > 0 && (
             <View style={styles.autocompleteContainer}>
-              {geocodingResults.map((result, index) => (
+              {placesPredictions.map((p, index) => (
                 <TouchableOpacity
                   key={index}
                   style={styles.autocompleteItem}
-                  onPress={() => handleLocationSelect(result)}
+                  onPress={() => handlePredictionSelect(p)}
                 >
                   <MapPin size={16} color="#666666" />
-                  <Text style={styles.autocompleteText} numberOfLines={2}>
-                    {result.displayName}
-                  </Text>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text style={styles.autocompleteText} numberOfLines={1}>
+                      {p.structured?.mainText || p.description}
+                    </Text>
+                    {p.structured?.secondaryText && (
+                      <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>
+                        {p.structured.secondaryText}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -702,7 +753,7 @@ export default function TokiForm({
 
           {/* Custom Date & Time Input */}
           <View style={styles.customDateTimeContainer}>
-            
+
             {/* Date and Time in a row */}
             <View style={styles.dateTimeRow}>
               {/* Date Input */}
@@ -710,9 +761,9 @@ export default function TokiForm({
                 <Text style={styles.dateTimeLabel}>Date:</Text>
 
                 <View style={styles.dateTimeInputContainer}>
-                  
+
                   <TextInput
-                    style={{outline: 'none', ...styles.dateTimeInput}}
+                    style={{ outline: 'none', ...styles.dateTimeInput }}
                     value={customDateTime ? customDateTime.split(' ')[0] : ''}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor="#999999"
@@ -729,13 +780,13 @@ export default function TokiForm({
                   </TouchableOpacity>
                 </View>
               </View>
-              
+
               {/* Time Input */}
               <View style={styles.dateTimeInputGroup}>
                 <Text style={styles.dateTimeLabel}>Time:</Text>
                 <View style={styles.dateTimeInputContainer}>
                   <TextInput
-                    style={{outline: 'none', ...styles.dateTimeInput}}
+                    style={{ outline: 'none', ...styles.dateTimeInput }}
                     value={customDateTime ? customDateTime.split(' ')[1] : ''}
                     placeholder="HH:MM"
                     placeholderTextColor="#999999"
@@ -779,7 +830,7 @@ export default function TokiForm({
                     const dateStr = dayjs(pickedDate).format('YYYY-MM-DD');
                     const currentTime = customDateTime ? customDateTime.split(' ')[1] : '14:00';
                     setCustomDateTime(`${dateStr} ${currentTime}`);
-                  } catch {}
+                  } catch { }
                 }}
               />
               <TouchableOpacity style={styles.pickerCloseButton} onPress={() => setIsDatePickerVisible(false)}>
@@ -901,7 +952,7 @@ export default function TokiForm({
           <View style={styles.attendeesInputContainer}>
             <Users size={20} color="#B49AFF" style={styles.attendeesIcon} />
             <TextInput
-              style={{outline: 'none', ...styles.attendeesInput}}
+              style={{ outline: 'none', ...styles.attendeesInput }}
               placeholder="10"
               value={maxAttendees}
               onChangeText={setMaxAttendees}
@@ -916,7 +967,7 @@ export default function TokiForm({
           <View style={styles.tagInputContainer}>
             <Tag size={20} color="#B49AFF" style={styles.tagIcon} />
             <TextInput
-              style={{outline: 'none', ...styles.tagInput}}
+              style={{ outline: 'none', ...styles.tagInput }}
               placeholder="Add custom tags..."
               value={currentTag}
               onChangeText={setCurrentTag}
@@ -927,7 +978,7 @@ export default function TokiForm({
               <Text style={styles.addTagButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
-          
+
           {customTags.length > 0 && (
             <View style={styles.tagsContainer}>
               {customTags.map((tag, index) => (

@@ -44,6 +44,8 @@ export interface User {
   location?: string;
   avatar?: string;
   verified: boolean;
+  latitude?: number;
+  longitude?: number;
   rating: string;
   memberSince: string;
   createdAt: string;

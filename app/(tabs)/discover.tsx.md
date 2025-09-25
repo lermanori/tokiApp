@@ -57,5 +57,17 @@ Removed all debugging console.log statements:
 - ✅ Auto-refresh on screen focus working
 - ⏳ Radius-based filtering deferred for future enhancement
 
+### New Changes (iOS Map Integration)
+- Implemented native `MapView` from `react-native-maps` for iOS/Android with `provider={PROVIDER_GOOGLE}`.
+- Centered map by user profile `location` using `geocodingService` (no device GPS permissions).
+- Replaced native placeholder UI with interactive map showing Toki markers and callouts.
+- Switched native callouts to default bubble (disabled tooltip) so callout renders with background.
+- Filters now use current map center for radius searches.
+
+### Why and How
+- We match the web look while using Google Maps on native per Expo docs.
+- Using profile location avoids permission prompts and respects the requested behavior.
+- Minimal risk: web Leaflet branch untouched; native-only code paths gated by platform.
+
 ### Notes
 The linter errors shown are pre-existing CSS compatibility issues between React Native and web platforms, not related to the attendee counter fix or debug cleanup. These are cosmetic and don't affect functionality.

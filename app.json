@@ -11,7 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.toki.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "config": {
+        "GOOGLE_MAPS_API_KEY": "AIzaSyBwE0proYRikHxk2Z6u3bT0F2YuPKzwtfE"
+      }
     },
     "web": {
       "bundler": "metro",
