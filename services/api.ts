@@ -817,6 +817,15 @@ class ApiService {
     return response.data;
   }
 
+  // Waitlist
+  async joinWaitlist(payload: { email: string; phone?: string | null; location?: string | null; reason?: string | null; platform?: string }) {
+    return this.makeRequest(`/waitlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getPopularTags(limit?: number): Promise<PopularTag[]> {
     const queryParams = limit ? `?limit=${limit}` : '';
     const response = await this.makeRequest<{ success: boolean; data: PopularTag[] }>(`/tokis/tags/popular${queryParams}`);

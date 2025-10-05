@@ -25,7 +25,7 @@ const DEV_USERS = [
 ];
 
 export default function LoginScreen() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -88,7 +88,7 @@ export default function LoginScreen() {
   };
 
   const handleAuth = async () => {
-    if (!email || !password || (!isLogin && !name)) {
+    if (!email || !password) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
@@ -96,7 +96,7 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage(''); // Clear any previous error messages
     try {
-      if (isLogin) {
+      {
         const response = await apiService.login({ email, password });
         if (response.success) {
           // Save credentials for dev environment
@@ -184,30 +184,6 @@ export default function LoginScreen() {
         } else {
           setErrorMessage(response.message || 'Login failed');
         }
-      } else {
-        const response = await apiService.register({ name, email, password });
-        if (response.success) {
-          // Convert API user to frontend user format
-          const user = {
-            ...response.data.user,
-            rating: parseFloat(response.data.user.rating) || 0,
-            tokisCreated: 0,
-            tokisJoined: 0,
-            connections: 0,
-          };
-          
-          // Update the app state with the authenticated user
-          dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
-          
-          // For registration, redirect immediately (user won't have data yet)
-          if (returnTo === 'join' && code) {
-            router.replace(`/join/${code}`);
-          } else {
-            router.replace('/(tabs)');
-          }
-        } else {
-          setErrorMessage(response.message || 'Registration failed');
-        }
       }
     } catch (error) {
       console.error('Auth error:', error);
@@ -246,29 +222,10 @@ export default function LoginScreen() {
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.content}>
               <Text style={styles.title}>Toki</Text>
-              <Text style={styles.subtitle}>
-                {isLogin ? 'Welcome back!' : 'Join the community'}
-              </Text>
+              <Text style={styles.subtitle}>Welcome back!</Text>
 
               <View style={styles.form}>
-                {!isLogin && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Full Name"
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                    autoComplete="name"
-                    textContentType="name"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                    {...(Platform.OS === 'web' ? { nativeID: 'name' } : {})}
-                    onSubmitEditing={() => {
-                      // Focus on email field when name is submitted
-                      // This will be handled by the email input's ref
-                    }}
-                  />
-                )}
+                {/* Registration removed */}
 
                 <TextInput
                   style={styles.input}
@@ -324,11 +281,7 @@ export default function LoginScreen() {
                   disabled={loading || loadingData}
                   data-testid="login-button"
                 >
-                  <Text style={styles.buttonText}>
-                    {loading ? 'Logging in...' : 
-                     loadingData ? 'Loading your data...' : 
-                     (isLogin ? 'Login' : 'Register')}
-                  </Text>
+                  <Text style={styles.buttonText}>{loading ? 'Logging in...' : loadingData ? 'Loading your data...' : 'Login'}</Text>
                 </TouchableOpacity>
                 
                 {loadingData && (
@@ -337,23 +290,7 @@ export default function LoginScreen() {
                   </Text>
                 )}
 
-                <TouchableOpacity
-                  style={styles.switchButton}
-                  onPress={() => {
-                    setIsLogin(!isLogin);
-                    setName('');
-                    setEmail('');
-                    setPassword('');
-                    setShowPassword(false);
-                    setErrorMessage(''); // Clear error message when switching modes
-                  }}
-                >
-                  <Text style={styles.switchText}>
-                    {isLogin
-                      ? "Don't have an account? Register"
-                      : 'Already have an account? Login'}
-                  </Text>
-                </TouchableOpacity>
+                {/* Switch removed; waitlist CTA is below */}
               </View>
 
               {/* Dev Mode Quick Login */}
@@ -406,9 +343,13 @@ export default function LoginScreen() {
               )}
 
               <View style={styles.footer}>
-                <Text style={styles.footerText}>
-                  Connect with people around you
-                </Text>
+                <Text style={styles.footerText}>Connect with people around you</Text>
+                <TouchableOpacity
+                  style={styles.waitlistButton}
+                  onPress={() => router.push('/waitlist')}
+                >
+                  <Text style={styles.waitlistButtonText}>Join the Waitlist</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </ScrollView>
@@ -539,6 +480,19 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     fontSize: 14,
     textAlign: 'center',
+  },
+  waitlistButton: {
+    marginTop: 12,
+    backgroundColor: '#111827',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  waitlistButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
   loadingMessage: {
     color: '#8B5CF6',

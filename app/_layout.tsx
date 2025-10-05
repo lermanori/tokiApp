@@ -66,11 +66,12 @@ function RootLayoutNav() {
         // Treat the URL path as join during the very first render before segments are populated
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
         const inHealthScreen = segments[0] === 'health';
+        const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
         
         console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'inHealthScreen:', inHealthScreen, 'currentUser.id:', state.currentUser.id);
         
-        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen) {
-          // Redirect to login if not authenticated (except for join and health screens)
+        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
+          // Redirect unauthenticated users to login; allow waitlist, join and health
           console.log('🔄 Redirecting to login - not authenticated');
           router.replace('/login');
         } else if (isAuthenticated && inLoginScreen) {
@@ -92,7 +93,7 @@ function RootLayoutNav() {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
         // Only redirect if we're not on the login, join, or health screen and have no current user
-        if (segments[0] !== 'login' && segments[0] !== 'join' && segments[0] !== 'health' && (!state.currentUser || !state.currentUser.id)) {
+        if (segments[0] !== 'login' && segments[0] !== 'join' && segments[0] !== 'health' && segments[0] !== 'waitlist' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -112,6 +113,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="waitlist" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="create-toki" options={{ headerShown: false }} />
       <Stack.Screen name="toki-details" options={{ headerShown: false }} />
