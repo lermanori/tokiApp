@@ -544,6 +544,49 @@ class ApiService {
     });
   }
 
+  async respondToInviteViaNotification(notificationId: string, action: 'accept' | 'decline') {
+    return this.makeRequest(`/tokis/invites/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ notificationId, action }),
+    });
+  }
+
+  // =========================
+  // Invite Links (URL-based)
+  // =========================
+  async generateInviteLink(tokiId: string, opts?: { maxUses?: number | null; message?: string | null }): Promise<{ success: boolean; data: { id: string; inviteCode: string; inviteUrl: string; maxUses: number | null; usedCount: number; customMessage?: string | null; createdAt: string } }> {
+    return this.makeRequest(`/tokis/${tokiId}/invite-links`, {
+      method: 'POST',
+      body: JSON.stringify({ maxUses: opts?.maxUses ?? null, message: opts?.message ?? null }),
+    });
+  }
+
+  async regenerateInviteLink(tokiId: string, opts?: { maxUses?: number | null; message?: string | null }): Promise<{ success: boolean; data: { id: string; inviteCode: string; inviteUrl: string; maxUses: number | null; usedCount: number; customMessage?: string | null; createdAt: string } }> {
+    return this.makeRequest(`/tokis/${tokiId}/invite-links/regenerate`, {
+      method: 'POST',
+      body: JSON.stringify({ maxUses: opts?.maxUses ?? null, message: opts?.message ?? null }),
+    });
+  }
+
+  async deactivateInviteLink(linkId: string): Promise<{ success: boolean; message: string }> {
+    return this.makeRequest(`/tokis/invite-links/${linkId}`, { method: 'DELETE' });
+  }
+
+  async getInviteLinksForToki(tokiId: string): Promise<{ success: boolean; data: { toki: any; links: Array<{ id: string; inviteCode: string; inviteUrl: string; isActive: boolean; maxUses: number | null; usedCount: number; remainingUses: number | null; customMessage?: string | null; createdAt: string; updatedAt: string }>; activeLink?: any } }> {
+    return this.makeRequest(`/tokis/${tokiId}/invite-links`);
+  }
+
+  async getInviteLinkInfo(code: string): Promise<{ success: boolean; data: { toki: any; host: any; inviteLink: any; isActive: boolean } }> {
+    return this.makeRequest(`/tokis/invite-links/${code}`);
+  }
+
+  async joinByInviteCode(inviteCode: string): Promise<{ success: boolean; message: string; data?: any; error?: string }> {
+    return this.makeRequest(`/tokis/join-by-link`, {
+      method: 'POST',
+      body: JSON.stringify({ inviteCode }),
+    });
+  }
+
   // Hide (deny list)
   async hideUser(tokiId: string, userId: string) {
     return this.makeRequest(`/tokis/${tokiId}/hide`, {
@@ -607,6 +650,14 @@ class ApiService {
   async getJoinRequests(tokiId: string): Promise<{ success: boolean; data: { requests: any[] } }> {
     const response = await this.makeRequest<{ success: boolean; data: { requests: any[] } }>(
       `/tokis/${tokiId}/join-requests`
+    );
+    return response;
+  }
+
+  async removeParticipant(tokiId: string, userId: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.makeRequest<{ success: boolean; message: string }>(
+      `/tokis/${tokiId}/participants/${userId}`,
+      { method: 'DELETE' }
     );
     return response;
   }
@@ -788,6 +839,13 @@ class ApiService {
 
     const response = await this.makeRequest<{ success: boolean; data: { connections: Connection[]; pagination: any } }>(
       `/connections?${queryParams.toString()}`
+    );
+    return response.data;
+  }
+
+  async getConnectionsForToki(tokiId: string): Promise<{ connections: any[]; toki: { id: string; title: string } }> {
+    const response = await this.makeRequest<{ success: boolean; data: { connections: any[]; toki: { id: string; title: string } } }>(
+      `/connections/for-toki/${tokiId}`
     );
     return response.data;
   }

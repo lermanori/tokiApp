@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
+import * as Clipboard from 'expo-clipboard';
+import Toast from 'react-native-toast-message';
 import RatingPrompt from '@/components/RatingPrompt';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
@@ -262,6 +264,15 @@ export default function TokiDetailsScreen() {
   const [toki, setToki] = useState<TokiDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
+
+  // Web-compatible alert helper
+  const showAlert = (title: string, message: string) => {
+    if (typeof window !== 'undefined' && window.alert) {
+      window.alert(`${title}: ${message}`);
+    } else {
+      console.log(`${title}: ${message}`);
+    }
+  };
   const [isJoining, setIsJoining] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -276,6 +287,17 @@ export default function TokiDetailsScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const lastProcessedTokiId = useRef<string | null>(null);
   const [showHostOnlyConfirm, setShowHostOnlyConfirm] = useState(false);
+  
+  // Invite Link Management (integrated into invite modal)
+  const [inviteLinks, setInviteLinks] = useState<any[]>([]);
+  const [activeInviteLink, setActiveInviteLink] = useState<any>(null);
+  const [isLoadingInviteLinks, setIsLoadingInviteLinks] = useState(false);
+  const [inviteLinkMessage, setInviteLinkMessage] = useState('');
+  const [inviteLinkMaxUses, setInviteLinkMaxUses] = useState<number | null>(null);
+  
+  // Remove Participant Confirmation
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [participantToRemove, setParticipantToRemove] = useState<{id: string, name: string} | null>(null);
 
   // Function to format time display smartly
   const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): string => {
@@ -423,7 +445,11 @@ export default function TokiDetailsScreen() {
           visibility: tokiData.visibility,
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
-          participants: tokiData.participants || [], // Ensure participants are loaded
+          participants: (tokiData.participants || []).map((p: any) => ({
+            id: p?.user?.id || p?.id || '',
+            name: p?.user?.name || p?.name || 'Unknown',
+            avatar: p?.user?.avatar || p?.avatar || undefined,
+          })),
         };
 
         console.log('🔍 Ownership check:', {
@@ -432,6 +458,12 @@ export default function TokiDetailsScreen() {
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           hasCurrentUser: !!state.currentUser?.id,
           hasHostId: !!tokiData.host?.id
+        });
+        
+        console.log('🔍 Toki data for invite button:', {
+          visibility: tokiData.visibility,
+          joinStatus: tokiData.joinStatus,
+          isHostedByUser: tokiData.host?.id === state.currentUser?.id
         });
 
         setToki(transformedToki);
@@ -506,6 +538,12 @@ export default function TokiDetailsScreen() {
       return;
     }
 
+    // If user is already joined/approved, navigate to chat
+    if (toki.joinStatus === 'joined' || toki.joinStatus === 'approved') {
+      handleChatPress();
+      return;
+    }
+
     if (!state.isConnected) {
       Alert.alert('Connection Error', 'Unable to join. Please check your connection and try again.');
       return;
@@ -516,12 +554,15 @@ export default function TokiDetailsScreen() {
     try {
       switch (toki.joinStatus) {
         case 'not_joined':
-          // Send join request using the backend
-          const requestSuccess = await actions.sendJoinRequest(toki.id);
-          if (requestSuccess) {
+          // Send join request using the backend; backend may auto-join if invited
+          const joinResultStatus = await actions.sendJoinRequest(toki.id);
+          if (joinResultStatus === 'joined') {
+            setToki(prev => prev ? ({ ...prev, joinStatus: 'joined' }) : null);
+            setTimeout(() => { loadTokiData(toki.id); }, 300);
+            console.log('✅ Auto-joined via invite for Toki:', toki.id);
+          } else if (joinResultStatus === 'pending') {
             setToki(prev => prev ? ({ ...prev, joinStatus: 'pending' }) : null);
-            Alert.alert('Request Sent', 'Your join request has been sent to the host. You\'ll be notified when they respond.');
-            console.log('✅ Join request sent for Toki:', toki.id);
+            console.log('✅ Join request pending for Toki:', toki.id);
           } else {
             Alert.alert('Error', 'Failed to send join request. Please try again.');
           }
@@ -529,32 +570,6 @@ export default function TokiDetailsScreen() {
 
         case 'pending':
           Alert.alert('Request Pending', 'Your join request is waiting for host approval.');
-          break;
-
-        case 'approved':
-          // Join the event using the backend
-          const success = await actions.joinToki(toki.id);
-          if (success) {
-            // Update join status locally, but refresh attendee count from backend
-            setToki(prev => prev ? ({
-              ...prev,
-              joinStatus: 'joined',
-            }) : null);
-
-            // Refresh data from backend to get accurate attendee count
-            setTimeout(() => {
-              loadTokiData(toki.id);
-            }, 500);
-
-            Alert.alert('Welcome!', 'You\'ve joined the event! You can now access the group chat.');
-            console.log('✅ Successfully joined Toki:', toki.id);
-          } else {
-            Alert.alert('Error', 'Failed to join the event. Please try again.');
-          }
-          break;
-
-        case 'joined':
-          Alert.alert('Already Joined', 'You\'re already part of this event!');
           break;
       }
     } catch (error) {
@@ -588,6 +603,7 @@ export default function TokiDetailsScreen() {
 
   // Invite flow will use a modal with connections selection
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'invite' | 'hide'>('invite');
   const [inviteConnections, setInviteConnections] = useState<any[]>([]);
   const [selectedInviteeIds, setSelectedInviteeIds] = useState<Set<string>>(new Set());
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
@@ -596,16 +612,39 @@ export default function TokiDetailsScreen() {
 
   const handleInvitePress = async () => {
     if (!toki) return;
-    if (!toki.isHostedByUser) {
-      Alert.alert('Only hosts can invite', 'Ask the host to invite users.');
+    
+    // Allow hosts or attendees of public tokis to invite
+    const canInvite = toki.isHostedByUser || (toki.visibility === 'public' && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved'));
+    if (!canInvite) {
+      Alert.alert('Cannot invite', 'Only hosts or attendees of public events can invite users.');
       return;
     }
+    
     try {
       setIsLoadingInvites(true);
-      const { connections } = await actions.getConnections();
-      setInviteConnections(connections || []);
+      setModalMode('invite');
+      const { connections } = await actions.getConnectionsForToki(toki.id);
+      
+      // Build participant set from the currently loaded toki data
+      const participantIds = new Set((toki.participants || []).map((p: any) => p.user?.id || p.id));
+      
+      // Mark participants in connections
+      const connectionsWithStatus = (connections || []).map((conn: any) => ({
+        ...conn,
+        isParticipant: participantIds.has(conn.user?.id || conn.id),
+      }));
+      
+      // For non-hosts, filter out hidden users since they can't see them
+      const filteredConnections = toki.isHostedByUser 
+        ? connectionsWithStatus 
+        : connectionsWithStatus.filter((conn: any) => !conn.isHidden);
+      
+      setInviteConnections(filteredConnections);
       setSelectedInviteeIds(new Set());
       setShowInviteModal(true);
+      
+      // Load active invite link
+      await loadInviteLinks();
     } catch (e) {
       Alert.alert('Error', 'Failed to load connections');
     } finally {
@@ -621,15 +660,228 @@ export default function TokiDetailsScreen() {
     });
   };
 
+  const handleUnhideUser = async (userId: string) => {
+    if (!toki) return;
+    try {
+      const success = await actions.unhideUser(toki.id, userId);
+      if (success) {
+        // Refresh the connections list to update hidden status
+        const { connections } = await actions.getConnectionsForToki(toki.id);
+        setInviteConnections(connections || []);
+        
+        // Update hidden count
+        const list = await actions.listHiddenUsers(toki.id);
+        setHiddenCount((list || []).length);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to unhide user');
+    }
+  };
+
+  const handleRemoveParticipant = (userId: string, participantName: string) => {
+    console.log('🔴 Remove participant button pressed for:', userId, participantName);
+    if (!toki) {
+      console.log('❌ No toki found');
+      return;
+    }
+    
+    setParticipantToRemove({ id: userId, name: participantName });
+    setShowRemoveConfirm(true);
+  };
+
+  const confirmRemoveParticipant = async () => {
+    if (!toki || !participantToRemove) return;
+    
+    console.log('🔴 User confirmed removal, calling API...');
+    try {
+      const success = await actions.removeParticipant(toki.id, participantToRemove.id);
+      if (success) {
+        console.log('✅ Participant removed successfully');
+        Toast.show({
+          type: 'success',
+          text1: 'Participant Removed',
+          text2: `${participantToRemove.name} has been removed from the event`,
+          position: 'top',
+          visibilityTime: 3000,
+          topOffset: 60,
+        });
+      } else {
+        console.log('❌ Failed to remove participant');
+        Toast.show({
+          type: 'error',
+          text1: 'Remove Failed',
+          text2: 'Failed to remove participant',
+          position: 'top',
+          visibilityTime: 4000,
+          topOffset: 60,
+        });
+      }
+    } catch (e) {
+      console.error('❌ Error removing participant:', e);
+      Toast.show({
+        type: 'error',
+        text1: 'Remove Failed',
+        text2: 'Failed to remove participant',
+        position: 'top',
+        visibilityTime: 4000,
+        topOffset: 60,
+      });
+    } finally {
+      setShowRemoveConfirm(false);
+      setParticipantToRemove(null);
+    }
+  };
+
+  const cancelRemoveParticipant = () => {
+    setShowRemoveConfirm(false);
+    setParticipantToRemove(null);
+  };
+
+  // Invite Link Management Functions
+  const loadInviteLinks = async () => {
+    if (!toki) return;
+    try {
+      setIsLoadingInviteLinks(true);
+      const data = await actions.getInviteLinksForToki(toki.id);
+      setInviteLinks(data.links || []);
+      setActiveInviteLink(data.activeLink || null);
+    } catch (e) {
+      console.error('Failed to load invite links:', e);
+    } finally {
+      setIsLoadingInviteLinks(false);
+    }
+  };
+
+
+  const handleGenerateInviteLink = async () => {
+    if (!toki) return;
+    try {
+      setIsLoadingInviteLinks(true);
+      const link = await actions.generateInviteLink(toki.id, {
+        maxUses: inviteLinkMaxUses || null,
+        message: inviteLinkMessage || null
+      });
+      if (link) {
+        await loadInviteLinks(); // Refresh the list
+        setInviteLinkMessage('');
+        setInviteLinkMaxUses(null);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to generate invite link');
+    } finally {
+      setIsLoadingInviteLinks(false);
+    }
+  };
+
+  const handleRegenerateInviteLink = async () => {
+    if (!toki) return;
+    try {
+      setIsLoadingInviteLinks(true);
+      const link = await actions.regenerateInviteLink(toki.id, {
+        maxUses: inviteLinkMaxUses || null,
+        message: inviteLinkMessage || null
+      });
+      if (link) {
+        setActiveInviteLink(link.data);
+        await loadInviteLinks(); // Refresh the list
+        setInviteLinkMessage('');
+        setInviteLinkMaxUses(null);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to regenerate invite link');
+    } finally {
+      setIsLoadingInviteLinks(false);
+    }
+  };
+
+  const handleCreateInviteLink = async () => {
+    if (!toki) return;
+    try {
+      setIsLoadingInviteLinks(true);
+      const link = await actions.generateInviteLink(toki.id, {
+        maxUses: inviteLinkMaxUses || null,
+        message: inviteLinkMessage || null
+      });
+      if (link) {
+        setActiveInviteLink(link.data);
+        await loadInviteLinks(); // Refresh the list
+        setInviteLinkMessage('');
+        setInviteLinkMaxUses(null);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to create invite link');
+    } finally {
+      setIsLoadingInviteLinks(false);
+    }
+  };
+
+  const handleDeactivateInviteLink = async (linkId: string) => {
+    try {
+      const success = await actions.deactivateInviteLink(linkId);
+      if (success) {
+        await loadInviteLinks(); // Refresh the list
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to deactivate invite link');
+    }
+  };
+
+  const handleCopyInviteLink = async (inviteUrl: string) => {
+    try {
+      await Clipboard.setStringAsync(inviteUrl);
+      Toast.show({
+        type: 'success',
+        text1: 'Link Copied!',
+        text2: 'Invite link copied to clipboard',
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 60,
+      });
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Copy Failed',
+        text2: 'Failed to copy link to clipboard',
+        position: 'top',
+        visibilityTime: 4000,
+        topOffset: 60,
+      });
+    }
+  };
+
   const sendInvites = async () => {
     if (!toki) return;
     if (selectedInviteeIds.size === 0) {
       Alert.alert('Select connections', 'Pick at least one connection to invite.');
       return;
     }
+    
+    // Filter out hidden users and participants from selected invitees
+    const hiddenUserIds = new Set(
+      inviteConnections
+        .filter((c: any) => c.isHidden)
+        .map((c: any) => c.user?.id || c.id)
+    );
+    
+    const participantUserIds = new Set(
+      inviteConnections
+        .filter((c: any) => c.isParticipant)
+        .map((c: any) => c.user?.id || c.id)
+    );
+    
+    const validInviteeIds = Array.from(selectedInviteeIds).filter(id => 
+      !hiddenUserIds.has(id) && !participantUserIds.has(id)
+    );
+    
+    if (validInviteeIds.length === 0) {
+      Alert.alert('No valid connections', 'All selected users are either hidden from this toki or already joined.');
+      return;
+    }
+    
     try {
       setIsLoadingInvites(true);
-      for (const userId of selectedInviteeIds) await actions.createInvite(toki.id, userId);
+      for (const userId of validInviteeIds) await actions.createInvite(toki.id, userId);
       setShowInviteModal(false);
       Alert.alert('Invites sent');
     } catch (e) {
@@ -821,8 +1073,8 @@ export default function TokiDetailsScreen() {
     switch (toki.joinStatus) {
       case 'not_joined': return 'I want to join';
       case 'pending': return 'Request Pending';
-      case 'approved': return 'Join Event';
-      case 'joined': return 'You\'re In!';
+      case 'approved': return 'Join Chat';
+      case 'joined': return 'Join Chat';
       default: return 'I want to join';
     }
   };
@@ -834,8 +1086,8 @@ export default function TokiDetailsScreen() {
     switch (toki.joinStatus) {
       case 'not_joined': return '#4DC4AA'; // I want to join - pastel green
       case 'pending': return '#F9E79B'; // Request pending - soft yellow
-      case 'approved': return '#A7F3D0'; // Approved - light pastel green
-      case 'joined': return '#EC4899'; // You're in - friendly pink
+      case 'approved': return '#4DC4AA'; // Join Chat - pastel green
+      case 'joined': return '#4DC4AA'; // Join Chat - pastel green
       default: return '#4DC4AA';
     }
   };
@@ -931,7 +1183,17 @@ export default function TokiDetailsScreen() {
         >
           <View style={styles.pickerBackdrop}>
             <View style={styles.inviteModalContainer}>
-              <Text style={styles.sectionTitle}>Manage Visibility</Text>
+              {/* Header with close button */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.sectionTitle}>{modalMode === 'invite' ? 'Invite Users' : 'Manage Visibility'}</Text>
+                <TouchableOpacity 
+                  style={styles.closeButton}
+                  onPress={() => setShowInviteModal(false)}
+                >
+                  <X size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
               <TextInput
                 style={styles.inviteSearch}
                 placeholder="Search connections..."
@@ -939,7 +1201,7 @@ export default function TokiDetailsScreen() {
                 value={inviteSearch}
                 onChangeText={setInviteSearch}
               />
-              <ScrollView style={{ maxHeight: 320 }}>
+              <ScrollView style={{ maxHeight: 280 }}>
                 {isLoadingInvites ? (
                   <Text style={styles.loadingText}>Loading...</Text>
                 ) : (
@@ -953,54 +1215,206 @@ export default function TokiDetailsScreen() {
                       const name = c.user?.name || c.name || 'Unknown';
                       const avatar = c.user?.avatar || c.user?.avatar_url || '';
                       const selected = selectedInviteeIds.has(id);
+                      const isHidden = c.isHidden || false;
                       const initials = name.split(' ').slice(0,2).map((n:string)=>n.charAt(0).toUpperCase()).join('');
-                      return (
-                        <TouchableOpacity
-                          key={id}
-                          style={[styles.connectionRow, selected && styles.connectionRowSelected]}
-                          onPress={() => toggleInvitee(id)}
-                        >
-                          {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.connectionAvatar} />
-                          ) : (
-                            <View style={[styles.connectionAvatar, styles.connectionAvatarFallback]}>
-                              <Text style={styles.connectionAvatarInitials}>{initials}</Text>
+                      
+                      if (modalMode === 'hide') {
+                        // Hide modal: show all users, with different actions for hidden vs non-hidden vs participants
+                        const isParticipant = c.isParticipant || false;
+                        const canHide = !isHidden && !isParticipant;
+                        
+                        return (
+                          <View
+                            key={id}
+                            style={[
+                              styles.connectionRow, 
+                              isHidden && styles.connectionRowHidden,
+                              isParticipant && styles.connectionRowParticipant
+                            ]}
+                          >
+                            {avatar ? (
+                              <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
+                            ) : (
+                              <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
+                                <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
+                              </View>
+                            )}
+                            <View style={styles.connectionInfo}>
+                              <Text style={[styles.connectionName, isHidden && styles.connectionNameHidden]}>{name}</Text>
+                              {isHidden && (
+                                <Text style={styles.hiddenLabel}>Hidden from this toki</Text>
+                              )}
+                              {isParticipant && (
+                                <Text style={styles.participantLabel}>Already Joined</Text>
+                              )}
                             </View>
-                          )}
-                          <Text style={styles.connectionName}>{name}</Text>
-                          <View style={[styles.inviteCheck, selected && styles.inviteCheckOn]}>
-                            <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
+                            <View style={styles.actionButtons}>
+                              {isHidden ? (
+                                <TouchableOpacity 
+                                  style={styles.unhideButton}
+                                  onPress={() => handleUnhideUser(id)}
+                                >
+                                  <Text style={styles.unhideButtonText}>Unhide</Text>
+                                </TouchableOpacity>
+                              ) : isParticipant ? (
+                                <View style={styles.joinedIndicator}>
+                                  <Text style={styles.joinedText}>✓</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity 
+                                  style={[styles.inviteCheck, selected && styles.inviteCheckOn]}
+                                  onPress={() => toggleInvitee(id)}
+                                >
+                                  <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
-                        </TouchableOpacity>
-                      );
+                        );
+                      } else {
+                        // Invite modal: show participants, hidden users, and available connections
+                        const isParticipant = c.isParticipant || false;
+                        const canInvite = !isHidden && !isParticipant;
+                        
+                        return (
+                          <View
+                            key={id}
+                            style={[
+                              styles.connectionRow, 
+                              selected && styles.connectionRowSelected,
+                              isHidden && styles.connectionRowHidden,
+                              isParticipant && styles.connectionRowParticipant
+                            ]}
+                          >
+                            {avatar ? (
+                              <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
+                            ) : (
+                              <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
+                                <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
+                              </View>
+                            )}
+                            <View style={styles.connectionInfo}>
+                              <Text style={[styles.connectionName, isHidden && styles.connectionNameHidden]}>{name}</Text>
+                              {isHidden && (
+                                <Text style={styles.hiddenLabel}>Hidden from this toki</Text>
+                              )}
+                              {isParticipant && (
+                                <Text style={styles.participantLabel}>Already Joined</Text>
+                              )}
+                            </View>
+                            <View style={styles.actionButtons}>
+                              {canInvite ? (
+                                <TouchableOpacity 
+                                  style={[styles.inviteCheck, selected && styles.inviteCheckOn]}
+                                  onPress={() => toggleInvitee(id)}
+                                >
+                                  <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
+                                </TouchableOpacity>
+                              ) : isParticipant ? (
+                                <View style={styles.joinedIndicator}>
+                                  <Text style={styles.joinedText}>✓</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          </View>
+                        );
+                      }
                     })
                 )}
               </ScrollView>
+
+              {/* Invite Link Section */}
+              <View style={styles.inviteLinkSection}>
+                <Text style={styles.inviteLinkTitle}>Invite Link</Text>
+                {activeInviteLink ? (
+                  <View style={styles.inviteLinkContainer}>
+                    <TextInput
+                      style={styles.inviteLinkInput}
+                      value={activeInviteLink.inviteUrl}
+                      editable={false}
+                      selectTextOnFocus={true}
+                    />
+                    <View style={styles.inviteLinkActions}>
+                      <TouchableOpacity 
+                        style={styles.copyButton}
+                        onPress={() => {
+                          Clipboard.setStringAsync(activeInviteLink.inviteUrl);
+                          Toast.show({
+                            type: 'success',
+                            text1: 'Link copied!',
+                            text2: 'Share this link to invite others'
+                          });
+                        }}
+                      >
+                        <Copy size={16} color="#8B5CF6" />
+                        <Text style={styles.copyButtonText}>Copy</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.regenerateButton}
+                        onPress={handleRegenerateInviteLink}
+                      >
+                        <RefreshCw size={16} color="#8B5CF6" />
+                        <Text style={styles.regenerateButtonText}>Regenerate</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.createLinkButton}
+                    onPress={handleCreateInviteLink}
+                  >
+                    <Link size={16} color="#FFFFFF" />
+                    <Text style={styles.createLinkButtonText}>Create Invite Link</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <View style={styles.confirmActions}>
                 <TouchableOpacity style={styles.cancelButton} onPress={() => setShowInviteModal(false)}>
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.confirmButton} onPress={async () => {
                   if (!toki) return;
-                  if (selectedInviteeIds.size === 0) { Alert.alert('Select connections'); return; }
+                  if (selectedInviteeIds.size === 0) { 
+                    Alert.alert('Select connections'); 
+                    return; 
+                  }
                   setIsLoadingInvites(true);
                   try {
-                    // Decide whether we are inviting or hiding based on which opener was used.
-                    // If the modal opened from Hide button, prefer hiding.
-                    // Heuristic: if hide button opened last, we set a flag; else invite.
-                    // For now, use a simple dual-action approach: invite by default; pressing Hide opens same modal and we call hide.
-                    for (const userId of selectedInviteeIds) {
-                      await actions.hideUser(toki.id, userId);
+                    if (modalMode === 'invite') {
+                      // Send invites using the new function that filters hidden users
+                      await sendInvites();
+                    } else {
+                      // Hide users - filter out participants
+                      const participantUserIds = new Set(
+                        inviteConnections
+                          .filter((c: any) => c.isParticipant)
+                          .map((c: any) => c.user?.id || c.id)
+                      );
+                      
+                      const validHideIds = Array.from(selectedInviteeIds).filter(id => 
+                        !participantUserIds.has(id)
+                      );
+                      
+                      if (validHideIds.length === 0) {
+                        Alert.alert('No valid users', 'All selected users are already participants and cannot be hidden.');
+                        return;
+                      }
+                      
+                      for (const userId of validHideIds) {
+                        await actions.hideUser(toki.id, userId);
+                      }
+                      setShowInviteModal(false);
                     }
-                    setShowInviteModal(false);
-                    Alert.alert('Hidden from selected users');
                   } catch (e) {
-                    Alert.alert('Error', 'Failed to apply hide');
+                    Alert.alert('Error', `Failed to ${modalMode === 'invite' ? 'send invites' : 'hide users'}`);
                   } finally {
                     setIsLoadingInvites(false);
                   }
                 }}>
-                  <Text style={styles.confirmButtonText}>Hide Users</Text>
+                  <Text style={styles.confirmButtonText}>
+                    {modalMode === 'invite' ? 'Send Invites' : `Hide ${selectedInviteeIds.size} Users`}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1083,6 +1497,23 @@ export default function TokiDetailsScreen() {
                         {participant.id === toki.host?.id ? 'Host' : 'Attendee'}
                       </Text>
                     </View>
+                    {/* Remove button for hosts (only show for non-host participants) */}
+                    {(() => {
+                      const shouldShow = toki.isHostedByUser && participant.id !== toki.host?.id;
+                      console.log('🔍 Should show remove button:', shouldShow, 'isHostedByUser:', toki.isHostedByUser, 'participant.id:', participant.id, 'host.id:', toki.host?.id);
+                      return shouldShow;
+                    })() && (
+                      <TouchableOpacity
+                        style={styles.removeParticipantButton}
+                        onPress={() => {
+                          console.log('🔴 X button pressed for participant:', participant.id, participant.name);
+                          handleRemoveParticipant(participant.id, participant.name);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <X size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1173,18 +1604,46 @@ export default function TokiDetailsScreen() {
           </View>
 
           <View style={styles.actionsSection}>
-            <TouchableOpacity style={styles.inviteButton} onPress={handleInvitePress}>
-              <UserPlus size={20} color="#B49AFF" />
-              <Text style={styles.inviteText}>Invite</Text>
-            </TouchableOpacity>
+            {/* Invite button - show for hosts or attendees of public tokis */}
+            {(() => {
+              const isHost = toki.isHostedByUser;
+              const isPublicAttendee = toki.visibility === 'public' && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved');
+              const canInvite = isHost || isPublicAttendee;
+              
+              console.log('🔍 Invite button debug:', {
+                isHost,
+                isPublicAttendee,
+                visibility: toki.visibility,
+                joinStatus: toki.joinStatus,
+                canInvite
+              });
+              
+              return canInvite;
+            })() && (
+              <TouchableOpacity style={styles.inviteButton} onPress={handleInvitePress}>
+                <UserPlus size={20} color="#B49AFF" />
+                <Text style={styles.inviteText}>Invite</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Hide button (host-only) */}
             {toki.isHostedByUser && (
               <TouchableOpacity style={styles.hideButton} onPress={async () => {
                 try {
                   setIsLoadingInvites(true);
-                  const { connections } = await actions.getConnections();
-                  setInviteConnections(connections || []);
+                  setModalMode('hide');
+                  const { connections } = await actions.getConnectionsForToki(toki.id);
+                  
+                  // Build participant set from the currently loaded toki data
+                  const participantIds = new Set((toki.participants || []).map((p: any) => p.user?.id || p.id));
+                  
+                  // Mark participants in connections and filter them out for hiding
+                  const connectionsWithStatus = (connections || []).map((conn: any) => ({
+                    ...conn,
+                    isParticipant: participantIds.has(conn.user?.id || conn.id),
+                  }));
+                  
+                  setInviteConnections(connectionsWithStatus);
                   setSelectedInviteeIds(new Set());
                   setInviteSearch('');
                   const list = await actions.listHiddenUsers(toki.id);
@@ -1227,6 +1686,7 @@ export default function TokiDetailsScreen() {
                     <Edit size={20} color="#4DC4AA" />
                     <Text style={styles.editText}>Edit</Text>
                   </TouchableOpacity>
+
 
                   <TouchableOpacity
                     style={styles.completeButton}
@@ -1301,6 +1761,7 @@ export default function TokiDetailsScreen() {
         </View>
       </Modal>
 
+
       <View style={styles.footer}>
         <TouchableOpacity
           style={[
@@ -1327,6 +1788,100 @@ export default function TokiDetailsScreen() {
         onClose={() => setShowRatingPrompt(false)}
         onRatingsSubmitted={completeEventAfterRatings}
         onNavigateToExplore={() => router.push('/(tabs)')}
+      />
+      
+      {/* Remove Participant Confirmation Modal */}
+      <Modal
+        visible={showRemoveConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelRemoveParticipant}
+      >
+        <View style={styles.removeModalOverlay}>
+          <View style={styles.removeConfirmModal}>
+            <Text style={styles.removeConfirmTitle}>Remove Participant</Text>
+            <Text style={styles.removeConfirmMessage}>
+              Are you sure you want to remove {participantToRemove?.name} from this event?
+            </Text>
+            <View style={styles.removeConfirmButtons}>
+              <TouchableOpacity
+                style={[styles.removeConfirmButton, styles.removeCancelButton]}
+                onPress={cancelRemoveParticipant}
+              >
+                <Text style={styles.removeCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.removeConfirmButton, styles.removeConfirmRemoveButton]}
+                onPress={confirmRemoveParticipant}
+              >
+                <Text style={styles.removeConfirmRemoveButtonText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
+      <Toast 
+        config={{
+          success: (props) => (
+            <View style={{
+              backgroundColor: '#10B981',
+              borderRadius: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              marginHorizontal: 20,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#FFFFFF',
+                marginBottom: 4,
+              }}>
+                {props.text1}
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: '#FFFFFF',
+              }}>
+                {props.text2}
+              </Text>
+            </View>
+          ),
+          error: (props) => (
+            <View style={{
+              backgroundColor: '#EF4444',
+              borderRadius: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              marginHorizontal: 20,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Text style={{
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#FFFFFF',
+                marginBottom: 4,
+              }}>
+                {props.text1}
+              </Text>
+              <Text style={{
+                fontSize: 14,
+                color: '#FFFFFF',
+              }}>
+                {props.text2}
+              </Text>
+            </View>
+          ),
+        }}
       />
     </SafeAreaView>
   );
@@ -1655,6 +2210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#B49AFF',
+    minWidth: 140,
   },
   participantAvatar: {
     width: 30,
@@ -1676,17 +2232,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   participantInfo: {
-    flex: 1,
+    flexShrink: 1,
+    marginRight: 4,
   },
   participantName: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#1C1C1C',
+    maxWidth: 160,
   },
   participantStatus: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#666666',
+  },
+  removeParticipantButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   hostActionsSection: {
     flexDirection: 'row',
@@ -1860,6 +2429,94 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  closeButton: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  inviteLinkSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  inviteLinkTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+    marginBottom: 12,
+  },
+  inviteLinkContainer: {
+    gap: 12,
+  },
+  inviteLinkInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F9FAFB',
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+  },
+  inviteLinkActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  copyButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#8B5CF6',
+  },
+  regenerateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  regenerateButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#8B5CF6',
+  },
+  createLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#8B5CF6',
+  },
+  createLinkButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+  },
   hideButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1918,6 +2575,64 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#1C1C1C',
   },
+  connectionInfo: {
+    flex: 1,
+  },
+  connectionRowHidden: {
+    opacity: 0.5,
+    backgroundColor: '#F9F9F9',
+  },
+  connectionAvatarHidden: {
+    opacity: 0.5,
+  },
+  connectionAvatarInitialsHidden: {
+    color: '#9CA3AF',
+  },
+  connectionNameHidden: {
+    color: '#9CA3AF',
+  },
+  hiddenLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#EF4444',
+    marginTop: 2,
+  },
+  participantLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#10B981',
+    marginTop: 2,
+  },
+  connectionRowParticipant: {
+    backgroundColor: '#F0FDF4',
+  },
+  joinedIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinedText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+  },
+  actionButtons: {
+    marginLeft: 'auto',
+  },
+  unhideButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  unhideButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+  },
   inviteCheck: {
     marginLeft: 'auto',
     width: 20,
@@ -1937,6 +2652,72 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
   inviteCheckTextOn: {
+    color: '#FFFFFF',
+  },
+
+  
+  // Remove Participant Confirmation Modal Styles
+  removeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  removeConfirmModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  removeConfirmTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1C1C1C',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  removeConfirmMessage: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  removeConfirmButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  removeConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  removeCancelButton: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  removeCancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#374151',
+  },
+  removeConfirmRemoveButton: {
+    backgroundColor: '#EF4444',
+  },
+  removeConfirmRemoveButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
   },
 

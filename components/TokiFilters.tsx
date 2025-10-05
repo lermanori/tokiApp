@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { CATEGORIES } from '@/utils/categories';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, SafeAreaView } from 'react-native';
 import { X } from 'lucide-react-native';
 import DateTimePicker from 'react-native-ui-datepicker';
@@ -75,7 +76,7 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     {
       title: 'Category',
       key: 'category',
-      options: ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'],
+      options: ['all', ...CATEGORIES],
     },
     {
       title: 'Distance',

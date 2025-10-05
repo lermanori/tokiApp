@@ -11,12 +11,17 @@ if (!databaseUrl) {
 
 const poolConfig: PoolConfig = {
   connectionString: databaseUrl,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  max: 10, // Maximum number of clients in the pool
+  idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
+  connectionTimeoutMillis: 5000, // Give up after 5s if a connection cannot be established
+  keepAlive: true,
+  ssl: { rejectUnauthorized: false },
   // Ensure all database operations use UTC timezone
   options: '--timezone=UTC'
 };
+
+// Set process timezone to UTC to avoid timezone issues
+process.env.TZ = 'UTC';
 
 export const pool = new Pool(poolConfig);
 
@@ -27,6 +32,9 @@ export async function testDatabaseConnection() {
     
     // Explicitly set timezone to UTC for this connection
     await client.query("SET TIME ZONE 'UTC'");
+    // Guard against long-running queries on this connection
+    await client.query("SET statement_timeout = '5s'");
+    await client.query("SET idle_in_transaction_session_timeout = '5s'");
     
     // Verify timezone setting
     const timezoneResult = await client.query('SHOW TIME ZONE');

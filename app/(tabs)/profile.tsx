@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, CreditCard as Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw } from 'lucide-react-native';
+import { Settings, CreditCard as Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { getBackendUrl } from '@/services/config';
@@ -19,72 +19,8 @@ export default function ProfileScreen() {
   const [forceUpdate, setForceUpdate] = useState(0);
 
   const loadUnreadNotificationsCount = async () => {
-    try {
-      let totalNotifications = 0;
-
-      // 1. Get backend notifications count
-      try {
-        const response = await fetch(`${getBackendUrl()}/api/notifications/count`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${await apiService.getAccessToken()}`
-          }
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            totalNotifications += result.data.unreadCount;
-            console.log('🔔 Backend notifications count:', result.data.unreadCount);
-          }
-        }
-      } catch (error) {
-        console.error('❌ Failed to fetch backend notifications count:', error);
-      }
-
-      // 2. Get join requests count for hosted Tokis
-      try {
-        let joinRequestsCount = 0;
-        for (const toki of state.tokis) {
-          if (toki.isHostedByUser && toki.host?.id === state.currentUser?.id) {
-            try {
-              const joinRequests = await actions.getJoinRequests(toki.id);
-              joinRequestsCount += joinRequests.length;
-            } catch (error) {
-              console.error('❌ Failed to get join requests for Toki:', toki.id, error);
-            }
-          }
-        }
-        totalNotifications += joinRequestsCount;
-        console.log('🔔 Join requests count for hosted Tokis:', joinRequestsCount);
-      } catch (error) {
-        console.error('❌ Failed to count join requests:', error);
-      }
-
-      // 3. Get count of user's own join requests (pending/approved)
-      try {
-        let userJoinRequestsCount = 0;
-        for (const toki of state.tokis) {
-          if (!toki.isHostedByUser &&
-            toki.joinStatus &&
-            toki.joinStatus !== 'not_joined' &&
-            (toki.joinStatus === 'pending' || toki.joinStatus === 'approved')) {
-            userJoinRequestsCount++;
-          }
-        }
-        totalNotifications += userJoinRequestsCount;
-        console.log('🔔 User join requests count:', userJoinRequestsCount);
-      } catch (error) {
-        console.error('❌ Failed to count user join requests:', error);
-      }
-
-      console.log('🔔 Total notifications count:', totalNotifications);
-      setUnreadNotifications(totalNotifications);
-
-    } catch (error) {
-      console.error('❌ Failed to load notifications count:', error);
-      setUnreadNotifications(0);
-    }
+    // Use unified count from context only
+    setUnreadNotifications(state.unreadNotificationsCount || 0);
   };
 
   const loadSavedTokisCount = async () => {
@@ -736,10 +672,6 @@ export default function ProfileScreen() {
               <Text style={styles.menuText}>Connections</Text>
               <Text style={styles.menuBadge}>{state.currentUser.connections}</Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Settings</Text>
             <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
               <Bell size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Notifications</Text>
@@ -747,6 +679,11 @@ export default function ProfileScreen() {
                 <Text style={styles.notificationCount}>{unreadNotifications}</Text>
               </View>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Settings</Text>
+
             <View style={styles.menuItem}>
               <Bell size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Push Notifications</Text>
@@ -788,6 +725,10 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.menuItem} onPress={actions.syncData}>
               <Settings size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Sync Data</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/health')}>
+              <Activity size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>System Health</Text>
             </TouchableOpacity>
           </View>
 

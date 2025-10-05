@@ -3,6 +3,14 @@ import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { uploadSingleImage, handleUploadError } from '../middleware/upload';
 import { calculateDistance, formatDistance } from '../utils/distance';
+import { 
+  generateInviteCode, 
+  deactivateExistingLinks, 
+  validateInviteLink, 
+  incrementLinkUsage, 
+  isUserParticipant, 
+  addUserToToki 
+} from '../utils/inviteLinkUtils';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -34,8 +42,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate category
-    const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'];
+    // Validate category (canonical 12)
+    const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning'];
     if (!validCategories.includes(category)) {
       return res.status(400).json({
         success: false,
@@ -255,11 +263,15 @@ router.get('/categories', async (req: Request, res: Response) => {
       { id: 'sports', name: 'Sports', icon: '🏃‍♂️', description: 'Physical activities and sports' },
       { id: 'coffee', name: 'Coffee', icon: '☕', description: 'Coffee meetups and cafes' },
       { id: 'music', name: 'Music', icon: '🎵', description: 'Music events and jam sessions' },
-      { id: 'food', name: 'Food', icon: '🍕', description: 'Food and dining experiences' },
+      { id: 'food', name: 'Food', icon: '🍝', description: 'Food and dining experiences' },
       { id: 'work', name: 'Work', icon: '💼', description: 'Work-related activities and networking' },
       { id: 'art', name: 'Art', icon: '🎨', description: 'Art and creative activities' },
-      { id: 'nature', name: 'Nature', icon: '🌿', description: 'Outdoor and nature activities' },
-      { id: 'drinks', name: 'Drinks', icon: '🍺', description: 'Social drinking and nightlife' }
+      { id: 'nature', name: 'Nature', icon: '🌳', description: 'Outdoor and nature activities' },
+      { id: 'drinks', name: 'Drinks', icon: '🍸', description: 'Social drinking and nightlife' },
+      { id: 'social', name: 'Social', icon: '🎉', description: 'Social gatherings and hangouts' },
+      { id: 'wellness', name: 'Wellness', icon: '🧘', description: 'Wellness, meditation, and health' },
+      { id: 'culture', name: 'Culture', icon: '🏛️', description: 'Cultural activities and events' },
+      { id: 'morning', name: 'Morning', icon: '☀️', description: 'Morning-oriented activities' }
     ];
 
     return res.status(200).json({
@@ -398,7 +410,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
-        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees,
+        COALESCE(jp.status, 'not_joined') as join_status
     `;
     
     // Always add distance calculation if user has coordinates
@@ -422,6 +435,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id
+      LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${paramCount + 1}
       WHERE t.status = 'active'
       AND NOT EXISTS (
         SELECT 1 FROM user_blocks ub 
@@ -433,6 +447,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         WHERE hu.toki_id = t.id AND hu.user_id = $${paramCount + 1}
       )
     `;
+    // Add userId for jp join and for block/hidden checks
     paramCount++;
     queryParams.push(userId);
     
@@ -520,8 +535,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       // }
     }
 
-    // Group by to handle tags aggregation
-    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude`;
+    // Group by to handle tags aggregation and joins
+    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, jp.status`;
 
     // Add sorting
     const validSortFields = ['created_at', 'title', 'location', 'current_attendees'];
@@ -622,49 +637,34 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const total = parseInt(countResult.rows[0].total);
 
     // Format response with join status
-    const tokis = await Promise.all(result.rows.map(async (row) => {
-      // Get current user's join status for this Toki
-      let joinStatus = 'not_joined';
-      if (row.host_id !== userId) {
-        const joinResult = await pool.query(
-          'SELECT status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
-          [row.id, userId]
-        );
-        
-        if (joinResult.rows.length > 0) {
-          joinStatus = joinResult.rows[0].status;
-        }
-      }
-
-      return {
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        location: row.location,
-        latitude: row.latitude,
-        longitude: row.longitude,
-        timeSlot: row.time_slot,
-        scheduledTime: row.scheduled_time,
-        maxAttendees: row.max_attendees,
-        currentAttendees: row.current_attendees,
-        category: row.category,
-        visibility: row.visibility,
-        imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        distance: row.distance_km ? {
-          km: Math.round(row.distance_km * 10) / 10,
-          miles: Math.round((row.distance_km * 0.621371) * 10) / 10
-        } : undefined,
-        host: {
-          id: row.host_id,
-          name: row.host_name,
-          avatar: row.host_avatar
-        },
-        tags: row.tags || [],
-        joinStatus: joinStatus
-      };
+    const tokis = result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      location: row.location,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      timeSlot: row.time_slot,
+      scheduledTime: row.scheduled_time,
+      maxAttendees: row.max_attendees,
+      currentAttendees: row.current_attendees,
+      category: row.category,
+      visibility: row.visibility,
+      imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      distance: row.distance_km ? {
+        km: Math.round(row.distance_km * 10) / 10,
+        miles: Math.round((row.distance_km * 0.621371) * 10) / 10
+      } : undefined,
+      host: {
+        id: row.host_id,
+        name: row.host_name,
+        avatar: row.host_avatar
+      },
+      tags: row.tags || [],
+      joinStatus: row.join_status || 'not_joined'
     }));
 
     return res.status(200).json({
@@ -1017,9 +1017,9 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate category if provided
+    // Validate category if provided (canonical 12)
     if (category) {
-      const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'];
+      const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning'];
       if (!validCategories.includes(category)) {
         return res.status(400).json({
           success: false,
@@ -1217,13 +1217,20 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
       return res.status(400).json({ success: false, error: 'Missing invitedUserId' });
     }
 
-    // Ensure requester is host
-    const hostCheck = await pool.query('SELECT host_id, visibility FROM tokis WHERE id = $1 AND status = $2', [id, 'active']);
-    if (hostCheck.rows.length === 0) {
+    // Check if toki exists and get details
+    const tokiCheck = await pool.query('SELECT host_id, visibility, title FROM tokis WHERE id = $1 AND status = $2', [id, 'active']);
+    if (tokiCheck.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Toki not found' });
     }
-    if (hostCheck.rows[0].host_id !== userId) {
-      return res.status(403).json({ success: false, error: 'Only host can invite users' });
+    
+    const toki = tokiCheck.rows[0];
+    const isHost = toki.host_id === userId;
+    const isPublicAttendee = toki.visibility === 'public' && 
+      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status IN ($3, $4)', 
+        [id, userId, 'approved', 'joined'])).rows.length > 0;
+    
+    if (!isHost && !isPublicAttendee) {
+      return res.status(403).json({ success: false, error: 'Only host or attendees of public tokis can invite users' });
     }
 
     const result = await pool.query(
@@ -1232,6 +1239,23 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
        ON CONFLICT (toki_id, invited_user_id) DO UPDATE SET status = 'invited', created_at = NOW()
        RETURNING *`,
       [id, invitedUserId, userId]
+    );
+
+    // Create notification for the invited user
+    const tokiTitle = toki.title || 'a Toki';
+    const inviterName = (req as any).user.name;
+    const inviterType = isHost ? 'the host' : 'an attendee';
+    
+    await pool.query(
+      `INSERT INTO notifications (user_id, title, message, type, related_toki_id, related_user_id, read, created_at)
+       VALUES ($1, $2, $3, 'invite', $4, $5, false, NOW())`,
+      [
+        invitedUserId,
+        'New Toki Invite',
+        `You've been invited to join "${tokiTitle}" by ${inviterName} (${inviterType})`,
+        id, // related_toki_id
+        userId // related_user_id (inviter)
+      ]
     );
 
     return res.status(201).json({ success: true, data: { invite: result.rows[0] } });
@@ -1303,6 +1327,89 @@ router.post('/:id/invites/:inviteId/respond', authenticateToken, async (req: Req
     return res.status(200).json({ success: true, data: { invite: updated.rows[0] } });
   } catch (error) {
     logger.error('Respond invite error:', error);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Respond to an invite via notification ID (for notification actions)
+router.post('/invites/respond', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { notificationId, action } = req.body as { notificationId: string; action: 'accept' | 'decline' };
+    const userId = (req as any).user.id;
+
+    if (!['accept', 'decline'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
+    }
+
+    // Get the notification and verify it belongs to the user
+    const notificationRow = await pool.query(
+      'SELECT * FROM notifications WHERE id = $1 AND user_id = $2 AND type = $3',
+      [notificationId, userId, 'invite']
+    );
+    
+    if (notificationRow.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Invite notification not found' });
+    }
+
+    const tokiId = notificationRow.rows[0].related_toki_id;
+    if (!tokiId) {
+      return res.status(400).json({ success: false, error: 'Invalid invite notification' });
+    }
+
+    // Find the invite for this toki and user
+    const inviteRow = await pool.query(
+      'SELECT * FROM toki_invites WHERE toki_id = $1 AND invited_user_id = $2 AND status = $3',
+      [tokiId, userId, 'invited']
+    );
+    
+    if (inviteRow.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Invite not found or already responded' });
+    }
+
+    const newStatus = action === 'accept' ? 'accepted' : 'declined';
+    const updated = await pool.query(
+      'UPDATE toki_invites SET status = $1 WHERE id = $2 RETURNING *',
+      [newStatus, inviteRow.rows[0].id]
+    );
+
+    // Mark the notification as read
+    await pool.query('UPDATE notifications SET read = true WHERE id = $1', [notificationId]);
+
+    // If accepted, add user as participant and create accepted notification
+    if (action === 'accept') {
+      await pool.query(
+        `INSERT INTO toki_participants (toki_id, user_id, status, joined_at)
+         VALUES ($1, $2, 'joined', NOW())
+         ON CONFLICT (toki_id, user_id) DO UPDATE SET status = 'joined', joined_at = NOW()`,
+        [tokiId, userId]
+      );
+
+      // Create a new invite_accepted notification
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, message, read, related_toki_id, related_user_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [
+          userId,
+          'invite_accepted',
+          'Invite Accepted',
+          `You've accepted the invite to join "${notificationRow.rows[0].message.split('"')[1] || 'event'}"`,
+          true,
+          tokiId,
+          notificationRow.rows[0].related_user_id
+        ]
+      );
+    }
+
+    return res.status(200).json({ 
+      success: true, 
+      data: { 
+        invite: updated.rows[0],
+        action: action,
+        tokiId: tokiId
+      } 
+    });
+  } catch (error) {
+    logger.error('Respond invite via notification error:', error);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
@@ -1414,6 +1521,14 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
       }
     }
 
+    // Check if user has an active invite for this toki
+    const inviteResult = await pool.query(
+      'SELECT * FROM toki_invites WHERE toki_id = $1 AND invited_user_id = $2 AND status = $3',
+      [id, userId, 'invited']
+    );
+
+    const hasActiveInvite = inviteResult.rows.length > 0;
+
     // Check if Toki is full
     const currentAttendeesResult = await pool.query(
       'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
@@ -1430,19 +1545,30 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
       });
     }
 
-    // Insert join request
+    // Determine status based on whether user has an active invite
+    const joinStatus = hasActiveInvite ? 'joined' : 'pending';
+    
+    // Insert join request or direct join
     const joinResult = await pool.query(
       'INSERT INTO toki_participants (toki_id, user_id, status, joined_at) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, userId, 'pending', new Date()]
+      [id, userId, joinStatus, new Date()]
     );
+
+    // If user had an active invite, update the invite status to accepted
+    if (hasActiveInvite) {
+      await pool.query(
+        'UPDATE toki_invites SET status = $1 WHERE toki_id = $2 AND invited_user_id = $3',
+        ['accepted', id, userId]
+      );
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Join request sent successfully',
+      message: hasActiveInvite ? 'Successfully joined the Toki' : 'Join request sent successfully',
       data: {
         id: joinResult.rows[0].id,
         tokiId: id,
-        status: 'pending',
+        status: joinStatus,
         createdAt: joinResult.rows[0].joined_at
       }
     });
@@ -1720,6 +1846,84 @@ router.get('/:id/join-requests', authenticateToken, async (req: Request, res: Re
   }
 });
 
+// Remove participant from Toki (only by host)
+router.delete('/:id/participants/:userId', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id, userId } = req.params;
+    const hostId = (req as any).user.id;
+
+    // Check if Toki exists and user is the host
+    const tokiResult = await pool.query(
+      'SELECT host_id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist or is not active'
+      });
+    }
+
+    if (tokiResult.rows[0].host_id !== hostId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied',
+        message: 'Only the host can remove participants'
+      });
+    }
+
+    // Check if the user to be removed is actually a participant
+    const participantResult = await pool.query(
+      'SELECT id, user_id FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (participantResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Participant not found',
+        message: 'The specified user is not a participant in this Toki'
+      });
+    }
+
+    // Don't allow host to remove themselves
+    if (userId === hostId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid operation',
+        message: 'Host cannot remove themselves from the Toki'
+      });
+    }
+
+    // Remove the participant
+    await pool.query(
+      'DELETE FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    // Update current_attendees count
+    await pool.query(
+      'UPDATE tokis SET current_attendees = current_attendees - 1 WHERE id = $1',
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Participant removed successfully'
+    });
+
+  } catch (error) {
+    console.error('Error removing participant:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to remove participant'
+    });
+  }
+});
+
 // Complete a Toki (only by host)
 router.put('/:id/complete', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -1850,6 +2054,410 @@ router.post('/:id/image', authenticateToken, uploadSingleImage, handleUploadErro
       success: false,
       error: 'Server error',
       message: 'Failed to upload image'
+    });
+  }
+});
+
+// =========================
+// Invite Links Endpoints
+// =========================
+
+// Generate invite link for a toki
+router.post('/:id/invite-links', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const { maxUses, message } = req.body;
+
+    // Verify user is the host of the toki
+    const tokiCheck = await pool.query(
+      'SELECT id, title, status FROM tokis WHERE id = $1 AND host_id = $2',
+      [id, userId]
+    );
+
+    if (tokiCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found or you are not the host'
+      });
+    }
+
+    const toki = tokiCheck.rows[0];
+
+    if (toki.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot create invite links for inactive tokis'
+      });
+    }
+
+    // Deactivate any existing active links
+    await deactivateExistingLinks(id, userId);
+
+    // Generate new invite code
+    const inviteCode = await generateInviteCode();
+
+    // Create new invite link
+    const result = await pool.query(
+      `INSERT INTO toki_invite_links (toki_id, created_by, invite_code, max_uses, custom_message)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [id, userId, inviteCode, maxUses || null, message || null]
+    );
+
+    const inviteLink = result.rows[0];
+    const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/join/${inviteCode}`;
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: inviteLink.id,
+        inviteCode: inviteLink.invite_code,
+        inviteUrl,
+        maxUses: inviteLink.max_uses,
+        usedCount: inviteLink.used_count,
+        customMessage: inviteLink.custom_message,
+        createdAt: inviteLink.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error creating invite link:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create invite link'
+    });
+  }
+});
+
+// Join toki via invite link
+router.post('/join-by-link', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { inviteCode } = req.body;
+    const userId = req.user!.id;
+
+    if (!inviteCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invite code is required'
+      });
+    }
+
+    // Validate invite link
+    const validation = await validateInviteLink(inviteCode);
+    
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: validation.error
+      });
+    }
+
+    const { linkData } = validation;
+    const tokiId = linkData.toki_id;
+
+    // Check if user is already a participant
+    const isParticipant = await isUserParticipant(tokiId, userId);
+    
+    if (isParticipant) {
+      return res.status(400).json({
+        success: false,
+        error: 'You are already a participant in this event'
+      });
+    }
+
+    // Add user to toki
+    const added = await addUserToToki(tokiId, userId);
+    
+    if (!added) {
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to join event. Event may be full or inactive.'
+      });
+    }
+
+    // Increment usage count
+    await incrementLinkUsage(inviteCode);
+
+    // Create notification for host (no actions needed since user is already approved)
+    await pool.query(
+      `INSERT INTO notifications (user_id, title, message, type, related_toki_id, related_user_id, read, created_at)
+       VALUES ($1, $2, $3, 'participant_joined', $4, $5, false, NOW())`,
+      [
+        linkData.created_by, // Host user ID
+        'New Participant Joined',
+        `${req.user!.name} joined your event "${linkData.toki_title}" via invite link`,
+        tokiId,
+        userId
+      ]
+    );
+
+    // Get updated toki details
+    const tokiResult = await pool.query(
+      `SELECT t.*, u.name as host_name, u.avatar_url as host_avatar
+       FROM tokis t
+       JOIN users u ON t.host_id = u.id
+       WHERE t.id = $1`,
+      [tokiId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully joined the event!',
+      data: {
+        toki: tokiResult.rows[0],
+        joinedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error joining via invite link:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to join event'
+    });
+  }
+});
+
+// Get invite link info (public endpoint)
+router.get('/invite-links/:code', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { code } = req.params;
+
+    const validation = await validateInviteLink(code);
+    
+    if (!validation.isValid) {
+      return res.status(404).json({
+        success: false,
+        error: validation.error
+      });
+    }
+
+    const { linkData } = validation;
+
+    // Fetch full public details for the toki so the join page can render
+    const tokiRow = (await pool.query(
+      `SELECT t.id, t.title, t.description, t.location, t.scheduled_time, t.current_attendees,
+              t.max_attendees, t.visibility, u.id as host_id, u.name as host_name, u.avatar_url as host_avatar
+       FROM tokis t
+       JOIN users u ON u.id = t.host_id
+       WHERE t.id = $1`,
+      [linkData.toki_id]
+    )).rows[0];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        toki: tokiRow ? {
+          id: tokiRow.id,
+          title: tokiRow.title,
+          description: tokiRow.description,
+          location: tokiRow.location,
+          scheduled_time: tokiRow.scheduled_time,
+          current_attendees: tokiRow.current_attendees,
+          max_attendees: tokiRow.max_attendees,
+          visibility: tokiRow.visibility,
+          host_id: tokiRow.host_id
+        } : {
+          id: linkData.toki_id,
+          title: linkData.toki_title,
+          visibility: linkData.toki_visibility,
+          max_attendees: linkData.toki_max_attendees
+        },
+        host: {
+          name: tokiRow?.host_name || linkData.host_name,
+          avatar: tokiRow?.host_avatar || linkData.host_avatar
+        },
+        inviteLink: {
+          code: linkData.invite_code,
+          maxUses: linkData.max_uses,
+          usedCount: linkData.used_count,
+          remainingUses: linkData.max_uses ? linkData.max_uses - linkData.used_count : null,
+          customMessage: linkData.custom_message
+        },
+        isActive: linkData.is_active
+      }
+    });
+  } catch (error) {
+    console.error('Error getting invite link info:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get invite link info'
+    });
+  }
+});
+
+// Get all invite links for a toki (host only)
+router.get('/:id/invite-links', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    // Verify user is the host
+    const tokiCheck = await pool.query(
+      'SELECT id, title FROM tokis WHERE id = $1 AND host_id = $2',
+      [id, userId]
+    );
+
+    if (tokiCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found or you are not the host'
+      });
+    }
+
+    // Get all invite links for this toki
+    const result = await pool.query(
+      `SELECT 
+        id,
+        invite_code,
+        is_active,
+        max_uses,
+        used_count,
+        custom_message,
+        created_at,
+        updated_at
+      FROM toki_invite_links 
+      WHERE toki_id = $1 
+      ORDER BY created_at DESC`,
+      [id]
+    );
+
+    const links = result.rows.map(link => ({
+      id: link.id,
+      inviteCode: link.invite_code,
+      inviteUrl: `${process.env.FRONTEND_URL || 'https://app.toki.com'}/join/${link.invite_code}`,
+      isActive: link.is_active,
+      maxUses: link.max_uses,
+      usedCount: link.used_count,
+      remainingUses: link.max_uses ? link.max_uses - link.used_count : null,
+      customMessage: link.custom_message,
+      createdAt: link.created_at,
+      updatedAt: link.updated_at
+    }));
+
+    const activeLink = links.find(link => link.isActive);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        toki: tokiCheck.rows[0],
+        links,
+        activeLink
+      }
+    });
+  } catch (error) {
+    console.error('Error getting invite links:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get invite links'
+    });
+  }
+});
+
+// Deactivate an invite link
+router.delete('/invite-links/:linkId', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { linkId } = req.params;
+    const userId = req.user!.id;
+
+    // Verify user owns this invite link
+    const linkCheck = await pool.query(
+      `SELECT il.id, il.toki_id, t.title as toki_title
+       FROM toki_invite_links il
+       JOIN tokis t ON il.toki_id = t.id
+       WHERE il.id = $1 AND il.created_by = $2`,
+      [linkId, userId]
+    );
+
+    if (linkCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invite link not found or you are not the owner'
+      });
+    }
+
+    // Deactivate the link
+    await pool.query(
+      'UPDATE toki_invite_links SET is_active = false, updated_at = NOW() WHERE id = $1',
+      [linkId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Invite link deactivated successfully'
+    });
+  } catch (error) {
+    console.error('Error deactivating invite link:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to deactivate invite link'
+    });
+  }
+});
+
+// Regenerate invite link
+router.post('/:id/invite-links/regenerate', authenticateToken, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const { maxUses, message } = req.body;
+
+    // Verify user is the host
+    const tokiCheck = await pool.query(
+      'SELECT id, title, status FROM tokis WHERE id = $1 AND host_id = $2',
+      [id, userId]
+    );
+
+    if (tokiCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found or you are not the host'
+      });
+    }
+
+    const toki = tokiCheck.rows[0];
+
+    if (toki.status !== 'active') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot create invite links for inactive tokis'
+      });
+    }
+
+    // Deactivate existing active links
+    await deactivateExistingLinks(id, userId);
+
+    // Generate new invite code
+    const inviteCode = await generateInviteCode();
+
+    // Create new invite link
+    const result = await pool.query(
+      `INSERT INTO toki_invite_links (toki_id, created_by, invite_code, max_uses, custom_message)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [id, userId, inviteCode, maxUses || null, message || null]
+    );
+
+    const inviteLink = result.rows[0];
+    const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/join/${inviteCode}`;
+
+    res.status(201).json({
+      success: true,
+      message: 'New invite link generated successfully',
+      data: {
+        id: inviteLink.id,
+        inviteCode: inviteLink.invite_code,
+        inviteUrl,
+        maxUses: inviteLink.max_uses,
+        usedCount: inviteLink.used_count,
+        customMessage: inviteLink.custom_message,
+        createdAt: inviteLink.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error regenerating invite link:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to regenerate invite link'
     });
   }
 });

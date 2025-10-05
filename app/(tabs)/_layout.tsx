@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions, Text } from 'react-native';
+import React, { useMemo } from 'react';
 import { Map, Plus, MessageCircle, User, Compass } from 'lucide-react-native';
 import { useApp } from '../../contexts/AppContext';
 
@@ -7,8 +8,8 @@ export default function TabLayout() {
   const { state } = useApp();
   const { width } = useWindowDimensions(); // More responsive than Dimensions.get()
   
-  // Responsive calculations
-  const getResponsiveStyles = () => {
+  // Memoize responsive calculations to prevent re-renders
+  const responsiveStyles = useMemo(() => {
     if (width < 600) {
       return {
         tabBarHeight: 80,
@@ -26,16 +27,21 @@ export default function TabLayout() {
         unreadDotSize: 8,
       };
     }
-  };
-
-  const responsiveStyles = getResponsiveStyles();
+  }, [width]);
   
-  // Calculate total unread messages
-  const totalUnreadCount = (state.conversations || []).reduce((sum, conv) => 
-    sum + (conv.unread_count || 0), 0
-  ) + (state.tokiGroupChats || []).reduce((sum, chat) => 
-    sum + (chat.unread_count || 0), 0
-  );
+  // Memoize unread counts to prevent re-renders
+  const totalUnreadCount = useMemo(() => {
+    return (state.conversations || []).reduce((sum, conv) => 
+      sum + (conv.unread_count || 0), 0
+    ) + (state.tokiGroupChats || []).reduce((sum, chat) => 
+      sum + (chat.unread_count || 0), 0
+    );
+  }, [state.conversations, state.tokiGroupChats]);
+
+  // Memoize unread notifications count
+  const unreadNotificationsCount = useMemo(() => {
+    return Math.min(99, state.unreadNotificationsCount || 0);
+  }, [state.unreadNotificationsCount]);
 
   return (
     <Tabs
@@ -68,7 +74,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'Discover',
+          title: 'Map',
           tabBarIcon: ({ color }) => (
             <Map size={responsiveStyles.iconSize} color={color} />
           ),
@@ -105,7 +111,16 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => (
-            <User size={responsiveStyles.iconSize} color={color} />
+            <View style={styles.iconContainer}>
+              <User size={responsiveStyles.iconSize} color={color} />
+              {unreadNotificationsCount > 0 && (
+                <View style={[styles.countBadge]}>
+                  <Text style={styles.countBadgeText}>
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -133,6 +148,24 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     position: 'relative',
+  },
+  countBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    lineHeight: 12,
   },
   unreadDot: {
     position: 'absolute',

@@ -456,108 +456,18 @@ export default function DiscoverScreen() {
     }
   };
 
-  const renderInteractiveMap = () => {
-    // Web platform with Leaflet
-    if (isWeb) {
-      return (
-        <View style={styles.mapContainer}>
-          <div style={styles.webMapContainer as any}>
-            <MapContainer
-              center={[mapRegion.latitude, mapRegion.longitude]}
-              zoom={13}
-              style={styles.leafletMap as any}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {/* Center is driven by profile location; omit user marker */}
-
-              {/* Toki markers */}
-              {filteredEvents.map((event) => {
-                if (event.coordinate.latitude && event.coordinate.longitude) {
-                  return (
-                    <LeafletMarker
-                      key={event.id}
-                      position={[event.coordinate.latitude, event.coordinate.longitude]}
-                      icon={L.divIcon({
-                        className: 'custom-marker',
-                        html: `
-                          <div style="
-                            background-color: ${getCategoryColorForMap(event.category)};
-                            width: 24px;
-                            height: 24px;
-                            border-radius: 50%;
-                            border: 3px solid white;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: white;
-                            font-weight: bold;
-                            font-size: 12px;
-                            font-family: Inter, sans-serif;
-                          ">
-                            ${event.category.charAt(0).toUpperCase()}
-                          </div>
-                        `,
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
-                      })}
-                      eventHandlers={{
-                        click: () => handleMapMarkerPress(event)
-                      }}
-                    >
-                      <LeafletPopup>
-                        <div style={styles.leafletPopup as any}>
-                          <strong>{event.title}</strong><br />
-                          <span style={{ color: '#B49AFF' }}>{event.category}</span><br />
-                          {event.location}<br />
-                          {formatAttendees(event.attendees, event.maxAttendees)}<br />
-                          <button
-                            style={styles.leafletButton as any}
-                            onClick={() => handleEventPress(event)}
-                          >
-                            View Details
-                          </button>
-                        </div>
-                      </LeafletPopup>
-                    </LeafletMarker>
-                  );
-                }
-                return null;
-              })}
-            </MapContainer>
-
-            {/* Map Controls Overlay */}
-            <div style={styles.webMapControls as any}>
-              <button style={styles.webMapControlButton as any} onClick={centerOnProfileLocation}>
-                🎯
-              </button>
-              <button style={styles.webMapControlButton as any} onClick={toggleMapView}>
-                📋
-              </button>
-            </div>
-          </div>
-        </View>
-      );
-    }
-
-    // Native platforms use extracted component to avoid web bundling native code
-    return (
-      <View style={styles.mapContainer}>
-        <DiscoverMap
-          region={mapRegion}
-          onRegionChange={(r: any) => setMapRegion(r)}
-          events={filteredEvents as any}
-          onEventPress={handleEventPress}
-          onMarkerPress={handleMapMarkerPress}
-          onToggleList={toggleMapView}
-        />
-      </View>
-    );
-  };
+  const renderInteractiveMap = () => (
+    <View style={styles.mapContainer}>
+      <DiscoverMap
+        region={mapRegion}
+        onRegionChange={(r: any) => setMapRegion(r)}
+        events={filteredEvents as any}
+        onEventPress={handleEventPress}
+        onMarkerPress={handleMapMarkerPress}
+        onToggleList={toggleMapView}
+      />
+    </View>
+  );
 
 
   const handleEventPress = (event: TokiEvent) => {

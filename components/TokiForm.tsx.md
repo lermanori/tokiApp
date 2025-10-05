@@ -1,31 +1,15 @@
-# File: TokiForm.tsx
+# File: components/TokiForm.tsx
 
 ### Summary
-This file contains the TokiForm component for creating and editing Tokis. It includes form fields for title, description, location, activity types, time, attendees, tags, and images.
+Create/edit Toki form. Activity selection now derives from the canonical `CATEGORIES` list.
 
 ### Fixes Applied log
-- **problem**: Activity type selection was single-select only, limiting users to one activity type per Toki.
-- **solution**: Updated to support multiple activity type selection (up to 3 options) with visual feedback and validation.
-- **problem**: Date entry required manual typing or preset selection only.
-- **solution**: Integrated `react-native-ui-datepicker` with a modal picker for selecting dates.
+- problem: Activity types were hard-coded (8 only), missing DB categories.
+- solution: Build `activityTypes` from `CATEGORIES` so the form always matches backend/DB.
 
 ### How Fixes Were Implemented
-- **State Management**: Changed `selectedActivity` (string) to `selectedActivities` (string array) to support multiple selections.
-- **Selection Logic**: Added `handleActivitySelect()` function that:
-  - Toggles activity selection (add/remove from array)
-  - Enforces 3-activity maximum with user alert
-  - Prevents selection when limit reached
-- **UI Updates**: 
-  - Added activity counter hint showing "Select up to 3 activity types (X/3 selected)"
-  - Added disabled state styling for unselectable activities when limit reached
-  - Updated button styling to show selected state for multiple activities
-- **Data Handling**: Updated form submission to send:
-  - `activity`: Primary activity (first selected)
-  - `activities`: Array of all selected activities
-  - `tags`: Includes all selected activities plus custom tags
-  - `category`: Uses primary activity for backward compatibility
-- **Validation**: Updated to require at least one activity type instead of exactly one.
-- **Backward Compatibility**: Maintains support for single activity in `initialData.activity` while adding support for `initialData.activities` array.
+- Imported `CATEGORIES` from `utils/categories`.
+- Mapped the array into `{ id, label }` for the selector; icons will be wired once assets are added.
 
 ### Date Picker Integration
 - Uses `react-native-ui-datepicker` and `dayjs`.

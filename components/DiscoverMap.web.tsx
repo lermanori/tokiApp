@@ -1,4 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { CATEGORY_COLORS } from '@/utils/categories';
+// Web icon URLs resolved by bundler
+// Importing ensures correct hashed paths in Expo Web
+import sportsIcon from '@/assets/emojis/sports.png';
+import coffeeIcon from '@/assets/emojis/coffee.png';
+import musicIcon from '@/assets/emojis/music.png';
+import foodIcon from '@/assets/emojis/food.png';
+import workIcon from '@/assets/emojis/work.png';
+import artIcon from '@/assets/emojis/art.png';
+import natureIcon from '@/assets/emojis/nature.png';
+import drinksIcon from '@/assets/emojis/drinks.png';
+import socialIcon from '@/assets/emojis/celebration.png';
+import wellnessIcon from '@/assets/emojis/wellness.png';
+import cultureIcon from '@/assets/emojis/home.png';
+import morningIcon from '@/assets/emojis/beach.png';
 import { View } from 'react-native';
 
 type EventItem = {
@@ -33,29 +48,60 @@ if (isWeb) {
   L = LeafletCore;
 }
 
-const getCategoryColorForMap = (category: string) => {
-  switch (category) {
-    case 'sports': return '#4DC4AA';
-    case 'beach': return '#F9E79B';
-    case 'sunset': return '#B49AFF';
-    case 'coffee': return '#EC4899';
-    case 'work': return '#A7F3D0';
-    case 'music': return '#F3E7FF';
-    case 'jazz': return '#4DC4AA';
-    case 'drinks': return '#F9E79B';
-    case 'networking': return '#B49AFF';
-    case 'wellness': return '#EC4899';
-    case 'yoga': return '#4DC4AA';
-    case 'morning': return '#F3E7FF';
-    case 'art': return '#EC4899';
-    case 'walking': return '#4DC4AA';
-    case 'culture': return '#B49AFF';
-    case 'social': return '#6B7280';
-    default: return '#666666';
-  }
-};
+const getCategoryColorForMap = (category: string) => CATEGORY_COLORS[category] || '#666666';
 
 export default function DiscoverMap({ region, events, onEventPress, onMarkerPress, onToggleList }: Props) {
+  const toUrl = (icon: any): string => {
+    if (!icon) return '';
+    if (typeof icon === 'string') return icon;
+    if (typeof icon.uri === 'string') return icon.uri; // Expo web assets export shape
+    if (typeof icon.src === 'string') return icon.src;
+    if (typeof icon.default === 'string') return icon.default;
+    return '';
+  };
+
+  const ICON_WEB: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {
+      sports: toUrl(sportsIcon),
+      coffee: toUrl(coffeeIcon),
+      music: toUrl(musicIcon),
+      food: toUrl(foodIcon),
+      work: toUrl(workIcon),
+      art: toUrl(artIcon),
+      nature: toUrl(natureIcon),
+      drinks: toUrl(drinksIcon),
+      social: toUrl(socialIcon),
+      wellness: toUrl(wellnessIcon),
+      culture: toUrl(cultureIcon),
+      morning: toUrl(morningIcon),
+    };
+    try { console.log('[DiscoverMap.web] ICON_WEB', map); } catch {}
+    return map;
+  }, []);
+  // Proximity clustering (~50 meters)
+  const clustered = useMemo(() => {
+    const groups: { key: string; items: EventItem[]; lat: number; lng: number }[] = [];
+    const meterToDeg = 1 / 111320; // rough conversion for latitude
+    const radiusMeters = 50;
+    const cell = radiusMeters * meterToDeg;
+
+    const gridKey = (lat: number, lng: number) => `${Math.round(lat / cell)}_${Math.round(lng / cell)}`;
+
+    (events || []).forEach((e) => {
+      const lat = e.coordinate?.latitude;
+      const lng = e.coordinate?.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const key = gridKey(lat as number, lng as number);
+      let g = groups.find((x) => x.key === key);
+      if (!g) {
+        g = { key, items: [], lat: lat as number, lng: lng as number };
+        groups.push(g);
+      }
+      g.items.push(e);
+    });
+
+    return groups;
+  }, [events]);
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -79,34 +125,70 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {events.map((event) => (
-            event.coordinate?.latitude && event.coordinate?.longitude ? (
+          {clustered.map((group) => (
+            Number.isFinite(group.lat) && Number.isFinite(group.lng) ? (
               <Marker
-                key={event.id}
-                position={[event.coordinate.latitude, event.coordinate.longitude]}
+                key={group.key}
+                position={[group.lat, group.lng]}
                 icon={L.divIcon({
                   className: 'custom-marker',
                   html: `
                     <div style="
-                      background-color: ${getCategoryColorForMap(event.category)};
-                      width: 24px; height: 24px; border-radius: 50%; border: 3px solid white;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
-                      color: white; font-weight: bold; font-size: 12px; font-family: Inter, sans-serif;">
-                      ${event.category.charAt(0).toUpperCase()}
+                      background-color: ${getCategoryColorForMap(group.items[0].category)};
+                      width: 32px; height: 32px; border-radius: 50%; border: 3px solid white;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: visible; position: relative;">
+                      <img src="${ICON_WEB[group.items[0].category] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
+                      ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}
                     </div>`,
-                  iconSize: [24, 24], iconAnchor: [12, 12]
+                  iconSize: [32, 32], iconAnchor: [16, 16]
                 })}
-                eventHandlers={{ click: () => onMarkerPress(event) }}
+                eventHandlers={{ click: () => onMarkerPress(group.items[0]) }}
               >
                 <Popup>
-                  <div style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
-                    <strong>{event.title}</strong><br />
-                    <span style={{ color: '#B49AFF' }}>{event.category}</span><br />
-                    {event.location}<br />
-                    <button style={{ background: '#B49AFF', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', marginTop: 6 }}
-                      onClick={() => onEventPress(event)}>
-                      View Details
-                    </button>
+                  <div style={{ textAlign: 'center', fontFamily: 'Inter, sans-serif', minWidth: 240 }}>
+                    {group.items.length === 1 ? (
+                      <>
+                        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{group.items[0].title}</div>
+                        <div style={{ marginBottom: 4 }}>
+                          <span style={{
+                            background: '#F5F3FF', color: '#6D28D9', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 11, fontWeight: 600
+                          }}>{group.items[0].category}</span>
+                        </div>
+                        <div style={{ color: '#6B7280', fontSize: 12, marginBottom: 6 }}>{group.items[0].location}</div>
+                        <button style={{ background: '#B49AFF', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', marginTop: 6 }}
+                          onClick={() => onEventPress(group.items[0])}>
+                          View Details
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 700, marginBottom: 8 }}>{group.items.length} events here</div>
+                        <ul style={{ textAlign: 'left', padding: 0, margin: 0, maxHeight: 160, overflow: 'auto', listStyle: 'none' }}>
+                          {group.items.map((ev) => (
+                            <li key={ev.id} style={{ margin: '8px 0' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#8B5CF6' }} />
+                                <a
+                                  href="#"
+                                  onClick={(e) => { e.preventDefault(); onEventPress(ev); }}
+                                  style={{ color: '#4F46E5', textDecoration: 'underline', fontWeight: 600, padding: '2px 4px', borderRadius: 6 }}
+                                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#EEF2FF'; }}
+                                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                  {ev.title}
+                                </a>
+                              </div>
+                              <div style={{ marginLeft: 16, display: 'flex', gap: 8, marginTop: 2 }}>
+                                <span style={{ background: '#F5F3FF', color: '#6D28D9', padding: '1px 6px', borderRadius: 999, fontSize: 10, fontWeight: 600 }}>{ev.category}</span>
+                                <span style={{ color: '#6B7280', fontSize: 11 }}>{typeof ev.attendees === 'number' && typeof ev.maxAttendees === 'number' ? `${ev.attendees}/${ev.maxAttendees} people` : ''}</span>
+                                <span style={{ color: '#6B7280', fontSize: 11 }}>{ev.location}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
                   </div>
                 </Popup>
               </Marker>

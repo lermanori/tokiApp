@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, UserRatingStats, BlockedUser, BlockStatus } from '../services/api';
 import { socketService } from '../services/socket';
+import { getBackendUrl } from '../services/config';
 
 interface Toki {
   id: string;
@@ -88,6 +89,25 @@ interface SavedToki {
   joinStatus?: string;
 }
 
+// Basic notification shape used by context
+interface NotificationItem {
+  id: string;
+  type?: string;
+  title?: string;
+  message?: string;
+  created_at?: string;
+  timestamp?: string;
+  read?: boolean;
+  isRead?: boolean;
+  source?: string;
+  externalId?: string;
+  actionRequired?: boolean;
+  tokiId?: string;
+  requestId?: string;
+  userId?: string;
+  tokiTitle?: string;
+}
+
 interface AppState {
   tokis: Toki[];
   users: User[];
@@ -103,6 +123,8 @@ interface AppState {
   conversations: any[];
   tokiGroupChats: any[];
   savedTokis: SavedToki[];
+  notifications: NotificationItem[];
+  unreadNotificationsCount: number;
 }
 
 type AppAction =
@@ -126,7 +148,11 @@ type AppAction =
   | { type: 'SET_TOKI_GROUP_CHATS'; payload: any[] }
   | { type: 'SET_SAVED_TOKIS'; payload: SavedToki[] }
   | { type: 'REMOVE_SAVED_TOKI'; payload: string }
-  | { type: 'REFRESH_SAVED_TOKIS' };
+  | { type: 'REFRESH_SAVED_TOKIS' }
+  | { type: 'SET_NOTIFICATIONS'; payload: NotificationItem[] }
+  | { type: 'SET_UNREAD_NOTIFICATIONS_COUNT'; payload: number }
+  | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
+  | { type: 'MARK_ALL_NOTIFICATIONS_READ' };
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -243,6 +269,8 @@ const initialState: AppState = {
   conversations: [],
   tokiGroupChats: [],
   savedTokis: [],
+  notifications: [],
+  unreadNotificationsCount: 0,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -381,6 +409,21 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, savedTokis: state.savedTokis.filter(toki => toki.id !== action.payload) };
     case 'REFRESH_SAVED_TOKIS':
       return { ...state, savedTokis: [] }; // Will be refreshed by calling getSavedTokis again
+    case 'SET_NOTIFICATIONS': {
+      const unread = (action.payload || []).filter(n => !(n.isRead || n.read)).length;
+      return { ...state, notifications: action.payload, unreadNotificationsCount: unread };
+    }
+    case 'SET_UNREAD_NOTIFICATIONS_COUNT':
+      return { ...state, unreadNotificationsCount: Math.max(0, action.payload || 0) };
+    case 'MARK_NOTIFICATION_READ': {
+      const updated = state.notifications.map(n => n.id === action.payload.id ? { ...n, isRead: true, read: true } : n);
+      const unread = updated.filter(n => !(n.isRead || n.read)).length;
+      return { ...state, notifications: updated, unreadNotificationsCount: unread };
+    }
+    case 'MARK_ALL_NOTIFICATIONS_READ': {
+      const updated = state.notifications.map(n => ({ ...n, isRead: true, read: true }));
+      return { ...state, notifications: updated, unreadNotificationsCount: 0 };
+    }
     default:
       return state;
   }
@@ -404,6 +447,7 @@ interface AppContextType {
     clearAllData: () => Promise<void>;
     // Connection actions
     getConnections: () => Promise<{ connections: any[]; pagination: any }>;
+    getConnectionsForToki: (tokiId: string) => Promise<{ connections: any[]; toki: { id: string; title: string } }>;
     getPendingConnections: () => Promise<any[]>;
     sendConnectionRequest: (userId: string) => Promise<boolean>;
     acceptConnectionRequest: (userId: string) => Promise<boolean>;
@@ -427,7 +471,7 @@ interface AppContextType {
     // User discovery actions
     searchUsers: (query?: string) => Promise<any[]>;
     // Toki join actions
-    sendJoinRequest: (id: string) => Promise<boolean>;
+    sendJoinRequest: (id: string) => Promise<'joined' | 'pending' | null>;
     approveJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     declineJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     getJoinRequests: (tokiId: string) => Promise<any[]>;
@@ -465,11 +509,30 @@ interface AppContextType {
     createInvite: (tokiId: string, invitedUserId: string) => Promise<boolean>;
     listInvites: (tokiId: string) => Promise<any[]>;
     respondToInvite: (tokiId: string, inviteId: string, action: 'accept' | 'decline') => Promise<boolean>;
+    respondToInviteViaNotification: (notificationId: string, action: 'accept' | 'decline') => Promise<boolean>;
+
+    // Invite Links (URL-based)
+    generateInviteLink: (tokiId: string, opts?: { maxUses?: number | null; message?: string | null }) => Promise<any>;
+    regenerateInviteLink: (tokiId: string, opts?: { maxUses?: number | null; message?: string | null }) => Promise<any>;
+    deactivateInviteLink: (linkId: string) => Promise<boolean>;
+    getInviteLinksForToki: (tokiId: string) => Promise<any>;
+    getInviteLinkInfo: (code: string) => Promise<any>;
+    joinByInviteCode: (inviteCode: string) => Promise<boolean>;
 
     // Hide / Unhide
     hideUser: (tokiId: string, userId: string) => Promise<boolean>;
     listHiddenUsers: (tokiId: string) => Promise<any[]>;
     unhideUser: (tokiId: string, userId: string) => Promise<boolean>;
+    
+    // Tokis
+    getTokiById: (tokiId: string) => Promise<any>;
+    
+    // Remove Participant
+    removeParticipant: (tokiId: string, userId: string) => Promise<boolean>;
+    // Notifications
+    loadNotifications: () => Promise<NotificationItem[]>;
+    markNotificationRead: (id: string, source?: string, externalId?: string) => Promise<void>;
+    markAllNotificationsRead: () => Promise<void>;
   };
 
 
@@ -479,6 +542,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const [isFetchingTokis, setIsFetchingTokis] = useState(false);
+  const [lastTokisFetchMs, setLastTokisFetchMs] = useState(0);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [lastConnectionCheckMs, setLastConnectionCheckMs] = useState(0);
+  const [isCheckingAuthStatus, setIsCheckingAuthStatus] = useState(false);
+  const [lastAuthStatusCheckMs, setLastAuthStatusCheckMs] = useState(0);
 
   // Load data from AsyncStorage on mount
   useEffect(() => {
@@ -715,6 +784,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkConnection = async () => {
     try {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path.startsWith('/join') || path.startsWith('/login')) {
+        console.log('🛑 Skipping health check on auth/join routes');
+        return;
+      }
+
+      if (isCheckingConnection) {
+        console.log('⏳ Skipping health check: already in-flight');
+        return;
+      }
+      const now = Date.now();
+      if (now - lastConnectionCheckMs < 3000) {
+        console.log('🕒 Skipping health check: cooldown');
+        return;
+      }
+
+      setIsCheckingConnection(true);
+      setLastConnectionCheckMs(now);
+
       await apiService.healthCheck();
       dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
@@ -722,6 +810,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('❌ Backend connection failed:', error);
       dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
       dispatch({ type: 'SET_ERROR', payload: 'Unable to connect to server' });
+    } finally {
+      setIsCheckingConnection(false);
     }
   };
 
@@ -738,6 +828,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadTokis = async () => {
     try {
+      // Avoid hammering the API when entering via invite links or login
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path.startsWith('/join') || path.startsWith('/login')) {
+        console.log('🛑 Skipping loadTokis on auth/join routes');
+        return;
+      }
+
+      // De-duplicate concurrent and very frequent calls
+      if (isFetchingTokis) {
+        console.log('⏳ Skipping loadTokis: already in-flight');
+        return;
+      }
+      const now = Date.now();
+      if (now - lastTokisFetchMs < 3000) {
+        console.log('🕒 Skipping loadTokis: cooldown');
+        return;
+      }
+
+      setIsFetchingTokis(true);
+      setLastTokisFetchMs(now);
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await apiService.getTokis();
       
@@ -778,12 +888,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('❌ Failed to load Tokis:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load activities' });
     } finally {
+      setIsFetchingTokis(false);
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
   const loadTokisWithFilters = async (filters: any) => {
     try {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path.startsWith('/join') || path.startsWith('/login')) {
+        console.log('🛑 Skipping loadTokisWithFilters on auth/join routes');
+        return;
+      }
+
+      if (isFetchingTokis) {
+        console.log('⏳ Skipping loadTokisWithFilters: already in-flight');
+        return;
+      }
+
+      setIsFetchingTokis(true);
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Build query string from filters
@@ -827,6 +950,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('❌ [APP CONTEXT] Failed to load Tokis with filters:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load filtered activities' });
     } finally {
+      setIsFetchingTokis(false);
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
@@ -1004,20 +1128,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendJoinRequest = async (id: string): Promise<boolean> => {
+  const sendJoinRequest = async (id: string): Promise<'joined' | 'pending' | null> => {
     try {
       console.log('🔄 Sending join request to backend for Toki:', id);
       
       const response = await apiService.joinToki(id);
       
       if (response.success) {
-        // Update local state to show pending status
+        const backendStatus = (response.data?.status as 'joined' | 'pending' | undefined) || 'pending';
+        // Update local state to reflect backend status
         dispatch({
           type: 'UPDATE_TOKI',
           payload: {
             id,
             updates: {
-              joinStatus: 'pending',
+              joinStatus: backendStatus,
             },
           },
         });
@@ -1025,15 +1150,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Update sync time
         setTimeout(() => syncData(), 100);
         
-        console.log('✅ Join request sent successfully');
-        return true;
+        console.log(`✅ Join flow successful with status: ${backendStatus}`);
+        return backendStatus;
       } else {
         console.error('❌ Join request failed:', response.message);
-        return false;
+        return null;
       }
     } catch (error) {
       console.error('❌ Failed to send join request:', error);
-      return false;
+      return null;
     }
   };
 
@@ -1144,6 +1269,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const respondToInviteViaNotification = async (notificationId: string, action: 'accept' | 'decline'): Promise<boolean> => {
+    try {
+      await apiService.respondToInviteViaNotification(notificationId, action);
+      return true;
+    } catch (e) {
+      console.error('❌ Failed to respond to invite via notification:', e);
+      return false;
+    }
+  };
+
+  // =========================
+  // Invite Links (URL-based)
+  // =========================
+  const generateInviteLink = async (tokiId: string, opts?: { maxUses?: number | null; message?: string | null }): Promise<any> => {
+    try {
+      const res: any = await apiService.generateInviteLink(tokiId, opts);
+      return res?.data || null;
+    } catch (e) {
+      console.error('❌ Failed to generate invite link:', e);
+      return null;
+    }
+  };
+
+  const regenerateInviteLink = async (tokiId: string, opts?: { maxUses?: number | null; message?: string | null }): Promise<any> => {
+    try {
+      const res: any = await apiService.regenerateInviteLink(tokiId, opts);
+      return res?.data || null;
+    } catch (e) {
+      console.error('❌ Failed to regenerate invite link:', e);
+      return null;
+    }
+  };
+
+  const deactivateInviteLink = async (linkId: string): Promise<boolean> => {
+    try {
+      const res: any = await apiService.deactivateInviteLink(linkId);
+      return !!res?.success;
+    } catch (e) {
+      console.error('❌ Failed to deactivate invite link:', e);
+      return false;
+    }
+  };
+
+  const getInviteLinksForToki = async (tokiId: string): Promise<any> => {
+    try {
+      const res: any = await apiService.getInviteLinksForToki(tokiId);
+      return res?.data || { links: [], activeLink: null };
+    } catch (e) {
+      console.error('❌ Failed to load invite links for toki:', e);
+      return { links: [], activeLink: null };
+    }
+  };
+
+  const getInviteLinkInfo = async (code: string): Promise<any> => {
+    try {
+      const res: any = await apiService.getInviteLinkInfo(code);
+      return res?.data || null;
+    } catch (e) {
+      console.error('❌ Failed to get invite link info:', e);
+      return null;
+    }
+  };
+
+  const joinByInviteCode = async (inviteCode: string): Promise<boolean> => {
+    try {
+      const res: any = await apiService.joinByInviteCode(inviteCode);
+      if (res?.success) {
+        // Refresh tokis so joinStatus reflects joined
+        setTimeout(() => loadTokis(), 100);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('❌ Failed to join by invite code:', e);
+      return false;
+    }
+  };
+
   // Hide actions
   const hideUser = async (tokiId: string, userId: string): Promise<boolean> => {
     try {
@@ -1157,8 +1360,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const listHiddenUsers = async (tokiId: string): Promise<any[]> => {
     try {
-      const res = await apiService.listHiddenUsers(tokiId);
-      return res.data?.hiddenUsers || [];
+      const res: any = await apiService.listHiddenUsers(tokiId);
+      return res?.data?.hiddenUsers || [];
     } catch (e) {
       console.error('❌ Failed to list hidden users:', e);
       return [];
@@ -1171,6 +1374,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (e) {
       console.error('❌ Failed to unhide user:', e);
+      return false;
+    }
+  };
+
+  const getTokiById = async (tokiId: string): Promise<any> => {
+    try {
+      const data = await apiService.getToki(tokiId);
+      return data;
+    } catch (e) {
+      console.error('❌ Failed to get toki by id:', e);
+      return null;
+    }
+  };
+
+  const removeParticipant = async (tokiId: string, userId: string): Promise<boolean> => {
+    try {
+      const response = await apiService.removeParticipant(tokiId, userId);
+      if (response.success) {
+        // Refresh the tokis data to update participants list
+        setTimeout(() => loadTokis(), 100);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('❌ Failed to remove participant:', e);
       return false;
     }
   };
@@ -1219,6 +1447,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkAuthStatus = async (): Promise<boolean> => {
     try {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (path.startsWith('/join') || path.startsWith('/login')) {
+        console.log('🛑 Skipping auth status on auth/join routes');
+        return false;
+      }
+
+      if (isCheckingAuthStatus) {
+        console.log('⏳ Skipping auth status: already in-flight');
+        return false;
+      }
+      const now = Date.now();
+      if (now - lastAuthStatusCheckMs < 3000) {
+        console.log('🕒 Skipping auth status: cooldown');
+        return false;
+      }
+
+      setIsCheckingAuthStatus(true);
+      setLastAuthStatusCheckMs(now);
+
       const isAuthenticated = await apiService.isAuthenticated();
       if (!isAuthenticated) {
         // Clear any stored user data when not authenticated
@@ -1229,6 +1476,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ Error checking auth status:', error);
       return false;
+    } finally {
+      setIsCheckingAuthStatus(false);
     }
   };
 
@@ -1328,7 +1577,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Rating actions
   const getUserRatings = async (userId: string) => {
     try {
-      const response = await apiService.getUserRatings(userId);
+      const response: any = await apiService.getUserRatings(userId);
       dispatch({ 
         type: 'SET_USER_RATINGS', 
         payload: { 
@@ -1345,8 +1594,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const submitRating = async (ratedUserId: string, tokiId: string, rating: number, reviewText?: string): Promise<boolean> => {
     try {
-      const response = await apiService.submitRating(ratedUserId, tokiId, rating, reviewText);
-      if (response.success) {
+      const response: any = await apiService.submitRating(ratedUserId, tokiId, rating, reviewText);
+      if (response?.success) {
         // Reload ratings to get updated data
         await getUserRatings(ratedUserId);
         console.log('✅ Rating submitted successfully');
@@ -1552,6 +1801,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ Failed to load connections:', error);
       return { connections: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } };
+    }
+  };
+
+  const getConnectionsForToki = async (tokiId: string): Promise<{ connections: any[]; toki: { id: string; title: string } }> => {
+    try {
+      const response = await apiService.getConnectionsForToki(tokiId);
+      console.log('✅ Connections for toki loaded successfully');
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to load connections for toki:', error);
+      return { connections: [], toki: { id: tokiId, title: '' } };
     }
   };
 
@@ -1952,6 +2212,91 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // =========================
+  // Notifications (Unread)
+  // =========================
+  const loadNotifications = async (): Promise<NotificationItem[]> => {
+    try {
+      // Use unified backend endpoint
+      const response = await fetch(`${getBackendUrl()}/api/notifications/combined`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+        },
+      });
+      if (!response.ok) {
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
+        return [];
+      }
+      const json = await response.json();
+      const listFromServer: NotificationItem[] = (json?.data?.notifications || json?.notifications || []).map((n: any) => ({
+        id: String(n.id),
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        created_at: n.timestamp || n.created_at,
+        timestamp: n.timestamp || n.created_at,
+        read: !!n.read,
+        isRead: !!n.read,
+        // unified identifiers
+        source: n.source,
+        externalId: n.externalId,
+        actionRequired: n.actionRequired,
+        tokiId: n.tokiId ? String(n.tokiId) : undefined,
+        requestId: n.requestId ? String(n.requestId) : undefined,
+        userId: n.userId ? String(n.userId) : undefined,
+        tokiTitle: n.tokiTitle,
+      }));
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: listFromServer });
+      return listFromServer;
+    } catch (error) {
+      console.error('❌ Failed to load notifications:', error);
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
+      return [];
+    }
+  };
+
+  const markNotificationRead = async (id: string, source?: string, externalId?: string): Promise<void> => {
+    try {
+      // Optimistic update for now
+      dispatch({ type: 'MARK_NOTIFICATION_READ', payload: { id } });
+      // Backend PATCH unified
+      try {
+        await fetch(`${getBackendUrl()}/api/notifications/read`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(source && externalId ? { source, externalId } : { items: [{ source: 'system', externalId: id.replace(/^sys-/, '') }] }),
+        });
+      } catch {}
+    } catch (error) {
+      console.error('❌ Failed to mark notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsRead = async (): Promise<void> => {
+    try {
+      // Optimistic update for now
+      dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' });
+      // Backend PATCH in batch
+      try {
+        const items = (state.notifications || []).map((n: any) => ({ source: n.source || 'system', externalId: n.externalId || String(n.id).replace(/^sys-/, '') }));
+        await fetch(`${getBackendUrl()}/api/notifications/read`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ items }),
+        });
+      } catch {}
+    } catch (error) {
+      console.error('❌ Failed to mark all notifications as read:', error);
+    }
+  };
+
   // Check connection and sync on mount
   useEffect(() => {
     const initializeApp = async () => {
@@ -1975,7 +2320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearInterval(syncInterval);
       clearInterval(authInterval);
     };
-  }, [state.isConnected]);
+  }, []); // Remove state.isConnected dependency to prevent infinite loop
 
   // Set up global socket listeners when user is authenticated and actions are available
   useEffect(() => {
@@ -2001,7 +2346,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         socketService.offTokiMessageReceived();
       };
     }
-  }, [state.currentUser?.id, state.isConnected]);
+  }, [state.currentUser?.id]); // Remove state.isConnected dependency
+
+  // Keep notifications hydrated on auth/connection changes
+  useEffect(() => {
+    if (state.isConnected && state.currentUser?.id) {
+      loadNotifications();
+    }
+  }, [state.currentUser?.id]); // Remove state.isConnected dependency
 
         const actions = {
         checkConnection,
@@ -2018,6 +2370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearAllData,
     // Connection actions
     getConnections,
+    getConnectionsForToki,
     getPendingConnections,
     sendConnectionRequest,
     acceptConnectionRequest,
@@ -2053,10 +2406,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createInvite,
     listInvites,
     respondToInvite,
+    respondToInviteViaNotification,
+    // Invite Links
+    generateInviteLink,
+    regenerateInviteLink,
+    deactivateInviteLink,
+    getInviteLinksForToki,
+    getInviteLinkInfo,
+    joinByInviteCode,
     // Hide
     hideUser,
     listHiddenUsers,
     unhideUser,
+    // Remove Participant
+    removeParticipant,
+    // Tokis
+    getTokiById,
     // Authentication actions
     checkAuthStatus,
     logout,
@@ -2084,6 +2449,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkIfSaved,
     // User update actions
     updateCurrentUser,
+    // Notifications
+    loadNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
   };
 
   return (

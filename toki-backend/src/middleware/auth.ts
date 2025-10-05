@@ -42,27 +42,26 @@ export const authenticateToken = async (
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
-    
-    // Verify user still exists in database
-    const result = await pool.query(
-      'SELECT id, email, name FROM users WHERE id = $1',
-      [decoded.id]
-    );
+    // Attach from JWT immediately to avoid blocking on DB when pool is saturated
+    req.user = { id: decoded.id, email: decoded.email, name: decoded.name };
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid token',
-        message: 'User no longer exists'
-      });
+    // Best-effort existence check; do not fail the request on transient DB errors
+    try {
+      const result = await pool.query(
+        'SELECT id FROM users WHERE id = $1',
+        [decoded.id]
+      );
+      if (result.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token',
+          message: 'User no longer exists'
+        });
+      }
+    } catch (dbErr) {
+      // Log and continue; JWT remains the source of truth to prevent 500s due to pool timeouts
+      console.warn('Auth DB check skipped due to error:', dbErr instanceof Error ? dbErr.message : dbErr);
     }
-
-    const user = result.rows[0];
-    req.user = {
-      id: user.id,
-      email: user.email,
-      name: user.name
-    };
 
     return next();
   } catch (error) {
@@ -106,21 +105,16 @@ export const optionalAuth = async (
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
-    
-    // Verify user still exists in database
-    const result = await pool.query(
-      'SELECT id, email, name FROM users WHERE id = $1',
-      [decoded.id]
-    );
-
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      req.user = {
-        id: user.id,
-        email: user.email,
-        name: user.name
-      };
-    }
+    // Attach immediately
+    req.user = { id: decoded.id, email: decoded.email, name: decoded.name };
+    // Best-effort DB validation (non-blocking on errors)
+    try {
+      const result = await pool.query('SELECT 1 FROM users WHERE id = $1', [decoded.id]);
+      if (result.rows.length === 0) {
+        // If user not found, drop user context but continue (optional auth)
+        req.user = undefined;
+      }
+    } catch {}
 
     return next();
   } catch (error) {

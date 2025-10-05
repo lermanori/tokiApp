@@ -395,8 +395,8 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                 <View style={styles.eventInfo}>
 
                     <View style={styles.tagsRow}>
-                        {toki.tags && toki.tags.slice(0, 3).map((tag: string) => (
-                            <View key={tag} style={styles.tag}>
+                        {toki.tags && toki.tags.slice(0, 3).map((tag: string, index: number) => (
+                            <View key={`${tag}-${index}`} style={styles.tag}>
                                 <Text style={styles.tagText}>{tag}</Text>
                             </View>
                         ))}

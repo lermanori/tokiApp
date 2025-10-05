@@ -5,17 +5,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle, X } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getBackendUrl } from '@/services/config';
-import { apiService } from '@/services/api';
+// Backend data is loaded via AppContext unified endpoint; no direct API calls here
 
 interface Notification {
   id: string;
-  type: 'join_request' | 'join_approved' | 'join_declined' | 'message' | 'event_reminder' | 'event_update' | 'like';
+  type: 'join_request' | 'join_approved' | 'join_declined' | 'message' | 'event_reminder' | 'event_update' | 'like' | 'invite' | 'invite_accepted' | 'participant_joined';
   title: string;
   message: string;
-  timestamp: string;
-  isRead: boolean;
+  created_at: string;
+  read: boolean;
   avatar?: string;
   tokiTitle?: string;
   actionRequired?: boolean;
@@ -25,169 +23,77 @@ interface Notification {
   tokiId?: string;
   requestId?: string;
   status?: 'pending' | 'approved' | 'declined';
+  // For invites
+  inviterId?: string;
+  inviterName?: string;
+  // unified identifiers
+  source?: string;
+  externalId?: string;
+  conversationId?: string;
 }
 
-// Helper function to format timestamp
-const formatTimestamp = (date: string) => {
+// Helper function to format timestamp (x minutes ago, hours ago, Yesterday, on dd/mm/yy)
+const formatRelativeTime = (input: string): string => {
+  // If input is already a friendly string, return as-is
+  const parsed = new Date(input);
+  if (isNaN(parsed.getTime())) {
+    return input || '';
+  }
+
   const now = new Date();
-  const notificationDate = new Date(date);
-  const diffInMinutes = Math.floor((now.getTime() - notificationDate.getTime()) / (1000 * 60));
-  
-  if (diffInMinutes < 1) return 'Just now';
-  if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
-  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
-  return `${Math.floor(diffInMinutes / 1440)} days ago`;
+  // Use UTC time for both to avoid timezone issues
+  const nowUTC = new Date(now.toISOString());
+  const parsedUTC = new Date(parsed.toISOString());
+  const diffMs = nowUTC.getTime() - parsedUTC.getTime();
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+
+  // Check yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    parsed.getFullYear() === yesterday.getFullYear() &&
+    parsed.getMonth() === yesterday.getMonth() &&
+    parsed.getDate() === yesterday.getDate();
+  if (isYesterday) return 'Yesterday';
+
+  // Fallback to date dd/mm/yy
+  const dd = String(parsed.getDate()).padStart(2, '0');
+  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+  const yy = String(parsed.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 };
 
-// Save notifications to AsyncStorage
-const saveNotifications = async (notifications: Notification[]) => {
-  try {
-    await AsyncStorage.setItem('notifications', JSON.stringify(notifications));
-  } catch (error) {
-    console.error('Failed to save notifications:', error);
-  }
-};
-
-// Load notifications from AsyncStorage
-const loadStoredNotifications = async (): Promise<Notification[]> => {
-  try {
-    const stored = await AsyncStorage.getItem('notifications');
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load stored notifications:', error);
-    return [];
-  }
-};
-
-// Convert backend join requests to notifications
-const convertJoinRequestsToNotifications = (joinRequests: any[], tokiTitle: string, tokiId: string): Notification[] => {
-  return joinRequests.map(request => ({
-    id: request.id,
-    type: 'join_request' as const,
-    title: 'New Join Request',
-    message: `${request.user.name} wants to join your ${tokiTitle} event`,
-    timestamp: formatTimestamp(request.joinedAt),
-    isRead: false,
-    avatar: request.user.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-    tokiTitle: tokiTitle,
-    actionRequired: true,
-    userId: request.user.id,
-    userName: request.user.name,
-    tokiId: tokiId, // Use the passed tokiId parameter
-    requestId: request.id,
-    status: request.status || 'pending',
-  }));
-};
+// We rely on the unified backend feed; no local conversion needed
 
 export default function NotificationsScreen() {
   const { state, actions } = useApp();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load notifications from backend API and join requests
+  // Load unified notifications via context and keep local mirror in sync
   useEffect(() => {
-    const loadNotifications = async () => {
+    const fetchUnified = async () => {
       try {
         setLoading(true);
-        
-        console.log('🔍 Loading notifications and join requests from backend...');
-        
-        const allNotifications: Notification[] = [];
-
-        // 1. Load notifications from backend notifications API
-        try {
-          const notificationsResponse = await fetch(`${getBackendUrl()}/api/notifications`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${await apiService.getAccessToken()}`
-            }
-          });
-
-          if (notificationsResponse.ok) {
-            const result = await notificationsResponse.json();
-            if (result.success) {
-              console.log('✅ Loaded notifications from backend:', result.data.notifications.length);
-              allNotifications.push(...result.data.notifications);
-            }
-          }
-        } catch (error) {
-          console.error('❌ Failed to load notifications:', error);
-        }
-
-        // 2. Load join requests for Tokis hosted by the current user
-        for (const toki of state.tokis) {
-          if (toki.isHostedByUser && toki.host?.id === state.currentUser?.id) {
-            try {
-              console.log('🔍 Loading join requests for hosted Toki:', toki.title);
-              const joinRequests = await actions.getJoinRequests(toki.id);
-              console.log('🔍 Join requests found:', joinRequests.length);
-              
-              if (joinRequests.length > 0) {
-                const joinNotifications = convertJoinRequestsToNotifications(joinRequests, toki.title, toki.id);
-                allNotifications.push(...joinNotifications);
-              }
-            } catch (error) {
-              console.error('Failed to load join requests for Toki:', toki.id, error);
-            }
-          }
-        }
-
-        // 3. Load join requests that the current user made (for their own join status)
-        for (const toki of state.tokis) {
-          if (!toki.isHostedByUser && 
-              toki.joinStatus && 
-              toki.joinStatus !== 'not_joined' && 
-              (toki.joinStatus === 'pending' || toki.joinStatus === 'approved')) {
-            try {
-              console.log('🔍 Creating user join notification for:', toki.title);
-              // Create notification for user's own join request
-              const userJoinNotification: Notification = {
-                id: `user-join-${toki.id}`,
-                type: toki.joinStatus === 'approved' ? 'join_approved' as const : 'join_request' as const,
-                title: toki.joinStatus === 'approved' ? 'Join Request Approved' : 'Join Request Sent',
-                message: toki.joinStatus === 'approved' ? `You can now join the ${toki.title} event` :
-                         `Your request to join ${toki.title} is pending`,
-                timestamp: 'Recently',
-                isRead: false,
-                avatar: toki.host.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2',
-                tokiTitle: toki.title,
-                actionRequired: false,
-                userId: state.currentUser?.id,
-                userName: state.currentUser?.name,
-                tokiId: toki.id,
-                status: toki.joinStatus as 'pending' | 'approved' | 'declined',
-              };
-              
-              console.log('🔍 Created user notification:', userJoinNotification);
-              
-              // Add if not already exists
-              const existingIndex = allNotifications.findIndex(n => n.id === userJoinNotification.id);
-              if (existingIndex === -1) {
-                allNotifications.push(userJoinNotification);
-              }
-            } catch (error) {
-              console.error('Failed to create user join notification for Toki:', toki.id, error);
-            }
-          }
-        }
-
-        console.log('📋 Total notifications loaded:', allNotifications.length);
-        console.log('📋 All notifications:', allNotifications);
-
-        setNotifications(allNotifications);
-        
-      } catch (error) {
-        console.error('❌ Failed to load notifications:', error);
-        setNotifications([]);
+        await actions.loadNotifications();
       } finally {
         setLoading(false);
       }
     };
-
     if (state.isConnected && state.currentUser?.id) {
-      loadNotifications();
+      fetchUnified();
     }
-  }, [state.tokis, state.isConnected, state.currentUser?.id]);
+  }, [state.isConnected, state.currentUser?.id]);
+
+  useEffect(() => {
+    setNotifications((state.notifications || []) as any);
+  }, [state.notifications]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -231,129 +137,199 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleNotificationPress = (notification: Notification) => {
-    // Mark as read
-    setNotifications(prev => 
-      prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
-    );
+  const handleMarkRead = (notification: Notification & { source?: string; externalId?: string }) => {
+    setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n));
+    actions.markNotificationRead(String(notification.id), notification.source, notification.externalId);
+  };
 
-    // Navigate based on notification type
-    switch (notification.type) {
-      case 'join_request':
-        // Navigate to join request management
-        console.log('Handle join request for:', notification.userName);
-        break;
-      case 'join_approved':
-        // Navigate to the event
-        router.push({
-          pathname: '/toki-details',
-          params: { tokiId: '4' } // Jazz Night
-        });
-        break;
-      case 'message':
-        // Navigate to chat
-        router.push('/chat');
-        break;
-      case 'event_reminder':
-      case 'like':
-        // Navigate to the event
-        router.push({
-          pathname: '/toki-details',
-          params: { tokiId: '1' } // Sunset Beach Volleyball
-        });
-        break;
+  const handleOpen = (notification: Notification) => {
+    // Mark read then navigate
+    handleMarkRead(notification);
+
+    if (notification.tokiId) {
+      router.push({ pathname: '/toki-details', params: { tokiId: String(notification.tokiId) } });
+      return;
     }
+    if (notification.type === 'message') {
+      if (notification.userId) {
+        router.push({ pathname: '/chat', params: { otherUserId: String(notification.userId), otherUserName: notification.userName || '', isGroup: 'false' } });
+      } else {
+        router.push('/(tabs)/messages');
+      }
+      return;
+    }
+    if (notification.type?.startsWith('connection') && notification.userId) {
+      router.push({ pathname: '/user-profile/[userId]', params: { userId: String(notification.userId) } });
+      return;
+    }
+    router.push('/(tabs)/messages');
   };
 
   const handleApproveRequest = async (notification: Notification) => {
     console.log('🔄 Approve button pressed for notification:', notification);
     
-    if (!notification.tokiId || !notification.requestId) {
-      console.error('❌ Missing data:', { tokiId: notification.tokiId, requestId: notification.requestId });
+    if (!notification.tokiId || !(notification.requestId || notification.externalId)) {
+      console.error('❌ Missing data:', { tokiId: notification.tokiId, requestId: notification.requestId, externalId: notification.externalId });
       Alert.alert('Error', 'Missing required data for approval');
       return;
     }
 
+    const requestId = notification.requestId || notification.externalId;
+
     try {
-      console.log('🔄 Calling approveJoinRequest with:', notification.tokiId, notification.requestId);
-      const success = await actions.approveJoinRequest(notification.tokiId, notification.requestId);
+      console.log('🔄 Calling approveJoinRequest with:', notification.tokiId, requestId);
+      const success = await actions.approveJoinRequest(notification.tokiId, requestId!);
       
       console.log('🔄 Approve result:', success);
       
       if (success) {
-        // Update the notification to show it was approved
-        const updatedNotifications = notifications.map(n => 
-          n.id === notification.id 
+        // Optimistically persist the item as an approved notification so it doesn't disappear
+        setNotifications(prev => prev.map(n =>
+          n.id === notification.id
             ? {
                 ...n,
                 type: 'join_approved' as const,
                 title: 'Join Request Approved',
-                message: notification.userId === state.currentUser?.id 
-                  ? `You can now join the ${notification.tokiTitle} event`
-                  : `${notification.userName} can now join your ${notification.tokiTitle} event`,
+                message: `${notification.userName || 'User'} can now join your ${notification.tokiTitle || 'event'}`,
                 actionRequired: false,
                 status: 'approved' as const,
-                isRead: false,
+                read: false,
               }
             : n
+        ));
+        // Soft refresh to pull the persisted host_join_approved item first
+        await actions.loadNotifications();
+        // Now mark the original pending item as read (after the visible change)
+        actions.markNotificationRead(
+          String(notification.id),
+          notification.source,
+          notification.requestId || notification.externalId
         );
-        setNotifications(updatedNotifications);
-        await saveNotifications(updatedNotifications);
-        Alert.alert('Success', 'Join request approved successfully');
+        console.log('✅ Join request approved successfully');
       } else {
-        Alert.alert('Error', 'Failed to approve join request');
+        console.error('❌ Failed to approve join request');
       }
     } catch (error) {
       console.error('❌ Error approving join request:', error);
-      Alert.alert('Error', 'Failed to approve join request');
     }
   };
 
   const handleRejectRequest = async (notification: Notification) => {
-    if (!notification.tokiId || !notification.requestId) {
-      Alert.alert('Error', 'Missing required data for rejection');
+    if (!notification.tokiId || !(notification.requestId || notification.externalId)) {
+      console.error('❌ Missing required data for rejection');
       return;
     }
 
+    const requestId = notification.requestId || notification.externalId;
+
     try {
-      const success = await actions.declineJoinRequest(notification.tokiId, notification.requestId);
+      const success = await actions.declineJoinRequest(notification.tokiId, requestId!);
       
       if (success) {
-        // Update the notification to show it was declined
-        const updatedNotifications = notifications.map(n => 
-          n.id === notification.id 
+        // Optimistically reflect decline in UI
+        setNotifications(prev => prev.map(n =>
+          n.id === notification.id
             ? {
                 ...n,
                 type: 'join_declined' as const,
                 title: 'Join Request Declined',
-                message: notification.userId === state.currentUser?.id 
-                  ? `Your request to join the ${notification.tokiTitle} event was declined`
-                  : `${notification.userName} was declined from joining your ${notification.tokiTitle} event`,
+                message: `${notification.userName || 'User'} was declined from joining your ${notification.tokiTitle || 'event'}`,
                 actionRequired: false,
                 status: 'declined' as const,
-                isRead: false,
+                read: true,
               }
             : n
+        ));
+        // Then refresh from backend and mark the original pending as read
+        await actions.loadNotifications();
+        actions.markNotificationRead(
+          String(notification.id),
+          notification.source,
+          requestId!
         );
-        setNotifications(updatedNotifications);
-        await saveNotifications(updatedNotifications);
-        Alert.alert('Success', 'Join request declined successfully');
+        console.log('✅ Join request declined successfully');
       } else {
-        Alert.alert('Error', 'Failed to decline join request');
+        console.error('❌ Failed to decline join request');
       }
     } catch (error) {
-      console.error('Error declining join request:', error);
-      Alert.alert('Error', 'Failed to decline join request');
+      console.error('❌ Error declining join request:', error);
+    }
+  };
+
+  // Connection request handlers (pending connection notifications)
+  const handleAcceptConnection = async (notification: Notification) => {
+    if (!notification.userId) return;
+    const ok = await actions.acceptConnectionRequest(notification.userId);
+    if (ok) {
+      // Remove the pending item immediately and mark as read
+      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+      actions.markNotificationRead(String(notification.id), notification.source, notification.externalId);
+      // Optionally reload unified feed
+      await actions.loadNotifications();
+    }
+  };
+
+  const handleDeclineConnection = async (notification: Notification) => {
+    if (!notification.userId) return;
+    const ok = await actions.declineConnectionRequest(notification.userId);
+    if (ok) {
+      // Remove the pending item immediately and mark as read
+      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+      actions.markNotificationRead(String(notification.id), notification.source, notification.externalId);
+      await actions.loadNotifications();
+    }
+  };
+
+  // Invite handlers
+  const handleAcceptInvite = async (notification: Notification) => {
+    if (!notification.externalId) {
+      console.error('❌ Missing notification ID for invite accept');
+      return;
+    }
+
+    try {
+      const success = await actions.respondToInviteViaNotification(notification.externalId, 'accept');
+      
+      if (success) {
+        // Remove the original invite notification and reload to get the new invite_accepted notification
+        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+        await actions.loadNotifications();
+        console.log('✅ Invite accepted successfully');
+      } else {
+        console.error('❌ Failed to accept invite');
+      }
+    } catch (error) {
+      console.error('❌ Error accepting invite:', error);
+    }
+  };
+
+  const handleDeclineInvite = async (notification: Notification) => {
+    if (!notification.externalId) {
+      console.error('❌ Missing notification ID for invite decline');
+      return;
+    }
+
+    try {
+      const success = await actions.respondToInviteViaNotification(notification.externalId, 'decline');
+      
+      if (success) {
+        // Remove the notification completely for declined invites
+        setNotifications(prev => prev.filter(n => n.id !== notification.id));
+        console.log('✅ Invite declined successfully');
+      } else {
+        console.error('❌ Failed to decline invite');
+      }
+    } catch (error) {
+      console.error('❌ Error declining invite:', error);
     }
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(n => ({ ...n, isRead: true }))
-    );
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    actions.markAllNotificationsRead();
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = (state.notifications || []).filter((n: any) => !(n.read || (n as any).isRead)).length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -394,10 +370,10 @@ export default function NotificationsScreen() {
                 key={notification.id}
                 style={[
                   styles.notificationItem,
-                  !notification.isRead && styles.unreadNotification,
+                  !notification.read && styles.unreadNotification,
                   { backgroundColor: getNotificationColor(notification.type) }
                 ]}
-                onPress={() => handleNotificationPress(notification)}
+                onPress={() => handleMarkRead(notification)}
               >
                 <View style={styles.notificationContent}>
                   <View style={styles.notificationHeader}>
@@ -415,7 +391,7 @@ export default function NotificationsScreen() {
                     <View style={styles.notificationText}>
                       <Text style={[
                         styles.notificationTitle,
-                        !notification.isRead && styles.unreadTitle
+                        !notification.read && styles.unreadTitle
                       ]}>
                         {notification.title}
                       </Text>
@@ -431,32 +407,85 @@ export default function NotificationsScreen() {
                     
                     <View style={styles.notificationMeta}>
                       <Text style={styles.timestamp}>
-                        {notification.timestamp}
+                        {formatRelativeTime(notification.created_at)}
                       </Text>
-                      {!notification.isRead && (
+                      {!notification.read && (
                         <View style={styles.unreadDot} />
                       )}
                     </View>
+                    {(
+                      notification.type === 'join_request' ||
+                      notification.source === 'host_join_request' ||
+                      notification.type === 'join_approved' ||
+                      notification.type === 'participant_joined' ||
+                      (typeof notification.type === 'string' && notification.type.startsWith('connection'))
+                    ) && (
+                      <View style={styles.itemActions}>
+                        <TouchableOpacity style={styles.openButton} onPress={(e?: any) => { e?.stopPropagation?.(); handleOpen(notification); }}>
+                          <Text style={styles.openButtonText}>Open</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                   
-                  {notification.actionRequired && (
-                    <View style={styles.actionButtons}>
+                  {(((notification.type === 'join_request' || notification.source === 'host_join_request')) && ((notification.externalId || notification.requestId))) && (
+                    <View style={styles.actionButtons} onStartShouldSetResponder={() => true}>
                       <TouchableOpacity 
                         style={styles.rejectButton}
-                        onPress={() => handleRejectRequest(notification)}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleRejectRequest(notification); }}
                       >
                         <X size={16} color="#EF4444" />
                         <Text style={styles.rejectText}>Decline</Text>
                       </TouchableOpacity>
                       <TouchableOpacity 
                         style={styles.approveButton}
-                        onPress={() => handleApproveRequest(notification)}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleApproveRequest(notification); }}
                       >
                         <CheckCircle size={16} color="#FFFFFF" />
                         <Text style={styles.approveText}>Approve</Text>
                       </TouchableOpacity>
                     </View>
                   )}
+
+                  {(notification.source === 'connection_pending' && notification.userId) && (
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity 
+                        style={styles.rejectButton}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleDeclineConnection(notification); }}
+                      >
+                        <X size={16} color="#EF4444" />
+                        <Text style={styles.rejectText}>Decline</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.approveButton}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleAcceptConnection(notification); }}
+                      >
+                        <CheckCircle size={16} color="#FFFFFF" />
+                        <Text style={styles.approveText}>Accept</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {(notification.type === 'invite' && notification.actionRequired) && (
+                    <View style={styles.actionButtons} onStartShouldSetResponder={() => true}>
+                      <TouchableOpacity 
+                        style={styles.rejectButton}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleDeclineInvite(notification); }}
+                      >
+                        <X size={16} color="#EF4444" />
+                        <Text style={styles.rejectText}>Decline</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.approveButton}
+                        onPress={(e?: any) => { e?.stopPropagation?.(); handleAcceptInvite(notification); }}
+                      >
+                        <CheckCircle size={16} color="#FFFFFF" />
+                        <Text style={styles.approveText}>Accept</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {notification.type === 'invite_accepted' && null}
                 </View>
               </TouchableOpacity>
             ))}
@@ -582,6 +611,36 @@ const styles = StyleSheet.create({
   },
   notificationMeta: {
     alignItems: 'flex-end',
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
+  },
+  openButton: {
+    backgroundColor: '#B49AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  openButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+  },
+  markReadButton: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#B49AFF',
+  },
+  markReadButtonText: {
+    color: '#B49AFF',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
   },
   timestamp: {
     fontSize: 12,

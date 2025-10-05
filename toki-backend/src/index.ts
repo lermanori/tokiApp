@@ -26,6 +26,7 @@ import savedTokiRoutes from './routes/saved-tokis';
 import profileImageRoutes from './routes/profile-images';
 import tokiImageRoutes from './routes/toki-images';
 import mapsRoutes from './routes/maps';
+import healthRoutes from './routes/health';
 
 const app = express();
 const server = createServer(app);
@@ -109,6 +110,7 @@ app.use('/api/saved-tokis', savedTokiRoutes);
 app.use('/api/profile-images', profileImageRoutes);
 app.use('/api/toki-images', tokiImageRoutes);
 app.use('/api/maps', mapsRoutes);
+app.use('/api/health', healthRoutes);
         
         app.get('/api', (req, res) => {
           res.json({

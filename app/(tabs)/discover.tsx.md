@@ -57,6 +57,10 @@ Removed all debugging console.log statements:
 - ✅ Auto-refresh on screen focus working
 - ⏳ Radius-based filtering deferred for future enhancement
 
+### New Change (Web map source of truth)
+- problem: Web map showed letter markers and lacked clustering because this file rendered its own Leaflet markers, diverging from `components/DiscoverMap.web.tsx`.
+- solution: Removed inline Leaflet branch and always render shared `DiscoverMap` so both web and native use the same emoji icons, colors, and proximity clustering.
+
 ### New Changes (iOS Map Integration)
 - Implemented native `MapView` from `react-native-maps` for iOS/Android with `provider={PROVIDER_GOOGLE}`.
 - Centered map by user profile `location` using `geocodingService` (no device GPS permissions).

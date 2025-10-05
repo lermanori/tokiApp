@@ -36,6 +36,8 @@ if (Platform.OS === 'web') {
   require('react-clock/dist/Clock.css');
 }
 import dayjs from 'dayjs';
+import { CATEGORIES, CATEGORY_ICONS } from '@/utils/categories';
+// import { Image } from 'react-native';
 
 interface TokiFormProps {
   mode: 'create' | 'edit';
@@ -112,17 +114,8 @@ export default function TokiForm({
     }
   }, [initialData.images]);
 
-  // Activity types
-  const activityTypes = [
-    { id: 'sports', label: 'Sports', icon: '⚽' },
-    { id: 'coffee', label: 'Coffee', icon: '☕' },
-    { id: 'music', label: 'Music', icon: '🎵' },
-    { id: 'food', label: 'Food', icon: '🍕' },
-    { id: 'work', label: 'Work', icon: '💼' },
-    { id: 'art', label: 'Art', icon: '🎨' },
-    { id: 'nature', label: 'Nature', icon: '🌿' },
-    { id: 'drinks', label: 'Drinks', icon: '🍹' },
-  ];
+  // Activity types built from canonical categories (icons wired later)
+  const activityTypes = CATEGORIES.map((id) => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1), icon: '' }));
 
   // Enhanced time slots
   const timeSlots = [
@@ -692,12 +685,19 @@ export default function TokiForm({
                 onPress={() => handleActivitySelect(activity.id)}
                 disabled={selectedActivities.length >= 3 && !selectedActivities.includes(activity.id)}
               >
-                <Text style={styles.activityIcon}>{activity.icon}</Text>
+                {CATEGORY_ICONS.emoji[activity.id] ? (
+                  <Image
+                    source={CATEGORY_ICONS.emoji[activity.id]}
+                    style={{ width: 20, height: 20, marginRight: 8 }}
+                  />
+                ) : (
+                  <Text style={styles.activityIcon}>{activity.icon}</Text>
+                )}
                 <Text style={[
                   styles.activityLabel,
                   selectedActivities.includes(activity.id) && styles.activityLabelSelected,
                   selectedActivities.length >= 3 && !selectedActivities.includes(activity.id) && styles.activityLabelDisabled
-                ]}>
+                ]} numberOfLines={1}>
                   {activity.label}
                 </Text>
               </TouchableOpacity>
@@ -1071,7 +1071,8 @@ const styles = StyleSheet.create({
   activityGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 6,
+    justifyContent: 'space-between',
   },
   activityButton: {
     backgroundColor: '#F3F4F6',
@@ -1081,7 +1082,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#EAEAEA',
-    minWidth: 80,
+    width: '30%',
+    minHeight: 55,
   },
   activityButtonSelected: {
     backgroundColor: '#B49AFF',
@@ -1096,6 +1098,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#666666',
     textAlign: 'center',
+    maxWidth: '100%',
   },
   activityLabelSelected: {
     color: '#FFFFFF',

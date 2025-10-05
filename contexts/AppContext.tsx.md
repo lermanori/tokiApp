@@ -1,19 +1,20 @@
-# File: AppContext.tsx
+# File: contexts/AppContext.tsx
 
 ### Summary
-This file contains the global state management and API actions for the Toki app, including user management, Toki operations, messaging, and WebSocket handling.
+This file contains the global state management and API actions for the Toki app, including user authentication, toki management, connections, and messaging.
 
 ### Fixes Applied log
-- problem: createToki function returned boolean instead of the created Toki ID, preventing proper navigation after creation.
-- solution: Changed createToki return type from `Promise<boolean>` to `Promise<string | null>` and updated implementation to return the new Toki ID.
-- problem: Hosts needed a way to mark Tokis as completed to trigger the rating system.
-- solution: Added completeToki action to AppContext for managing event completion state.
+- **Added remove participant action**: Created `removeParticipant(tokiId: string, userId: string)` action to remove participants from tokis.
+- **Updated AppContextType interface**: Added `removeParticipant` method to the actions interface.
+- **Added to actions export**: Included `removeParticipant` in the exported actions object.
+- **Prevented repeated unauthenticated fetches**: Added in-flight + cooldown guards to `loadTokis` and `loadTokisWithFilters`, and skipped fetching on `/join` and `/login` routes to stop bursts of `/api/tokis` requests for unlogged users.
+ - **Throttled health/auth checks**: Added guards and 3s cooldowns for `checkConnection` (API root) and `checkAuthStatus` (`/auth/me`), and skip both on `/join` and `/login` routes to prevent `net::ERR_INSUFFICIENT_RESOURCES` from request storms.
 
 ### How Fixes Were Implemented
-- Modified the `createToki` function in `AppContextType` interface to return `Promise<string | null>` instead of `Promise<boolean>`.
-- Updated the `createToki` implementation to return `newToki.id` on success and `null` on failure.
-- This change enables the frontend to navigate directly to the newly created Toki's details page using the returned ID.
-- Added `completeToki` action to the AppContextType interface for completing Tokis.
-- Implemented the `completeToki` function that calls the backend API to mark a Toki as completed.
-- Added proper error handling and logging for the completion process.
-- This enables hosts to mark events as completed, which will be the trigger for the rating system.
+- **Interface update**: Added `removeParticipant: (tokiId: string, userId: string) => Promise<boolean>;` to the `AppContextType` interface.
+- **Implementation**: Created async function that calls `apiService.removeParticipant()` and refreshes toki data on success.
+- **Data refresh**: Uses `setTimeout(() => loadTokis(), 100)` to refresh the tokis list after successful removal.
+- **Error handling**: Catches and logs errors, returns boolean success status.
+- **Actions export**: Added `removeParticipant` to the actions object exported by the context provider.
+- **Request throttling**: Introduced `isFetchingTokis` and `lastTokisFetchMs` state; bail out if a fetch is in-flight or if the previous fetch happened <3s ago. Also early-return on auth/join routes.
+ - **Health/Auth throttling**: Added `isCheckingConnection`, `lastConnectionCheckMs`, `isCheckingAuthStatus`, and `lastAuthStatusCheckMs` with the same cooldown/skip logic.

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Calendar, Plus, RefreshCw } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import TokiCard from '@/components/TokiCard';
 
@@ -17,14 +17,14 @@ interface Toki {
   maxAttendees: number;
   tags: string[];
   image: string;
-  status: 'created' | 'joined' | 'not_joined';
-  date: string;
+  status?: 'created' | 'joined' | 'not_joined';
+  date?: string;
   host: {
     id?: string;
     name: string;
     avatar: string;
   };
-  joinStatus?: 'approved' | 'joined' | 'hosting' | 'not_joined';
+  joinStatus?: 'approved' | 'joined' | 'hosting' | 'not_joined' | 'pending';
   distance?: {
     km: number;
     miles: number;
@@ -62,8 +62,9 @@ const getImageForActivity = (activity: string) => {
 
 export default function MyTokisScreen() {
   const { state, actions } = useApp();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'created' | 'joined' | 'completed'>('all');
-  const [tokis, setTokis] = useState<Toki[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<'hosting' | 'joined' | 'pending'>('hosting');
+  const [tokis, setTokis] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load Tokis from backend
   useEffect(() => {
@@ -79,16 +80,45 @@ export default function MyTokisScreen() {
     }
   }, [state.isConnected]);
 
+  // Reload when screen regains focus (parity with Explore)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (state.isConnected) {
+        actions.loadTokis();
+      }
+    }, [state.isConnected])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await actions.checkConnection();
+    await actions.loadTokis();
+    setRefreshing(false);
+  };
+
+  // Normalize statuses from joinStatus + host to align with app
+  const tokisWithStatus = React.useMemo(() => {
+    const uid = state.currentUser?.id || '';
+    return tokis.map((t) => {
+      const isHostedByUser = (t as any)?.host?.id === uid || (t as any)?.joinStatus === 'hosting';
+      const normalizedStatus: 'hosting' | 'joined' | 'pending' | 'other' = isHostedByUser
+        ? 'hosting'
+        : ((t as any)?.joinStatus === 'approved' || (t as any)?.joinStatus === 'joined')
+          ? 'joined'
+          : (t as any)?.joinStatus === 'pending'
+            ? 'pending'
+            : 'other';
+      return { ...(t as any), isHostedByUser, normalizedStatus } as any;
+    });
+  }, [tokis, state.currentUser?.id]);
+
   const filters = [
-    { key: 'all', label: 'All', count: tokis.length },
-    { key: 'created', label: 'Hosting', count: tokis.filter(t => t.status === 'created').length },
-    { key: 'joined', label: 'Joined', count: tokis.filter(t => t.status === 'joined').length },
-    { key: 'not_joined', label: 'Available', count: tokis.filter(t => t.status === 'not_joined').length },
+    { key: 'hosting', label: 'Hosting', count: tokisWithStatus.filter(t => (t as any).normalizedStatus === 'hosting').length },
+    { key: 'joined', label: 'Joined', count: tokisWithStatus.filter(t => (t as any).normalizedStatus === 'joined').length },
+    { key: 'pending', label: 'Pending', count: tokisWithStatus.filter(t => (t as any).normalizedStatus === 'pending').length },
   ];
 
-  const filteredTokis = selectedFilter === 'all' 
-    ? tokis 
-    : tokis.filter(toki => toki.status === selectedFilter);
+  const filteredTokis = tokisWithStatus.filter(t => (t as any).normalizedStatus === selectedFilter);
 
   const getStatusColor = (status: 'created' | 'joined' | 'not_joined') => {
     switch (status) {
@@ -109,7 +139,7 @@ export default function MyTokisScreen() {
     return 'Available';
   };
 
-  const handleTokiPress = (toki: Toki) => {
+  const handleTokiPress = (toki: any) => {
     router.push({
       pathname: '/toki-details',
       params: { 
@@ -170,15 +200,17 @@ export default function MyTokisScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {filteredTokis.length === 0 ? (
           <View style={styles.emptyState}>
             <Calendar size={48} color="#D1D5DB" />
             <Text style={styles.emptyTitle}>No Tokis found</Text>
             <Text style={styles.emptyDescription}>
-              {selectedFilter === 'all' 
-                ? "You haven't created or joined any Tokis yet"
-                : `No ${selectedFilter} Tokis found`}
+              {selectedFilter === 'hosting' && "You haven't hosted any Tokis yet"}
+              {selectedFilter === 'joined' && "You haven't joined any Tokis yet"}
+              {selectedFilter === 'pending' && "You have no pending requests"}
             </Text>
             <TouchableOpacity style={styles.createButton} onPress={handleCreateToki}>
               <Text style={styles.createButtonText}>Create Your First Toki</Text>
@@ -186,29 +218,10 @@ export default function MyTokisScreen() {
           </View>
         ) : (
           <View style={styles.tokisContainer}>
-            {filteredTokis.map((toki) => (
-              <View key={toki.id} style={styles.tokiCardWrapper}>
+            {filteredTokis.map((toki: any) => (
+              <View key={toki.id} style={styles.cardWrapper}>
                 <TokiCard
-                  toki={{
-                    id: toki.id,
-                    title: toki.title,
-                    description: toki.description,
-                    location: toki.location,
-                    time: toki.time,
-                    scheduledTime: toki.scheduledTime,
-                    attendees: toki.attendees,
-                    maxAttendees: toki.maxAttendees,
-                    category: toki.category,
-                    image: toki.image,
-                    host: {
-                      name: toki.host.name,
-                      avatar: toki.host.avatar
-                    },
-                    distance: typeof toki.distance === 'number' ? { km: toki.distance, miles: toki.distance * 0.621371 } : toki.distance,
-                    tags: toki.tags,
-                    isHostedByUser: toki.status === 'created',
-                    joinStatus: toki.joinStatus === 'hosting' ? 'joined' : toki.joinStatus
-                  }}
+                  toki={{ ...toki, isHostedByUser: toki.isHostedByUser }}
                   onPress={() => handleTokiPress(toki)}
                 />
               </View>
@@ -311,8 +324,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   tokisContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 20,
+  },
+  cardWrapper: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 360,
+    maxWidth: 520,
+    width: '100%',
   },
   tokiCardWrapper: {
     position: 'relative',
