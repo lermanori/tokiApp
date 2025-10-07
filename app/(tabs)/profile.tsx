@@ -655,6 +655,13 @@ export default function ProfileScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>My Activity</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
+              <Bell size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>Notifications</Text>
+              <View style={styles.notificationIndicator}>
+                <Text style={styles.notificationCount}>{unreadNotifications}</Text>
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleMyTokis}>
               <Calendar size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>My Tokis</Text>
@@ -672,13 +679,7 @@ export default function ProfileScreen() {
               <Text style={styles.menuText}>Connections</Text>
               <Text style={styles.menuBadge}>{state.currentUser.connections}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
-              <Bell size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>Notifications</Text>
-              <View style={styles.notificationIndicator}>
-                <Text style={styles.notificationCount}>{unreadNotifications}</Text>
-              </View>
-            </TouchableOpacity>
+           
           </View>
 
           <View style={styles.section}>

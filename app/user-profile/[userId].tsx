@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, MoreVertical, Instagram, Linkedin, Facebook } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
@@ -310,11 +310,7 @@ export default function UserProfileScreen() {
             <ArrowLeft size={24} color="#1C1C1C" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
-          {state.currentUser && (
-            <TouchableOpacity style={styles.moreButton} onPress={handleBlockUser}>
-              <MoreVertical size={24} color="#1C1C1C" />
-            </TouchableOpacity>
-          )}
+          {/* Removed overflow menu for other user profile */}
         </View>
       </LinearGradient>
 
@@ -428,13 +424,16 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   backButton: {
     padding: 8,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    position: 'absolute',
+    left: 0,
   },
   headerTitle: {
     fontSize: 18,
@@ -638,11 +637,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+
   },
   statNumber: {
     fontSize: 20,
@@ -651,7 +654,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#6B7280',
     fontFamily: 'Inter-Medium',
     textAlign: 'center',
@@ -659,7 +662,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: '#E5E7EB',
-    marginHorizontal: 8,
+    marginHorizontal: 12,
   },
   bottomSpacing: {
     height: 40,

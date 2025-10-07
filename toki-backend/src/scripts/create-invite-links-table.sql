@@ -30,3 +30,4 @@ COMMENT ON COLUMN toki_invite_links.max_uses IS 'Maximum number of uses allowed 
 COMMENT ON COLUMN toki_invite_links.used_count IS 'Number of times this link has been used';
 COMMENT ON COLUMN toki_invite_links.is_active IS 'Whether this invite link is currently active';
 
+

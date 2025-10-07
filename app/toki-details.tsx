@@ -8,6 +8,7 @@ import { useApp } from '@/contexts/AppContext';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import RatingPrompt from '@/components/RatingPrompt';
+import InviteModal from '@/components/InviteModal';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -678,6 +679,39 @@ export default function TokiDetailsScreen() {
     }
   };
 
+  const handleInviteModalConfirm = async () => {
+    if (!toki) return;
+    if (selectedInviteeIds.size === 0) {
+      Alert.alert('Select connections');
+      return;
+    }
+    setIsLoadingInvites(true);
+    try {
+      if (modalMode === 'invite') {
+        await sendInvites();
+      } else {
+        const participantUserIds = new Set(
+          inviteConnections
+            .filter((c: any) => c.isParticipant)
+            .map((c: any) => c.user?.id || c.id)
+        );
+        const validHideIds = Array.from(selectedInviteeIds).filter(id => !participantUserIds.has(id));
+        if (validHideIds.length === 0) {
+          Alert.alert('No valid users', 'All selected users are already participants and cannot be hidden.');
+          return;
+        }
+        for (const userId of validHideIds) {
+          await actions.hideUser(toki.id, userId);
+        }
+        setShowInviteModal(false);
+      }
+    } catch (e) {
+      Alert.alert('Error', `Failed to ${modalMode === 'invite' ? 'send invites' : 'hide users'}`);
+    } finally {
+      setIsLoadingInvites(false);
+    }
+  };
+
   const handleRemoveParticipant = (userId: string, participantName: string) => {
     console.log('🔴 Remove participant button pressed for:', userId, participantName);
     if (!toki) {
@@ -1168,258 +1202,29 @@ export default function TokiDetailsScreen() {
                 />
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleInvitePress}>
               <Share size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Invite modal */}
-        <Modal
-          transparent
+        <InviteModal
           visible={showInviteModal}
-          animationType="fade"
-          onRequestClose={() => setShowInviteModal(false)}
-        >
-          <View style={styles.pickerBackdrop}>
-            <View style={styles.inviteModalContainer}>
-              {/* Header with close button */}
-              <View style={styles.modalHeader}>
-                <Text style={styles.sectionTitle}>{modalMode === 'invite' ? 'Invite Users' : 'Manage Visibility'}</Text>
-                <TouchableOpacity 
-                  style={styles.closeButton}
-                  onPress={() => setShowInviteModal(false)}
-                >
-                  <X size={24} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-
-              <TextInput
-                style={styles.inviteSearch}
-                placeholder="Search connections..."
-                placeholderTextColor="#9CA3AF"
-                value={inviteSearch}
-                onChangeText={setInviteSearch}
-              />
-              <ScrollView style={{ maxHeight: 280 }}>
-                {isLoadingInvites ? (
-                  <Text style={styles.loadingText}>Loading...</Text>
-                ) : (
-                  inviteConnections
-                    .filter((c: any) => {
-                      const name = (c.user?.name || c.name || '').toLowerCase();
-                      return name.includes(inviteSearch.toLowerCase());
-                    })
-                    .map((c: any) => {
-                      const id = c.user?.id || c.id;
-                      const name = c.user?.name || c.name || 'Unknown';
-                      const avatar = c.user?.avatar || c.user?.avatar_url || '';
-                      const selected = selectedInviteeIds.has(id);
-                      const isHidden = c.isHidden || false;
-                      const initials = name.split(' ').slice(0,2).map((n:string)=>n.charAt(0).toUpperCase()).join('');
-                      
-                      if (modalMode === 'hide') {
-                        // Hide modal: show all users, with different actions for hidden vs non-hidden vs participants
-                        const isParticipant = c.isParticipant || false;
-                        const canHide = !isHidden && !isParticipant;
-                        
-                        return (
-                          <View
-                            key={id}
-                            style={[
-                              styles.connectionRow, 
-                              isHidden && styles.connectionRowHidden,
-                              isParticipant && styles.connectionRowParticipant
-                            ]}
-                          >
-                            {avatar ? (
-                              <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
-                            ) : (
-                              <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
-                                <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
-                              </View>
-                            )}
-                            <View style={styles.connectionInfo}>
-                              <Text style={[styles.connectionName, isHidden && styles.connectionNameHidden]}>{name}</Text>
-                              {isHidden && (
-                                <Text style={styles.hiddenLabel}>Hidden from this toki</Text>
-                              )}
-                              {isParticipant && (
-                                <Text style={styles.participantLabel}>Already Joined</Text>
-                              )}
-                            </View>
-                            <View style={styles.actionButtons}>
-                              {isHidden ? (
-                                <TouchableOpacity 
-                                  style={styles.unhideButton}
-                                  onPress={() => handleUnhideUser(id)}
-                                >
-                                  <Text style={styles.unhideButtonText}>Unhide</Text>
-                                </TouchableOpacity>
-                              ) : isParticipant ? (
-                                <View style={styles.joinedIndicator}>
-                                  <Text style={styles.joinedText}>✓</Text>
-                                </View>
-                              ) : (
-                                <TouchableOpacity 
-                                  style={[styles.inviteCheck, selected && styles.inviteCheckOn]}
-                                  onPress={() => toggleInvitee(id)}
-                                >
-                                  <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      } else {
-                        // Invite modal: show participants, hidden users, and available connections
-                        const isParticipant = c.isParticipant || false;
-                        const canInvite = !isHidden && !isParticipant;
-                        
-                        return (
-                          <View
-                            key={id}
-                            style={[
-                              styles.connectionRow, 
-                              selected && styles.connectionRowSelected,
-                              isHidden && styles.connectionRowHidden,
-                              isParticipant && styles.connectionRowParticipant
-                            ]}
-                          >
-                            {avatar ? (
-                              <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
-                            ) : (
-                              <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
-                                <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
-                              </View>
-                            )}
-                            <View style={styles.connectionInfo}>
-                              <Text style={[styles.connectionName, isHidden && styles.connectionNameHidden]}>{name}</Text>
-                              {isHidden && (
-                                <Text style={styles.hiddenLabel}>Hidden from this toki</Text>
-                              )}
-                              {isParticipant && (
-                                <Text style={styles.participantLabel}>Already Joined</Text>
-                              )}
-                            </View>
-                            <View style={styles.actionButtons}>
-                              {canInvite ? (
-                                <TouchableOpacity 
-                                  style={[styles.inviteCheck, selected && styles.inviteCheckOn]}
-                                  onPress={() => toggleInvitee(id)}
-                                >
-                                  <Text style={[styles.inviteCheckText, selected && styles.inviteCheckTextOn]}>✓</Text>
-                                </TouchableOpacity>
-                              ) : isParticipant ? (
-                                <View style={styles.joinedIndicator}>
-                                  <Text style={styles.joinedText}>✓</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                          </View>
-                        );
-                      }
-                    })
-                )}
-              </ScrollView>
-
-              {/* Invite Link Section */}
-              <View style={styles.inviteLinkSection}>
-                <Text style={styles.inviteLinkTitle}>Invite Link</Text>
-                {activeInviteLink ? (
-                  <View style={styles.inviteLinkContainer}>
-                    <TextInput
-                      style={styles.inviteLinkInput}
-                      value={activeInviteLink.inviteUrl}
-                      editable={false}
-                      selectTextOnFocus={true}
-                    />
-                    <View style={styles.inviteLinkActions}>
-                      <TouchableOpacity 
-                        style={styles.copyButton}
-                        onPress={() => {
-                          Clipboard.setStringAsync(activeInviteLink.inviteUrl);
-                          Toast.show({
-                            type: 'success',
-                            text1: 'Link copied!',
-                            text2: 'Share this link to invite others'
-                          });
-                        }}
-                      >
-                        <Copy size={16} color="#8B5CF6" />
-                        <Text style={styles.copyButtonText}>Copy</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.regenerateButton}
-                        onPress={handleRegenerateInviteLink}
-                      >
-                        <RefreshCw size={16} color="#8B5CF6" />
-                        <Text style={styles.regenerateButtonText}>Regenerate</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.createLinkButton}
-                    onPress={handleCreateInviteLink}
-                  >
-                    <Link size={16} color="#FFFFFF" />
-                    <Text style={styles.createLinkButtonText}>Create Invite Link</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.confirmActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowInviteModal(false)}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmButton} onPress={async () => {
-                  if (!toki) return;
-                  if (selectedInviteeIds.size === 0) { 
-                    Alert.alert('Select connections'); 
-                    return; 
-                  }
-                  setIsLoadingInvites(true);
-                  try {
-                    if (modalMode === 'invite') {
-                      // Send invites using the new function that filters hidden users
-                      await sendInvites();
-                    } else {
-                      // Hide users - filter out participants
-                      const participantUserIds = new Set(
-                        inviteConnections
-                          .filter((c: any) => c.isParticipant)
-                          .map((c: any) => c.user?.id || c.id)
-                      );
-                      
-                      const validHideIds = Array.from(selectedInviteeIds).filter(id => 
-                        !participantUserIds.has(id)
-                      );
-                      
-                      if (validHideIds.length === 0) {
-                        Alert.alert('No valid users', 'All selected users are already participants and cannot be hidden.');
-                        return;
-                      }
-                      
-                      for (const userId of validHideIds) {
-                        await actions.hideUser(toki.id, userId);
-                      }
-                      setShowInviteModal(false);
-                    }
-                  } catch (e) {
-                    Alert.alert('Error', `Failed to ${modalMode === 'invite' ? 'send invites' : 'hide users'}`);
-                  } finally {
-                    setIsLoadingInvites(false);
-                  }
-                }}>
-                  <Text style={styles.confirmButtonText}>
-                    {modalMode === 'invite' ? 'Send Invites' : `Hide ${selectedInviteeIds.size} Users`}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          mode={modalMode}
+          connections={inviteConnections}
+          selectedIds={selectedInviteeIds}
+          search={inviteSearch}
+          onChangeSearch={setInviteSearch}
+          isLoading={isLoadingInvites}
+          activeInviteLink={activeInviteLink}
+          onCreateInviteLink={handleCreateInviteLink}
+          onRegenerateInviteLink={handleRegenerateInviteLink}
+          onCopyInviteLink={handleCopyInviteLink}
+          onToggleInvitee={toggleInvitee}
+          onUnhideUser={handleUnhideUser}
+          onClose={() => setShowInviteModal(false)}
+          onConfirm={handleInviteModalConfirm}
+        />
 
         <View style={styles.detailsContainer}>
           <View style={styles.titleSection}>

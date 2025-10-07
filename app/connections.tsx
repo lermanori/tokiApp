@@ -8,6 +8,14 @@ import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 
+// Helper function to get user initials from name
+const getUserInitials = (name: string): string => {
+  if (!name) return '?';
+  const names = name.trim().split(' ');
+  if (names.length === 1) return names[0].charAt(0).toUpperCase();
+  return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+};
+
 interface Connection {
   id: string;
   name: string;
@@ -87,6 +95,7 @@ export default function ConnectionsScreen() {
   // Custom prompt states
   const [showBlockPrompt, setShowBlockPrompt] = useState(false);
   const [showUnblockPrompt, setShowUnblockPrompt] = useState(false);
+  const [showRemovePrompt, setShowRemovePrompt] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null);
 
   // Load connections from backend
@@ -356,34 +365,31 @@ export default function ConnectionsScreen() {
   };
 
   const handleRemoveConnection = async (connectionId: string, connectionName: string) => {
-    Alert.alert(
-      'Remove Connection',
-      `Are you sure you want to remove ${connectionName} from your connections?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const success = await actions.removeConnection(connectionId);
-              if (success) {
-                Alert.alert('Success', `Removed ${connectionName} from your connections`);
-                loadConnections();
-              } else {
-                Alert.alert('Error', 'Failed to remove connection. Please try again.');
-              }
-            } catch (error) {
-              console.error('Error removing connection:', error);
-              Alert.alert('Error', 'Failed to remove connection. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    console.log('🔗 [REMOVE] Button pressed for:', connectionName, 'ID:', connectionId);
+    setSelectedUser({ id: connectionId, name: connectionName });
+    setShowRemovePrompt(true);
+  };
+
+  const confirmRemoveConnection = async () => {
+    if (!selectedUser) return;
+    
+    console.log('🔗 [REMOVE] Confirmed removal for:', selectedUser.name);
+    try {
+      const success = await actions.removeConnection(selectedUser.id);
+      console.log('🔗 [REMOVE] API response:', success);
+      if (success) {
+        // Show success message
+        console.log('🔗 [REMOVE] Successfully removed connection:', selectedUser.name);
+        loadConnections();
+      } else {
+        console.error('🔗 [REMOVE] Failed to remove connection');
+      }
+    } catch (error) {
+      console.error('🔗 [REMOVE] Error removing connection:', error);
+    } finally {
+      setShowRemovePrompt(false);
+      setSelectedUser(null);
+    }
   };
 
   const handleBlockUser = async (userId: string, userName: string) => {
@@ -508,10 +514,13 @@ export default function ConnectionsScreen() {
               <MessageCircle size={20} color="#B49AFF" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.blockButton}
-              onPress={() => handleBlockUser(user.id, user.name)}
+              style={styles.removeButton}
+              onPress={() => {
+                console.log('🔗 [REMOVE] Button onPress triggered for:', user.name);
+                handleRemoveConnection(user.id, user.name);
+              }}
             >
-              <Text style={styles.blockButtonText}>Block</Text>
+              <Text style={styles.removeButtonText}>Remove</Text>
             </TouchableOpacity>
           </View>
         );
@@ -633,7 +642,8 @@ export default function ConnectionsScreen() {
             Pending ({pendingConnections.length})
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        {/* Blocked tab hidden for now */}
+        {/* <TouchableOpacity
           style={[
             styles.tabButton,
             selectedTab === 'blocked' && styles.tabButtonActive
@@ -646,7 +656,7 @@ export default function ConnectionsScreen() {
           ]}>
             Blocked ({blockedUsers.length})
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       <View style={styles.filtersContainer}>
@@ -707,7 +717,13 @@ export default function ConnectionsScreen() {
                       style={styles.avatarContainer}
                       onPress={() => handleAvatarPress(user)}
                     >
-                      <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                      {user.avatar && user.avatar !== 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2' ? (
+                        <Image source={{ uri: user.avatar }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarFallback}>
+                          <Text style={styles.avatarInitials}>{getUserInitials(user.name)}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                     
                     <View style={styles.connectionInfo}>
@@ -771,12 +787,13 @@ export default function ConnectionsScreen() {
                 <View key={request.id} style={styles.connectionCard}>
                   <View style={styles.connectionHeader}>
                     <TouchableOpacity style={styles.avatarContainer}>
-                      <Image 
-                        source={{ 
-                          uri: request.requester?.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2'
-                        }} 
-                        style={styles.avatar} 
-                      />
+                      {request.requester?.avatar && request.requester.avatar !== 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2' ? (
+                        <Image source={{ uri: request.requester.avatar }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarFallback}>
+                          <Text style={styles.avatarInitials}>{getUserInitials(request.requester?.name || 'Unknown User')}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                     
                     <View style={styles.connectionInfo}>
@@ -824,51 +841,14 @@ export default function ConnectionsScreen() {
             </View>
           )
         ) : (
-          // Blocked Users Tab
-          blockedUsers.length === 0 ? (
-            <View style={styles.emptyState}>
-              <UserPlus size={48} color="#D1D5DB" />
-              <Text style={styles.emptyTitle}>No blocked users</Text>
-              <Text style={styles.emptyDescription}>
-                You haven't blocked any users yet.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.connectionsContainer}>
-              {blockedUsers.map((blockedUser: any) => (
-                <View key={blockedUser.id} style={styles.connectionCard}>
-                  <View style={styles.connectionHeader}>
-                    <TouchableOpacity style={styles.avatarContainer}>
-                      <Image 
-                        source={{ 
-                          uri: blockedUser.blocked_user_avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2'
-                        }} 
-                        style={styles.avatar} 
-                      />
-                    </TouchableOpacity>
-                    
-                    <View style={styles.connectionInfo}>
-                      <Text style={styles.connectionName}>{blockedUser.blocked_user_name}</Text>
-                      <Text style={styles.connectionBio}>{blockedUser.blocked_user_bio || 'No bio available'}</Text>
-                      <Text style={styles.blockReason}>Blocked: {blockedUser.reason || 'No reason provided'}</Text>
-                    </View>
-                    
-                    <TouchableOpacity 
-                      style={[styles.acceptButton, styles.unblockButton]}
-                      onPress={() => handleUnblockUser(blockedUser.blocked_user_id, blockedUser.blocked_user_name)}
-                    >
-                      <Text style={styles.unblockButtonText}>Unblock</Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {/* Blocked Badge */}
-                  <View style={styles.blockedBadge}>
-                    <Text style={styles.blockedBadgeText}>Blocked</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )
+          // Blocked Users Tab - Hidden for now
+          <View style={styles.emptyState}>
+            <UserPlus size={48} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>Blocked users feature is temporarily disabled</Text>
+            <Text style={styles.emptyDescription}>
+              This feature is not available at the moment.
+            </Text>
+          </View>
         )}
         
         <View style={styles.bottomSpacing} />
@@ -958,6 +938,51 @@ export default function ConnectionsScreen() {
               >
                 <UserCheck size={20} color="#FFFFFF" />
                 <Text style={styles.modalButtonPrimaryText}>Unblock User</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Remove Connection Prompt Modal */}
+      <Modal
+        visible={showRemovePrompt}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowRemovePrompt(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <UserX size={32} color="#EF4444" />
+              <Text style={styles.modalTitle}>Remove Connection</Text>
+            </View>
+            
+            <Text style={styles.modalMessage}>
+              Are you sure you want to remove <Text style={styles.userNameHighlight}>{selectedUser?.name}</Text> from your connections?
+            </Text>
+            
+            <Text style={styles.modalSubtext}>
+              This will:
+              {'\n'}• Remove them from your connections list
+              {'\n'}• They will no longer see your Tokis
+              {'\n'}• You can reconnect later if needed
+            </Text>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalButtonSecondary}
+                onPress={() => setShowRemovePrompt(false)}
+              >
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.modalButtonPrimary}
+                onPress={confirmRemoveConnection}
+              >
+                <UserX size={20} color="#FFFFFF" />
+                <Text style={styles.modalButtonPrimaryText}>Remove Connection</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1136,6 +1161,19 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
   },
+  avatarFallback: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
   connectionInfo: {
     flex: 1,
   },
@@ -1272,7 +1310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  blockButton: {
+  removeButton: {
     backgroundColor: '#FEF2F2',
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1280,7 +1318,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EF4444',
   },
-  blockButtonText: {
+  removeButtonText: {
     fontSize: 12,
     fontFamily: 'Inter-Medium',
     color: '#EF4444',
@@ -1389,15 +1427,8 @@ const styles = StyleSheet.create({
     top: 10,
   },
   spinning: {
-    animation: 'spin 1s linear infinite',
-  },
-  '@keyframes spin': {
-    from: {
-      transform: [{ rotate: '0deg' }],
-    },
-    to: {
-      transform: [{ rotate: '360deg' }],
-    },
+    // Note: Animation would need to be handled with Animated API in React Native
+    // For now, we'll just use a static style
   },
   connectButton: {
     flex: 1,

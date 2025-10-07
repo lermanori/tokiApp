@@ -223,3 +223,4 @@ CREATE INDEX idx_toki_invite_links_created_by ON toki_invite_links(created_by);
 - **Custom Domains**: Support for custom invite domains
 - **Social Sharing**: Built-in social media sharing options
 
+
