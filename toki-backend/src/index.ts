@@ -60,7 +60,8 @@ app.use(cors({
       'http://localhost:8081', 
       'http://localhost:8082',
       'https://tokiapp.netlify.app',
-      'https://*.netlify.app'
+      'https://*.netlify.app',
+      'https://toki-app.com'
     ];
     if (!origin || allowedOrigins.some(allowed => {
       if (allowed.includes('*')) {

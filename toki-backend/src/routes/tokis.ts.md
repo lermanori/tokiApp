@@ -6,6 +6,7 @@ This file contains the backend routes for managing Tokis, including creation, re
 ### Fixes Applied log
 - **Added remove participant endpoint**: Created `DELETE /:id/participants/:userId` endpoint to allow hosts to remove participants from their tokis.
 - **Fixed invite link notifications**: Changed notification type from `join_request` to `participant_joined` for users joining via invite links, removing unnecessary approve/decline actions.
+- **Updated category validation**: Updated hardcoded `validCategories` array to use new category names (dinner, culture, party, chill) instead of old names (food, art, social).
 
 ### How Fixes Were Implemented
 - **New endpoint**: Added `router.delete('/:id/participants/:userId', authenticateToken, ...)` after the join-requests endpoint.
@@ -20,4 +21,8 @@ This file contains the backend routes for managing Tokis, including creation, re
 - **Invite link notification fix**:
   - Changed notification type from `join_request` to `participant_joined` in join-by-link endpoint
   - Users joining via invite links are automatically approved, so no action buttons needed
+- **Category validation update**:
+  - Updated `validCategories` array in both POST (create) and PUT (update) endpoints
+  - Changed from: `['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning']`
+  - Changed to: `['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning']`
 - **Error handling**: Comprehensive error responses for various failure scenarios (toki not found, access denied, participant not found, etc.)

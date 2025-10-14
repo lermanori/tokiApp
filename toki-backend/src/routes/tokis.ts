@@ -43,7 +43,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate category (canonical 12)
-    const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning'];
+    const validCategories = ['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning'];
     if (!validCategories.includes(category)) {
       return res.status(400).json({
         success: false,
@@ -263,14 +263,14 @@ router.get('/categories', async (req: Request, res: Response) => {
       { id: 'sports', name: 'Sports', icon: '🏃‍♂️', description: 'Physical activities and sports' },
       { id: 'coffee', name: 'Coffee', icon: '☕', description: 'Coffee meetups and cafes' },
       { id: 'music', name: 'Music', icon: '🎵', description: 'Music events and jam sessions' },
-      { id: 'food', name: 'Food', icon: '🍝', description: 'Food and dining experiences' },
+      { id: 'dinner', name: 'Dinner', icon: '🍝', description: 'Food and dining experiences' },
       { id: 'work', name: 'Work', icon: '💼', description: 'Work-related activities and networking' },
-      { id: 'art', name: 'Art', icon: '🎨', description: 'Art and creative activities' },
+      { id: 'culture', name: 'Culture', icon: '🎨', description: 'Art and creative activities' },
       { id: 'nature', name: 'Nature', icon: '🌳', description: 'Outdoor and nature activities' },
       { id: 'drinks', name: 'Drinks', icon: '🍸', description: 'Social drinking and nightlife' },
-      { id: 'social', name: 'Social', icon: '🎉', description: 'Social gatherings and hangouts' },
+      { id: 'party', name: 'Party', icon: '🎉', description: 'Social gatherings and hangouts' },
       { id: 'wellness', name: 'Wellness', icon: '🧘', description: 'Wellness, meditation, and health' },
-      { id: 'culture', name: 'Culture', icon: '🏛️', description: 'Cultural activities and events' },
+      { id: 'chill', name: 'Chill', icon: '🏠', description: 'Relaxed, casual activities' },
       { id: 'morning', name: 'Morning', icon: '☀️', description: 'Morning-oriented activities' }
     ];
 
@@ -1019,7 +1019,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     // Validate category if provided (canonical 12)
     if (category) {
-      const validCategories = ['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning'];
+      const validCategories = ['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning'];
       if (!validCategories.includes(category)) {
         return res.status(400).json({
           success: false,

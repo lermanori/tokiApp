@@ -16,7 +16,8 @@ import {
   BookOpen,
   Gamepad2,
   ShoppingBag,
-  Plane
+  Plane,
+  Home
 } from 'lucide-react-native';
 
 interface TokiIconProps {
@@ -47,11 +48,11 @@ export const TokiIcon: React.FC<TokiIconProps> = ({
       case 'wellness':
       case 'yoga':
         return <Heart size={size} color={color} />;
-      case 'art':
       case 'culture':
+      case 'art':
         return <Palette size={size} color={color} />;
-      case 'food':
       case 'dinner':
+      case 'food':
         return <Utensils size={size} color={color} />;
       case 'nature':
       case 'picnic':
@@ -78,6 +79,8 @@ export const TokiIcon: React.FC<TokiIconProps> = ({
         return <ShoppingBag size={size} color={color} />;
       case 'travel':
         return <Plane size={size} color={color} />;
+      case 'chill':
+        return <Home size={size} color={color} />;
       default:
         return <Users size={size} color={color} />;
     }

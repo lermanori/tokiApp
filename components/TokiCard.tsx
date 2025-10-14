@@ -115,9 +115,9 @@ const getActivityEmoji = (category: string): string => {
         case 'sports': return '⚽';
         case 'coffee': return '☕';
         case 'music': return '🎵';
-        case 'food': return '🍕';
+        case 'dinner': return '🍕';
         case 'work': return '💼';
-        case 'art': return '🎨';
+        case 'culture': return '🎨';
         case 'nature': return '🌿';
         case 'drinks': return '🍹';
         case 'beach': return '🏖️';
@@ -129,7 +129,8 @@ const getActivityEmoji = (category: string): string => {
         case 'morning': return '🌅';
         case 'walking': return '🚶';
         case 'culture': return '🏛️';
-        case 'social': return '👥';
+        case 'party': return '🎉';
+        case 'chill': return '🏠';
         default: return '🎉';
     }
 };
@@ -140,9 +141,9 @@ const getActivityLabel = (category: string): string => {
         case 'sports': return 'Sports';
         case 'coffee': return 'Coffee';
         case 'music': return 'Music';
-        case 'food': return 'Food';
+        case 'dinner': return 'Dinner';
         case 'work': return 'Work';
-        case 'art': return 'Art';
+        case 'culture': return 'Culture';
         case 'nature': return 'Nature';
         case 'drinks': return 'Drinks';
         case 'beach': return 'Beach';
@@ -154,7 +155,8 @@ const getActivityLabel = (category: string): string => {
         case 'morning': return 'Morning';
         case 'walking': return 'Walking';
         case 'culture': return 'Culture';
-        case 'social': return 'Social';
+        case 'party': return 'Party';
+        case 'chill': return 'Chill';
         default: return 'Activity';
     }
 };

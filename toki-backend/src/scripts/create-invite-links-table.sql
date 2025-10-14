@@ -31,3 +31,4 @@ COMMENT ON COLUMN toki_invite_links.used_count IS 'Number of times this link has
 COMMENT ON COLUMN toki_invite_links.is_active IS 'Whether this invite link is currently active';
 
 
+
