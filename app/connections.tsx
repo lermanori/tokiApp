@@ -298,14 +298,33 @@ export default function ConnectionsScreen() {
 
   const handleMessagePress = async (user: UnifiedUser) => {
     try {
-      router.push({
-        pathname: '/chat',
-        params: { 
-          otherUserId: user.id,
-          otherUserName: user.name,
-          isGroup: 'false'
-        }
-      });
+      // Check if conversation already exists with this user
+      const existingConversation = state.conversations?.find(
+        (conv: any) => conv.other_user_id === user.id
+      );
+      
+      if (existingConversation) {
+        // Navigate to existing conversation
+        router.push({
+          pathname: '/chat',
+          params: { 
+            conversationId: existingConversation.id,
+            otherUserId: user.id,
+            otherUserName: user.name,
+            isGroup: 'false'
+          }
+        });
+      } else {
+        // Navigate to new conversation - let chat screen create conversation on first message
+        router.push({
+          pathname: '/chat',
+          params: { 
+            otherUserId: user.id,
+            otherUserName: user.name,
+            isGroup: 'false'
+          }
+        });
+      }
     } catch (error) {
       console.error('Error opening chat:', error);
       Alert.alert('Error', 'Failed to open chat. Please try again.');
@@ -1222,9 +1241,12 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   messageButton: {
-    padding: 8,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
     backgroundColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   connectionStats: {
     paddingTop: 8,
@@ -1308,7 +1330,9 @@ const styles = StyleSheet.create({
   connectionActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
+    flex: 1,
   },
   removeButton: {
     backgroundColor: '#FEF2F2',
@@ -1317,6 +1341,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   removeButtonText: {
     fontSize: 12,

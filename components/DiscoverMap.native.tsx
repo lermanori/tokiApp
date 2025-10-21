@@ -1,9 +1,8 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Platform } from 'react-native';
 import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Image, Platform } from 'react-native';
-import { CATEGORY_ICONS } from '@/utils/categories';
+import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/utils/categories';
 
 type EventItem = {
   id: string;
@@ -34,6 +33,12 @@ const formatAttendees = (attendees?: number, maxAttendees?: number) => {
 
 export default function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList }: Props) {
   const pendingSelectionRef = useRef<EventItem | null>(null);
+  
+  // Debug: Log available categories and icons
+  console.log('🗺️ [NATIVE MAP] Available categories:', Object.keys(CATEGORY_ICONS.map));
+  console.log('🗺️ [NATIVE MAP] Events received:', events?.length || 0);
+  console.log('🗺️ [NATIVE MAP] Event categories:', events?.map(e => e.category) || []);
+  
   // Proximity clustering (~50m)
   const clustered = useMemo(() => {
     const groups: { key: string; items: EventItem[]; lat: number; lng: number }[] = [];
@@ -75,14 +80,25 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
             <RNMarker
               key={group.key}
               coordinate={{ latitude: group.lat, longitude: group.lng }}
-              pinColor={getCategoryColorForMap(group.items[0].category)}
+              pinColor={'#FFFFFF'}
               onPress={() => onMarkerPress(group.items[0])}
             >
               {/* Custom icon inside a small circular container */}
-              <View style={{ backgroundColor: getCategoryColorForMap(group.items[0].category), width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
-                {CATEGORY_ICONS.map[group.items[0].category] && (
-                  <Image source={CATEGORY_ICONS.map[group.items[0].category]} style={{ width: 22, height: 22 }} />
-                )}
+              <View style={{ backgroundColor: '#FFFFFF', width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: getCategoryColorForMap(group.items[0].category), justifyContent: 'center', alignItems: 'center' }}>
+                {(() => {
+                  const category = group.items[0].category;
+                  const iconSource = CATEGORY_ICONS.map[category];
+                  
+                  console.log(`🗺️ [NATIVE MAP] Rendering marker for category: ${category}`);
+                  console.log(`🗺️ [NATIVE MAP] Icon source:`, iconSource);
+                  
+                  if (iconSource) {
+                    return <Image source={iconSource} style={{ width: 22, height: 22 }} />;
+                  } else {
+                    console.log(`🗺️ [NATIVE MAP] No icon found for ${category}, using default`);
+                    return <Image source={DEFAULT_CATEGORY_ICON} style={{ width: 22, height: 22 }} />;
+                  }
+                })()}
                 {group.items.length > 1 && (
                   <View style={{ position: 'absolute', bottom: -6, right: -6, backgroundColor: '#111827', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 2, borderColor: '#FFFFFF' }}>
                     <Text style={{ color: '#FFFFFF', fontSize: 11 }}>{group.items.length}</Text>

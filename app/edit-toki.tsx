@@ -84,7 +84,7 @@ export default function EditTokiScreen() {
         latitude: tokiData.latitude,
         longitude: tokiData.longitude,
         timeSlot: tokiData.time,
-        customDateTime: tokiData.customDateTime,
+        scheduledTime: tokiData.customDateTime,
         category: tokiData.activity,
         maxAttendees: tokiData.maxAttendees,
         visibility: tokiData.visibility || 'public',
@@ -94,7 +94,7 @@ export default function EditTokiScreen() {
       const success = await actions.updateTokiBackend(tokiId as string, updatedTokiData);
 
       if (success) {
-        router.push(`/toki-details?tokiId=${tokiId}`);
+        router.push(`/toki-details?tokiId=${tokiId}&fromEdit=true`);
         return true;
       } else {
         Alert.alert('Error', 'Failed to update Toki. Please try again.');

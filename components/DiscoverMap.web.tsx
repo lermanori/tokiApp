@@ -134,8 +134,8 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
                   className: 'custom-marker',
                   html: `
                     <div style="
-                      background-color: ${getCategoryColorForMap(group.items[0].category)};
-                      width: 32px; height: 32px; border-radius: 50%; border: 3px solid white;
+                      background-color: #FFFFFF;
+                      width: 32px; height: 32px; border-radius: 50%; border: 3px solid ${getCategoryColorForMap(group.items[0].category)};
                       box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: visible; position: relative;">
                       <img src="${ICON_WEB[group.items[0].category] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
                       ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}

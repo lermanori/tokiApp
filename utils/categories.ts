@@ -79,4 +79,7 @@ export const CATEGORY_ICON_WEB: Record<string, string> = {
   morning: '/assets/emojis/beach.png',
 };
 
+// Default icon for categories without specific icons
+export const DEFAULT_CATEGORY_ICON = require('@/assets/emojis/work.png');
+
 

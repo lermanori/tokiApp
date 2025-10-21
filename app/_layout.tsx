@@ -123,6 +123,7 @@ function RootLayoutNav() {
       <Stack.Screen name="saved-tokis" options={{ headerShown: false }} />
       <Stack.Screen name="connections" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="user-profile/[userId]" options={{ headerShown: false }} />
       <Stack.Screen name="join/[code]" options={{ headerShown: false }} />
       <Stack.Screen name="join-test" options={{ headerShown: false }} />
       <Stack.Screen name="test-route" options={{ headerShown: false }} />

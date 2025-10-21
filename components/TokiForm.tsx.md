@@ -17,6 +17,15 @@ Create/edit Toki form. Activity selection now derives from the canonical `CATEGO
 - On selection, updates `customDateTime`'s date portion in `YYYY-MM-DD` while preserving the current time (defaults to `14:00` if empty).
 - Picker state: `isDatePickerVisible`.
 
+### Time Picker Minute Interval Update
+- problem: Time selection allowed every minute, leading to inconsistent times and extra scrolling.
+- solution: Restrict selection to 15-minute intervals across platforms.
+
+### How Fix Was Implemented
+- Web `react-mobile-picker`: minutes column now uses `['00','15','30','45']` and snaps current minute to nearest quarter.
+- iOS `@react-native-community/datetimepicker`: added `minuteInterval={15}`.
+- Android: rounds chosen time to nearest 15 minutes before saving.
+
 ### Installation
 ```bash
 npm i react-native-ui-datepicker dayjs

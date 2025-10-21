@@ -56,7 +56,11 @@ All API methods are now integrated and the component uses real backend data inst
 
 ### Navigation Integration
 - **Back Navigation**: Returns to previous screen
-- **Chat Integration**: Direct navigation to chat when connected
+- **Chat Integration**: Direct navigation to chat with specific user when "Send Message" is pressed
 - **Profile Links**: Ready for integration with other app sections
+
+### Fixes Applied log
+- **Fixed Send Message navigation**: Changed "Send Message" button to navigate to chat with correct parameters
+- **Updated navigation behavior**: Users now go directly to chat with the specific user using otherUserId parameter
 
 This component provides the foundation for user discovery and social networking features in the app.

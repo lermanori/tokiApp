@@ -858,9 +858,11 @@ export default function TokiForm({
                     {(() => {
                       const current = (webTimeTemp || (customDateTime ? customDateTime.split(' ')[1] : '14:00')).split(':');
                       const hour = current[0];
-                      const minute = current[1];
+                      const rawMinute = parseInt(current[1] || '0', 10);
+                      const quarterMinutes = ['00', '15', '30', '45'];
+                      const minute = quarterMinutes[Math.round(rawMinute / 15) % 4];
                       const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-                      const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                      const minutes = quarterMinutes;
                       return (
                         <Picker
                           value={{ hour, minute }}
@@ -906,9 +908,17 @@ export default function TokiForm({
                       mode="time"
                       value={customDateTime ? dayjs(customDateTime.replace(' ', 'T')).toDate() : new Date()}
                       display={Platform.OS === 'android' ? 'clock' : 'spinner'}
+                      minuteInterval={Platform.OS === 'ios' ? 15 : undefined}
                       onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
                         if (Platform.OS === 'android') {
                           if (event.type === 'set' && selectedDate) {
+                            // Snap to nearest 15 minutes on Android
+                            const minutes = selectedDate.getMinutes();
+                            const rounded = Math.round(minutes / 15) * 15;
+                            if (rounded >= 60) {
+                              selectedDate.setHours(selectedDate.getHours() + 1);
+                            }
+                            selectedDate.setMinutes(rounded % 60, 0, 0);
                             const timeStr = dayjs(selectedDate).format('HH:mm');
                             const currentDate = customDateTime ? customDateTime.split(' ')[0] : dayjs().format('YYYY-MM-DD');
                             setCustomDateTime(`${currentDate} ${timeStr}`);
@@ -916,6 +926,13 @@ export default function TokiForm({
                           setIsTimePickerVisible(false);
                         } else {
                           if (selectedDate) {
+                            // iOS already constrains via minuteInterval, but keep rounding safeguard
+                            const minutes = selectedDate.getMinutes();
+                            const rounded = Math.round(minutes / 15) * 15;
+                            if (rounded >= 60) {
+                              selectedDate.setHours(selectedDate.getHours() + 1);
+                            }
+                            selectedDate.setMinutes(rounded % 60, 0, 0);
                             const timeStr = dayjs(selectedDate).format('HH:mm');
                             const currentDate = customDateTime ? customDateTime.split(' ')[0] : dayjs().format('YYYY-MM-DD');
                             setCustomDateTime(`${currentDate} ${timeStr}`);

@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle, X } from 'lucide-react-native';
+import { ArrowLeft, Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle, X, UserPlus, UserCheck, UserX, Clock, MapPin } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 // Backend data is loaded via AppContext unified endpoint; no direct API calls here
 
 interface Notification {
   id: string;
-  type: 'join_request' | 'join_approved' | 'join_declined' | 'message' | 'event_reminder' | 'event_update' | 'like' | 'invite' | 'invite_accepted' | 'participant_joined';
+  type: 'join_request' | 'join_approved' | 'join_declined' | 'message' | 'event_reminder' | 'event_update' | 'like' | 'invite' | 'invite_accepted' | 'participant_joined' | 'connection_request' | 'connection_accepted';
   title: string;
   message: string;
   created_at: string;
@@ -31,6 +31,40 @@ interface Notification {
   externalId?: string;
   conversationId?: string;
 }
+
+// Helper function to group notifications by time periods
+const groupNotificationsByTime = (notifications: Notification[]) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const lastWeek = new Date(today);
+  lastWeek.setDate(lastWeek.getDate() - 7);
+
+  const groups: { [key: string]: Notification[] } = {
+    'Today': [],
+    'Yesterday': [],
+    'Last Week': [],
+    'Older': []
+  };
+
+  notifications.forEach(notification => {
+    const notificationDate = new Date(notification.created_at);
+    const notificationDay = new Date(notificationDate.getFullYear(), notificationDate.getMonth(), notificationDate.getDate());
+
+    if (notificationDay.getTime() === today.getTime()) {
+      groups['Today'].push(notification);
+    } else if (notificationDay.getTime() === yesterday.getTime()) {
+      groups['Yesterday'].push(notification);
+    } else if (notificationDate >= lastWeek) {
+      groups['Last Week'].push(notification);
+    } else {
+      groups['Older'].push(notification);
+    }
+  });
+
+  return groups;
+};
 
 // Helper function to format timestamp (x minutes ago, hours ago, Yesterday, on dd/mm/yy)
 const formatRelativeTime = (input: string): string => {
@@ -100,41 +134,35 @@ export default function NotificationsScreen() {
       case 'join_request':
         return <Users size={20} color="#B49AFF" />;
       case 'join_approved':
-        return <CheckCircle size={20} color="#4DC4AA" />;
+        return <CheckCircle size={20} color="#B49AFF" />;
       case 'join_declined':
-        return <X size={20} color="#EF4444" />;
+        return <X size={20} color="#B49AFF" />;
       case 'message':
-        return <MessageCircle size={20} color="#6366F1" />;
+        return <MessageCircle size={20} color="#B49AFF" />;
       case 'event_reminder':
-        return <Calendar size={20} color="#F9E79B" />;
+        return <Clock size={20} color="#B49AFF" />;
       case 'event_update':
-        return <Bell size={20} color="#8B5CF6" />;
+        return <Bell size={20} color="#B49AFF" />;
       case 'like':
-        return <Heart size={20} color="#EC4899" />;
+        return <Heart size={20} color="#B49AFF" />;
+      case 'invite':
+        return <UserPlus size={20} color="#B49AFF" />;
+      case 'invite_accepted':
+        return <UserCheck size={20} color="#B49AFF" />;
+      case 'participant_joined':
+        return <Users size={20} color="#B49AFF" />;
       default:
-        return <Bell size={20} color="#666666" />;
+        // Handle connection-related notifications
+        if (type?.includes('connection') || type?.includes('request')) {
+          return <UserPlus size={20} color="#B49AFF" />;
+        }
+        return <Bell size={20} color="#B49AFF" />;
     }
   };
 
   const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'join_request':
-        return '#F3E8FF';
-      case 'join_approved':
-        return '#F0FDF4';
-      case 'join_declined':
-        return '#FEF2F2';
-      case 'message':
-        return '#EEF2FF';
-      case 'event_reminder':
-        return '#FFFBEB';
-      case 'event_update':
-        return '#F5F3FF';
-      case 'like':
-        return '#FDF2F8';
-      default:
-        return '#F9FAFB';
-    }
+    // Use consistent background color for all notifications
+    return '#FFFFFF';
   };
 
   const handleMarkRead = (notification: Notification & { source?: string; externalId?: string }) => {
@@ -146,11 +174,15 @@ export default function NotificationsScreen() {
     // Mark read then navigate
     handleMarkRead(notification);
 
+    // Navigate based on notification type and available data
     if (notification.tokiId) {
+      // Toki-related notifications - go to toki details
       router.push({ pathname: '/toki-details', params: { tokiId: String(notification.tokiId) } });
       return;
     }
+    
     if (notification.type === 'message') {
+      // Message notifications - go to chat
       if (notification.userId) {
         router.push({ pathname: '/chat', params: { otherUserId: String(notification.userId), otherUserName: notification.userName || '', isGroup: 'false' } });
       } else {
@@ -158,10 +190,21 @@ export default function NotificationsScreen() {
       }
       return;
     }
-    if (notification.type?.startsWith('connection') && notification.userId) {
+    
+    // Connection-related notifications - go to user profile
+    if (notification.userId && (
+      notification.type === 'connection_request' ||
+      notification.type === 'connection_accepted' ||
+      notification.source === 'connection_pending' ||
+      notification.source === 'connection_accepted' ||
+      notification.type === 'invite' ||
+      notification.type === 'invite_accepted'
+    )) {
       router.push({ pathname: '/user-profile/[userId]', params: { userId: String(notification.userId) } });
       return;
     }
+    
+    // Default fallback - go to messages tab
     router.push('/(tabs)/messages');
   };
 
@@ -365,16 +408,27 @@ export default function NotificationsScreen() {
           </View>
         ) : (
           <View style={styles.notificationsList}>
-            {notifications.map((notification) => (
-              <TouchableOpacity
-                key={notification.id}
-                style={[
-                  styles.notificationItem,
-                  !notification.read && styles.unreadNotification,
-                  { backgroundColor: getNotificationColor(notification.type) }
-                ]}
-                onPress={() => handleMarkRead(notification)}
-              >
+            {(() => {
+              const groupedNotifications = groupNotificationsByTime(notifications);
+              const timeGroups = ['Today', 'Yesterday', 'Last Week', 'Older'];
+              
+              return timeGroups.map((timeGroup) => {
+                const groupNotifications = groupedNotifications[timeGroup];
+                if (groupNotifications.length === 0) return null;
+                
+                return (
+                  <View key={timeGroup}>
+                    <Text style={styles.timeGroupHeader}>{timeGroup}</Text>
+                    {groupNotifications.map((notification) => (
+                      <TouchableOpacity
+                        key={notification.id}
+                        style={[
+                          styles.notificationItem,
+                          !notification.read && styles.unreadNotification,
+                          { backgroundColor: getNotificationColor(notification.type) }
+                        ]}
+                        onPress={() => handleOpen(notification)}
+                      >
                 <View style={styles.notificationContent}>
                   <View style={styles.notificationHeader}>
                     <View style={styles.iconContainer}>
@@ -413,19 +467,6 @@ export default function NotificationsScreen() {
                         <View style={styles.unreadDot} />
                       )}
                     </View>
-                    {(
-                      notification.type === 'join_request' ||
-                      notification.source === 'host_join_request' ||
-                      notification.type === 'join_approved' ||
-                      notification.type === 'participant_joined' ||
-                      (typeof notification.type === 'string' && notification.type.startsWith('connection'))
-                    ) && (
-                      <View style={styles.itemActions}>
-                        <TouchableOpacity style={styles.openButton} onPress={(e?: any) => { e?.stopPropagation?.(); handleOpen(notification); }}>
-                          <Text style={styles.openButtonText}>Open</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
                   </View>
                   
                   {(((notification.type === 'join_request' || notification.source === 'host_join_request')) && ((notification.externalId || notification.requestId))) && (
@@ -488,7 +529,11 @@ export default function NotificationsScreen() {
                   {notification.type === 'invite_accepted' && null}
                 </View>
               </TouchableOpacity>
-            ))}
+                    ))}
+                  </View>
+                );
+              });
+            })()}
           </View>
         )}
         
@@ -552,6 +597,15 @@ const styles = StyleSheet.create({
   notificationsList: {
     paddingTop: 8,
   },
+  timeGroupHeader: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#1C1C1C',
+    marginHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
   notificationItem: {
     marginHorizontal: 16,
     marginBottom: 8,
@@ -574,7 +628,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,

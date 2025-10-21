@@ -234,6 +234,11 @@ export default function ChatScreen() {
       } finally {
         setIsLoading(false);
       }
+    } else {
+      // No conversation yet - this is a new conversation
+      console.log('🆕 New conversation - no messages to load');
+      setIsLoading(false);
+      setMessages([]);
     }
   };
 

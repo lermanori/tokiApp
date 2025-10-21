@@ -198,7 +198,7 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
     // 3) Recently accepted connections (either direction)
     const connAccepted = (await pool.query(
       `SELECT uc.id, COALESCE(uc.updated_at, uc.created_at) as ts, 
-              uc.requester_id,
+              uc.requester_id, uc.recipient_id,
               CASE WHEN uc.requester_id = $1 THEN u2.name ELSE u1.name END as name
        FROM user_connections uc
        JOIN users u1 ON u1.id = uc.requester_id
@@ -211,6 +211,7 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
     )).rows.map(r => {
       // Determine the message based on who the current user is
       const isRequester = r.requester_id === userId;
+      const otherUserId = isRequester ? r.recipient_id : r.requester_id;
       const message = isRequester 
         ? `${r.name} accepted your connection request`
         : `You accepted ${r.name}'s connection request`;
@@ -224,6 +225,7 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
         message: message,
         timestamp: r.ts,
         read: false,
+        userId: String(otherUserId),
       };
     });
 
@@ -256,7 +258,7 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
 
     // 5) User's own join status updates (approved)
     const userApproved = (await pool.query(
-      `SELECT tp.id, COALESCE(tp.updated_at, tp.joined_at) as ts, t.title as toki_title
+      `SELECT tp.id, COALESCE(tp.updated_at, tp.joined_at) as ts, t.title as toki_title, t.id as toki_id
        FROM toki_participants tp
        JOIN tokis t ON t.id = tp.toki_id
        WHERE tp.user_id = $1 AND tp.status IN ('approved')
@@ -271,6 +273,8 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
       message: `You can now join the ${r.toki_title} event`,
       timestamp: r.ts,
       read: true,
+      tokiId: String(r.toki_id),
+      tokiTitle: r.toki_title,
     }));
 
     // 6) Host-side approvals (persisted view that a user was approved for host's event)

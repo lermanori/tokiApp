@@ -161,34 +161,36 @@ const InviteModal: React.FC<InviteModalProps> = ({
             )}
           </ScrollView>
 
-          <View style={styles.inviteLinkSection}>
-            <Text style={styles.inviteLinkTitle}>Invite Link</Text>
-            {activeInviteLink ? (
-              <View style={styles.inviteLinkContainer}>
-                <TextInput
-                  style={styles.inviteLinkInput}
-                  value={activeInviteLink.inviteUrl}
-                  editable={false}
-                  selectTextOnFocus={true}
-                />
-                <View style={styles.inviteLinkActions}>
-                  <TouchableOpacity style={styles.copyButton} onPress={() => onCopyInviteLink(activeInviteLink.inviteUrl)}>
-                    <Copy size={16} color="#8B5CF6" />
-                    <Text style={styles.copyButtonText}>Copy</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.regenerateButton} onPress={onRegenerateInviteLink}>
-                    <RefreshCw size={16} color="#8B5CF6" />
-                    <Text style={styles.regenerateButtonText}>Regenerate</Text>
-                  </TouchableOpacity>
+          {mode === 'invite' && (
+            <View style={styles.inviteLinkSection}>
+              <Text style={styles.inviteLinkTitle}>Invite Link</Text>
+              {activeInviteLink ? (
+                <View style={styles.inviteLinkContainer}>
+                  <TextInput
+                    style={styles.inviteLinkInput}
+                    value={activeInviteLink.inviteUrl}
+                    editable={false}
+                    selectTextOnFocus={true}
+                  />
+                  <View style={styles.inviteLinkActions}>
+                    <TouchableOpacity style={styles.copyButton} onPress={() => onCopyInviteLink(activeInviteLink.inviteUrl)}>
+                      <Copy size={16} color="#8B5CF6" />
+                      <Text style={styles.copyButtonText}>Copy</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.regenerateButton} onPress={onRegenerateInviteLink}>
+                      <RefreshCw size={16} color="#8B5CF6" />
+                      <Text style={styles.regenerateButtonText}>Regenerate</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.createLinkButton} onPress={onCreateInviteLink}>
-                <Link size={16} color="#FFFFFF" />
-                <Text style={styles.createLinkButtonText}>Create Invite Link</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+              ) : (
+                <TouchableOpacity style={styles.createLinkButton} onPress={onCreateInviteLink}>
+                  <Link size={16} color="#FFFFFF" />
+                  <Text style={styles.createLinkButtonText}>Create Invite Link</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <View style={styles.confirmActions}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>

@@ -155,7 +155,7 @@ export default function WaitlistForm() {
       </TouchableOpacity>
       
       <LinearGradient
-        colors={['#FEF3C7', '#FECACA', '#E9D5FF']}
+        colors={['rgb(255, 241, 235)', 'rgb(243, 231, 255)', 'rgb(229, 220, 255)']}
         style={styles.gradient}
       >
         <TouchableOpacity 
@@ -498,7 +498,8 @@ const styles = StyleSheet.create({
   phoneContainer: {
     flexDirection: 'row',
     marginBottom: 16,
-    gap: 4,
+    gap: 8,
+    alignItems: 'center',
   },
   countryDropdownContainer: {
     position: 'relative',
@@ -514,6 +515,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     minWidth: 120,
+    maxWidth: 140,
+    flex: 0,
+    overflow: 'hidden',
   },
   countryText: {
     fontSize: 16,
@@ -550,6 +554,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     fontFamily: 'Inter-Regular',
+    overflow: 'hidden',
   },
   locationDropdownContainer: {
     position: 'relative',

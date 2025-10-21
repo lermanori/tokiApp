@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import RatingPrompt from '@/components/RatingPrompt';
 import InviteModal from '@/components/InviteModal';
+import ParticipantsModal from '@/components/ParticipantsModal';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -265,6 +266,7 @@ export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams();
   const [toki, setToki] = useState<TokiDetails | null>(null);
+  const fromEdit = params.fromEdit === 'true';
   const [isLoading, setIsLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
 
@@ -307,7 +309,9 @@ export default function TokiDetailsScreen() {
     // If we have scheduled time, use it for smart display
     if (scheduledTime) {
       try {
-        const date = new Date(scheduledTime);
+        // Parse the scheduled time as UTC to avoid timezone conversion issues
+        // The backend sends time in format "YYYY-MM-DD HH:MM" which should be treated as UTC
+        const date = new Date(scheduledTime + 'Z'); // Add 'Z' to indicate UTC
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrow = new Date(today);
@@ -319,7 +323,8 @@ export default function TokiDetailsScreen() {
         const timeString = date.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
-          hour12: true
+          hour12: true,
+          timeZone: 'UTC' // Display time in UTC to match input
         });
 
         // Check if it's today, tomorrow, or later
@@ -335,6 +340,7 @@ export default function TokiDetailsScreen() {
           return `${day}/${month}/${year} at ${timeString}`;
         }
       } catch (error) {
+        console.error('Error parsing scheduled time:', error);
         // Fallback to original time if parsing fails
         return time || 'Time TBD';
       }
@@ -606,6 +612,9 @@ export default function TokiDetailsScreen() {
 
   // Invite flow will use a modal with connections selection
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [participantsSearch, setParticipantsSearch] = useState('');
+  const [isRemovingParticipant, setIsRemovingParticipant] = useState(false);
   const [modalMode, setModalMode] = useState<'invite' | 'hide'>('invite');
   const [inviteConnections, setInviteConnections] = useState<any[]>([]);
   const [selectedInviteeIds, setSelectedInviteeIds] = useState<Set<string>>(new Set());
@@ -723,6 +732,60 @@ export default function TokiDetailsScreen() {
     
     setParticipantToRemove({ id: userId, name: participantName });
     setShowRemoveConfirm(true);
+  };
+
+  const handleRemoveParticipantFromModal = async (participantId: string) => {
+    if (!toki?.id) return;
+    
+    setIsRemovingParticipant(true);
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/tokis/${toki.id}/participants/${participantId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        // Remove participant from local state
+        setToki(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            participants: prev.participants?.filter(p => p.id !== participantId) || [],
+            attendees: Math.max(0, (prev.attendees || 0) - 1)
+          };
+        });
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Participant Removed',
+          text2: 'The participant has been removed from the event'
+        });
+      } else {
+        const errorData = await response.json();
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorData.message || 'Failed to remove participant'
+        });
+      }
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to remove participant'
+      });
+    } finally {
+      setIsRemovingParticipant(false);
+    }
+  };
+
+  const handleOpenParticipantsModal = () => {
+    setParticipantsSearch('');
+    setShowParticipantsModal(true);
   };
 
   const confirmRemoveParticipant = async () => {
@@ -1149,7 +1212,10 @@ export default function TokiDetailsScreen() {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Toki not found</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => {
-            if (router.canGoBack()) {
+            // If coming from edit, go to home page instead of back to edit
+            if (fromEdit) {
+              router.push('/(tabs)');
+            } else if (router.canGoBack()) {
               router.back();
             } else {
               router.push('/(tabs)');
@@ -1177,8 +1243,10 @@ export default function TokiDetailsScreen() {
             style={styles.headerGradient}
           />
           <TouchableOpacity style={styles.backButtonHeader} onPress={() => {
-            // Try to go back, but if that fails, go to the main tabs
-            if (router.canGoBack()) {
+            // If coming from edit, go to home page instead of back to edit
+            if (fromEdit) {
+              router.push('/(tabs)');
+            } else if (router.canGoBack()) {
               router.back();
             } else {
               router.push('/(tabs)');
@@ -1228,6 +1296,22 @@ export default function TokiDetailsScreen() {
           onConfirm={handleInviteModalConfirm}
         />
 
+        <ParticipantsModal
+          visible={showParticipantsModal}
+          participants={toki?.participants?.map(p => ({
+            id: p.id,
+            name: p.name,
+            avatar: p.avatar,
+            isHost: p.id === toki?.host?.id
+          })) || []}
+          search={participantsSearch}
+          onChangeSearch={setParticipantsSearch}
+          isLoading={false}
+          isHost={toki?.isHostedByUser || false}
+          onClose={() => setShowParticipantsModal(false)}
+          onRemoveParticipant={handleRemoveParticipantFromModal}
+        />
+
         <View style={styles.detailsContainer}>
           <View style={styles.titleSection}>
             <Text style={styles.title}>{toki.title}</Text>
@@ -1267,7 +1351,7 @@ export default function TokiDetailsScreen() {
             <View style={styles.participantsSection}>
               <Text style={styles.sectionTitle}>Participants</Text>
               <View style={styles.participantsList}>
-                {toki.participants.map((participant, index) => (
+                {toki.participants.slice(0, 4).map((participant, index) => (
                   <View key={participant.id} style={styles.participantItem}>
                     {participant.avatar ? (
                       <Image
@@ -1323,6 +1407,17 @@ export default function TokiDetailsScreen() {
                     )}
                   </View>
                 ))}
+                
+                {toki.participants.length > 4 && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={handleOpenParticipantsModal}
+                  >
+                    <Text style={styles.showMoreText}>
+                      View more ({toki.participants.length - 4} more)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}
@@ -2063,6 +2158,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  showMoreButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+  },
+  showMoreText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
   },
   hostActionsSection: {
     flexDirection: 'row',

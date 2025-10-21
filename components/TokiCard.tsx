@@ -346,13 +346,13 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                         /> */}
                         <Text style={styles.eventTitle}>{toki.title}</Text>
                     </View>
-                    {toki.visibility === 'private' && (
-                        <View style={[styles.categoryBadge, { backgroundColor: '#111827' }] }>
-                            <Lock size={12} color="#FFFFFF" />
-                            <Text style={[styles.categoryBadgeText, { color: '#FFFFFF' }]}>Private</Text>
-                        </View>
-                    )}
                     <View style={styles.headerActions}>
+                        {toki.visibility === 'private' && (
+                            <View style={[styles.categoryBadge, { backgroundColor: '#111827' }] }>
+                                <Lock size={12} color="#FFFFFF" />
+                                <Text style={[styles.categoryBadgeText, { color: '#FFFFFF' }]}>Private</Text>
+                            </View>
+                        )}
                         <TouchableOpacity
                             style={styles.saveButton}
                             onPress={handleSaveToggle}
@@ -524,9 +524,12 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     categoryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
+        gap: 4,
     },
     categoryBadgeText: {
         fontSize: 12,

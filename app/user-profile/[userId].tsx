@@ -141,14 +141,33 @@ export default function UserProfileScreen() {
   const handleSendMessage = () => {
     if (!userProfile) return;
     
-    router.push({
-      pathname: '/chat',
-      params: { 
-        conversationId: `user-${userId}`,
-        otherUserName: userProfile.name,
-        isGroup: 'false'
-      }
-    });
+    // Check if conversation already exists with this user
+    const existingConversation = state.conversations?.find(
+      (conv: any) => conv.other_user_id === userId
+    );
+    
+    if (existingConversation) {
+      // Navigate to existing conversation
+      router.push({
+        pathname: '/chat',
+        params: { 
+          conversationId: existingConversation.id,
+          otherUserId: userId,
+          otherUserName: userProfile.name,
+          isGroup: 'false'
+        }
+      });
+    } else {
+      // Navigate to new conversation - let chat screen create conversation on first message
+      router.push({
+        pathname: '/chat',
+        params: { 
+          otherUserId: userId,
+          otherUserName: userProfile.name,
+          isGroup: 'false'
+        }
+      });
+    }
   };
 
   const handleBack = () => {

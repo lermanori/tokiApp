@@ -41,17 +41,18 @@ export default function WaitlistScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']} style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={{ padding: 6 }}>
-            <ArrowLeft size={24} color="#1C1C1C" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Join the Waitlist</Text>
-          <View style={{ width: 24 }} />
+      <LinearGradient colors={['rgb(255, 241, 235)', 'rgb(243, 231, 255)', 'rgb(229, 220, 255)']} style={styles.gradient}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={{ padding: 6 }}>
+              <ArrowLeft size={24} color="#1C1C1C" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Join the Waitlist</Text>
+            <View style={{ width: 24 }} />
+          </View>
         </View>
-      </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.subtitle}>We’re in private beta. Leave your details and we’ll invite you soon.</Text>
 
         <View style={styles.field}>
@@ -59,9 +60,25 @@ export default function WaitlistScreen() {
           <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" autoCapitalize="none" placeholderTextColor="#9CA3AF" />
         </View>
 
-        <View style={[styles.field, { flexDirection: 'row', gap: 8 }]}>
-          <TextInput style={[styles.input, { flexBasis: 100 }]} value={dialCode} onChangeText={setDialCode} placeholder="+972" placeholderTextColor="#9CA3AF" />
-          <TextInput style={[styles.input, { flex: 1 }]} value={phone} onChangeText={setPhone} placeholder="508740985" keyboardType="phone-pad" placeholderTextColor="#9CA3AF" />
+        <View style={styles.phoneField}>
+          <Text style={styles.label}>Phone</Text>
+          <View style={styles.phoneContainer}>
+            <TextInput 
+              style={styles.countryCodeInput} 
+              value={dialCode} 
+              onChangeText={setDialCode} 
+              placeholder="+972" 
+              placeholderTextColor="#9CA3AF" 
+            />
+            <TextInput 
+              style={styles.phoneNumberInput} 
+              value={phone} 
+              onChangeText={setPhone} 
+              placeholder="508740985" 
+              keyboardType="phone-pad" 
+              placeholderTextColor="#9CA3AF" 
+            />
+          </View>
         </View>
 
         <View style={styles.field}>
@@ -77,21 +94,55 @@ export default function WaitlistScreen() {
         <TouchableOpacity style={[styles.button, loading && { opacity: 0.7 }]} onPress={submit} disabled={loading}>
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Join The Waitlist</Text>}
         </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  container: { flex: 1 },
+  gradient: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontSize: 20, fontFamily: 'Inter-Bold', color: '#1C1C1C' },
   content: { padding: 20, gap: 16 },
   subtitle: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter-Regular' },
   field: { gap: 6 },
+  phoneField: { gap: 6 },
   label: { fontSize: 14, color: '#374151', fontFamily: 'Inter-Medium' },
   input: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#111827', fontFamily: 'Inter-Regular' },
+  phoneContainer: { 
+    flexDirection: 'row', 
+    gap: 8,
+    alignItems: 'center',
+  },
+  countryCodeInput: { 
+    backgroundColor: '#F3F4F6', 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB', 
+    borderRadius: 12, 
+    paddingHorizontal: 12, 
+    paddingVertical: 12, 
+    color: '#111827', 
+    fontFamily: 'Inter-Regular',
+    minWidth: 80,
+    maxWidth: 100,
+    flex: 0,
+    overflow: 'hidden',
+  },
+  phoneNumberInput: { 
+    backgroundColor: '#F3F4F6', 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB', 
+    borderRadius: 12, 
+    paddingHorizontal: 14, 
+    paddingVertical: 12, 
+    color: '#111827', 
+    fontFamily: 'Inter-Regular',
+    flex: 1,
+    overflow: 'hidden',
+  },
   button: { backgroundColor: '#111827', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   buttonText: { color: '#FFFFFF', fontSize: 16, fontFamily: 'Inter-SemiBold' },
 });

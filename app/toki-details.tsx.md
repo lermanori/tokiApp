@@ -1,17 +1,14 @@
-# File: app/toki-details.tsx
+# File: toki-details.tsx
 
 ### Summary
-This file contains the frontend component for displaying Toki details, including participant management, invite functionality, and host actions.
+This file implements the Toki details screen, displaying comprehensive information about a specific Toki event including participants, host details, and event metadata.
 
 ### Fixes Applied log
-- **Added remove participant UI**: Added small "X" button next to each participant for hosts to remove them.
-- **Added remove participant handler**: Created `handleRemoveParticipant` function with confirmation dialog.
-- **Added remove button styles**: Created `removeParticipantButton` style for the X button.
+- **Problem**: Timezone conversion issue causing 2-hour difference between input time and display time
+- **Solution**: Added `timeZone: 'UTC'` to `toLocaleTimeString` options to display time in UTC, matching the input time format
 
 ### How Fixes Were Implemented
-- **UI enhancement**: Modified the participants mapping to include a conditional remove button that only shows for hosts and non-host participants.
-- **Handler function**: Created `handleRemoveParticipant(userId: string, participantName: string)` that shows a confirmation alert before removing.
-- **Confirmation dialog**: Uses `Alert.alert` with "Cancel" and "Remove" options, with destructive styling for the remove action.
-- **API integration**: Calls `actions.removeParticipant(toki.id, userId)` and handles success/error responses.
-- **Styling**: Added `removeParticipantButton` style with red background, border, and proper sizing for the X icon.
-- **Conditional rendering**: Only shows the remove button when `toki.isHostedByUser` is true and the participant is not the host.
+- **Problem**: The `formatTimeDisplay` function was converting UTC time to local timezone for display
+- **Solution**: Modified `toLocaleTimeString` call to include `timeZone: 'UTC'` parameter, ensuring the displayed time matches the input time (16:15 → 4:15 PM instead of 6:15 PM)
+- **Backend Integration**: Updated backend to return `scheduledTime` in UTC format (`YYYY-MM-DD HH:MM`)
+- **Date Parsing**: Enhanced date parsing to treat backend timestamps as UTC by adding 'Z' suffix
