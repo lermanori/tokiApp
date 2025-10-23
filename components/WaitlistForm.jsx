@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   Alert,
   Platform,
   Modal
@@ -70,7 +70,7 @@ const countries = [
 
 const locations = [
   'Amsterdam',
-  'Barcelona', 
+  'Barcelona',
   'Berlin',
   'Copenhagen',
   'Lisbon',
@@ -97,12 +97,12 @@ export default function WaitlistForm() {
   const [locationSearch, setLocationSearch] = useState('');
 
   // Filter countries and locations based on search
-  const filteredCountries = countries.filter(country => 
+  const filteredCountries = countries.filter(country =>
     country.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
     country.code.includes(countrySearch)
   );
-  
-  const filteredLocations = locations.filter(location => 
+
+  const filteredLocations = locations.filter(location =>
     location.toLowerCase().includes(locationSearch.toLowerCase())
   );
 
@@ -119,7 +119,7 @@ export default function WaitlistForm() {
         reason: reason || null,
         platform: Platform.OS,
       };
-      
+
       await apiService.joinWaitlist(formData);
 
       // Success
@@ -130,7 +130,7 @@ export default function WaitlistForm() {
       setLocation('');
       setReason('');
       setSelectedCountry(countries[0]);
-      
+
       // Don't dispatch navigation event - stay on waitlist page
       // Users should see success message and stay on waitlist
     } catch (error) {
@@ -143,7 +143,7 @@ export default function WaitlistForm() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.backButton}
         onPress={() => {
           if (typeof window !== 'undefined') {
@@ -153,12 +153,12 @@ export default function WaitlistForm() {
       >
         <ArrowLeft size={24} color="#FFFFFF" />
       </TouchableOpacity>
-      
+
       <LinearGradient
         colors={['rgb(255, 241, 235)', 'rgb(243, 231, 255)', 'rgb(229, 220, 255)']}
         style={styles.gradient}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.gradient}
           activeOpacity={1}
           onPress={() => {
@@ -167,104 +167,182 @@ export default function WaitlistForm() {
           }}
         >
           <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.content}>
-            
-            <View style={styles.header}>
-              <Text style={styles.title}>Feeling social right now?</Text>
-              <Text style={styles.subtitle}>
-                You're not the only one.{'\n'}Join the mood map.
-              </Text>
-            </View>
+            <View style={styles.content}>
 
-            <View style={styles.formContainer}>
-              <View style={[styles.form, submitted && styles.formSubmitted]}>
-                {/* Reason textarea - desktop only */}
-                <View style={styles.desktopOnly}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Feeling social right now?</Text>
+                <Text style={styles.subtitle}>
+                You're not the only one.{'\n'}Join the mood map.
+                </Text>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={[styles.form, submitted && styles.formSubmitted]}>
+                  {/* Reason textarea - desktop only */}
+                  <View style={styles.desktopOnly}>
+                    <TextInput
+                      style={styles.textarea}
+                      placeholder="Think you belong to Toki? Tell us why (optional)"
+                      value={reason}
+                      onChangeText={setReason}
+                      multiline
+                      numberOfLines={3}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  {/* Email */}
                   <TextInput
-                    style={styles.textarea}
-                    placeholder="Think you belong to Toki? Tell us why (optional)"
-                    value={reason}
-                    onChangeText={setReason}
-                    multiline
-                    numberOfLines={3}
+                    style={styles.input}
+                    placeholder="Your email"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
                     placeholderTextColor="#9CA3AF"
                   />
-                </View>
 
-                {/* Email */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="Your email"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  placeholderTextColor="#9CA3AF"
-                />
+                  {/* Phone Input */}
+                  <View style={styles.phoneContainer}>
+                    <View style={styles.countryDropdownContainer}>
+                      <TouchableOpacity
+                        style={styles.countrySelector}
+                        onPress={() => setShowCountryDropdown(!showCountryDropdown)}
+                      >
+                        <Text style={styles.countryText}>
+                          {selectedCountry.flag} {selectedCountry.code}
+                        </Text>
+                        <Text style={styles.dropdownArrow}>▼</Text>
+                      </TouchableOpacity>
 
-                {/* Phone Input */}
-                <View style={styles.phoneContainer}>
-                  <View style={styles.countryDropdownContainer}>
-                    <TouchableOpacity 
-                      style={styles.countrySelector}
-                      onPress={() => setShowCountryDropdown(!showCountryDropdown)}
+                      <Modal
+                        visible={showCountryDropdown}
+                        transparent={true}
+                        animationType="fade"
+                        onRequestClose={() => {
+                          setShowCountryDropdown(false);
+                          setCountrySearch('');
+                        }}
+                      >
+                        <TouchableOpacity
+                          style={styles.modalOverlay}
+                          activeOpacity={1}
+                          onPress={() => {
+                            setShowCountryDropdown(false);
+                            setCountrySearch('');
+                          }}
+                        >
+                          <TouchableOpacity
+                            style={styles.countryDropdown}
+                            activeOpacity={1}
+                            onPress={() => { }} // Prevent closing when tapping dropdown content
+                          >
+                            <View style={styles.searchContainer}>
+                              <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search countries..."
+                                value={countrySearch}
+                                onChangeText={setCountrySearch}
+                                placeholderTextColor="#9CA3AF"
+                              />
+                            </View>
+                            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+                              {filteredCountries.map((country) => (
+                                <TouchableOpacity
+                                  key={country.code}
+                                  style={styles.dropdownItem}
+                                  onPress={() => {
+                                    setSelectedCountry(country);
+                                    setShowCountryDropdown(false);
+                                    setCountrySearch('');
+                                  }}
+                                >
+                                  <Text style={styles.dropdownItemText}>
+                                    {country.flag} {country.code} {country.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                              {filteredCountries.length === 0 && (
+                                <View style={styles.noResults}>
+                                  <Text style={styles.noResultsText}>No countries found</Text>
+                                </View>
+                              )}
+                            </ScrollView>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      </Modal>
+                    </View>
+
+                    <TextInput
+                      style={styles.phoneInput}
+                      placeholder="508740985"
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  {/* Location Dropdown */}
+                  <View style={styles.locationDropdownContainer}>
+                    <TouchableOpacity
+                      style={styles.locationSelector}
+                      onPress={() => setShowLocationDropdown(!showLocationDropdown)}
                     >
-                      <Text style={styles.countryText}>
-                        {selectedCountry.flag} {selectedCountry.code}
+                      <Text style={[styles.locationText, !location && styles.placeholderText]}>
+                        {location || 'Select a location'}
                       </Text>
                       <Text style={styles.dropdownArrow}>▼</Text>
                     </TouchableOpacity>
-                    
+
                     <Modal
-                      visible={showCountryDropdown}
+                      visible={showLocationDropdown}
                       transparent={true}
                       animationType="fade"
                       onRequestClose={() => {
-                        setShowCountryDropdown(false);
-                        setCountrySearch('');
+                        setShowLocationDropdown(false);
+                        setLocationSearch('');
                       }}
                     >
-                    <TouchableOpacity 
-                      style={styles.modalOverlay}
-                      activeOpacity={1}
-                      onPress={() => {
-                        setShowCountryDropdown(false);
-                        setCountrySearch('');
-                      }}
-                    >
-                        <TouchableOpacity 
-                          style={styles.countryDropdown}
+                      <TouchableOpacity
+                        style={styles.modalOverlay}
+                        activeOpacity={1}
+                        onPress={() => {
+                          setShowLocationDropdown(false);
+                          setLocationSearch('');
+                        }}
+                      >
+                        <TouchableOpacity
+                          style={styles.locationDropdown}
                           activeOpacity={1}
-                          onPress={() => {}} // Prevent closing when tapping dropdown content
+                          onPress={() => { }} // Prevent closing when tapping dropdown content
                         >
                           <View style={styles.searchContainer}>
                             <TextInput
                               style={styles.searchInput}
-                              placeholder="Search countries..."
-                              value={countrySearch}
-                              onChangeText={setCountrySearch}
+                              placeholder="Search locations..."
+                              value={locationSearch}
+                              onChangeText={setLocationSearch}
                               placeholderTextColor="#9CA3AF"
                             />
                           </View>
                           <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-                            {filteredCountries.map((country) => (
+                            {filteredLocations.map((loc) => (
                               <TouchableOpacity
-                                key={country.code}
+                                key={loc}
                                 style={styles.dropdownItem}
                                 onPress={() => {
-                                  setSelectedCountry(country);
-                                  setShowCountryDropdown(false);
-                                  setCountrySearch('');
+                                  setLocation(loc);
+                                  setShowLocationDropdown(false);
+                                  setLocationSearch('');
                                 }}
                               >
-                                <Text style={styles.dropdownItemText}>
-                                  {country.flag} {country.code} {country.name}
-                                </Text>
+                                <Text style={styles.dropdownItemText}>{loc}</Text>
                               </TouchableOpacity>
                             ))}
-                            {filteredCountries.length === 0 && (
+                            {filteredLocations.length === 0 && (
                               <View style={styles.noResults}>
-                                <Text style={styles.noResultsText}>No countries found</Text>
+                                <Text style={styles.noResultsText}>No locations found</Text>
                               </View>
                             )}
                           </ScrollView>
@@ -272,130 +350,52 @@ export default function WaitlistForm() {
                       </TouchableOpacity>
                     </Modal>
                   </View>
-                  
-                  <TextInput
-                    style={styles.phoneInput}
-                    placeholder="508740985"
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
 
-                {/* Location Dropdown */}
-                <View style={styles.locationDropdownContainer}>
-                  <TouchableOpacity 
-                    style={styles.locationSelector}
-                    onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+                  {/* Reason textarea - mobile only */}
+                  <View style={styles.mobileOnly}>
+                    <TextInput
+                      style={styles.textarea}
+                      placeholder="Think you belong to Toki? Tell us why (optional)"
+                      value={reason}
+                      onChangeText={setReason}
+                      multiline
+                      numberOfLines={3}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  {/* Button */}
+                  <TouchableOpacity
+                    style={[styles.button, isLoading && styles.buttonDisabled]}
+                    onPress={handleSubmit}
+                    disabled={isLoading}
                   >
-                    <Text style={[styles.locationText, !location && styles.placeholderText]}>
-                      {location || 'Select a location'}
+                    <Text style={styles.buttonText}>
+                      {isLoading ? 'Joining...' : 'Join The Waitlist'}
                     </Text>
-                    <Text style={styles.dropdownArrow}>▼</Text>
                   </TouchableOpacity>
-                  
-                  <Modal
-                    visible={showLocationDropdown}
-                    transparent={true}
-                    animationType="fade"
-                      onRequestClose={() => {
-                        setShowLocationDropdown(false);
-                        setLocationSearch('');
-                      }}
-                  >
-                    <TouchableOpacity 
-                      style={styles.modalOverlay}
-                      activeOpacity={1}
-                      onPress={() => {
-                        setShowLocationDropdown(false);
-                        setLocationSearch('');
-                      }}
-                    >
-                      <TouchableOpacity 
-                        style={styles.locationDropdown}
-                        activeOpacity={1}
-                        onPress={() => {}} // Prevent closing when tapping dropdown content
-                      >
-                        <View style={styles.searchContainer}>
-                          <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search locations..."
-                            value={locationSearch}
-                            onChangeText={setLocationSearch}
-                            placeholderTextColor="#9CA3AF"
-                          />
-                        </View>
-                        <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-                          {filteredLocations.map((loc) => (
-                            <TouchableOpacity
-                              key={loc}
-                              style={styles.dropdownItem}
-                              onPress={() => {
-                                setLocation(loc);
-                                setShowLocationDropdown(false);
-                                setLocationSearch('');
-                              }}
-                            >
-                              <Text style={styles.dropdownItemText}>{loc}</Text>
-                            </TouchableOpacity>
-                          ))}
-                          {filteredLocations.length === 0 && (
-                            <View style={styles.noResults}>
-                              <Text style={styles.noResultsText}>No locations found</Text>
-                            </View>
-                          )}
-                        </ScrollView>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  </Modal>
-                </View>
 
-                {/* Reason textarea - mobile only */}
-                <View style={styles.mobileOnly}>
-                  <TextInput
-                    style={styles.textarea}
-                    placeholder="Think you belong to Toki? Tell us why (optional)"
-                    value={reason}
-                    onChangeText={setReason}
-                    multiline
-                    numberOfLines={3}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-
-                {/* Button */}
-                <TouchableOpacity
-                  style={[styles.button, isLoading && styles.buttonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.buttonText}>
-                    {isLoading ? 'Joining...' : 'Join The Waitlist'}
+                  {/* Subtext */}
+                  <Text style={styles.subtext}>
+                    * We're currently in private beta. If you're invited by someone from the community, let us know.
                   </Text>
-                </TouchableOpacity>
+                </View>
 
-                {/* Subtext */}
-                <Text style={styles.subtext}>
-                  * We're currently in private beta. If you're invited by someone from the community, let us know.
-                </Text>
+                {/* Success message */}
+                {submitted && (
+                  <View style={styles.successOverlay}>
+                    <Text style={styles.successText}>
+                      🎉 You're on the waitlist!{'\n'}We'll notify you when we're ready to invite you.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Error message */}
+                {message && !submitted && (
+                  <Text style={styles.errorText}>{message}</Text>
+                )}
               </View>
-
-              {/* Success message */}
-              {submitted && (
-                <View style={styles.successOverlay}>
-                  <Text style={styles.successText}>
-                    🎉 You're on the waitlist!{'\n'}We'll notify you when we're ready to invite you.
-                  </Text>
-                </View>
-              )}
-
-              {/* Error message */}
-              {message && !submitted && (
-                <Text style={styles.errorText}>{message}</Text>
-              )}
             </View>
-          </View>
           </ScrollView>
         </TouchableOpacity>
       </LinearGradient>
