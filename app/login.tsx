@@ -34,9 +34,10 @@ export default function LoginScreen() {
   const [loadingData, setLoadingData] = useState(false); // New state for data loading
   const [errorMessage, setErrorMessage] = useState(''); // New state for error messages
   const [isDevMode, setIsDevMode] = useState(false);
-  const { dispatch } = useApp();
+  const { dispatch, actions } = useApp();
   const router = useRouter();
-  const { returnTo, code } = useLocalSearchParams<{ returnTo?: string; code?: string }>();
+  const searchParams = useLocalSearchParams();
+  const { returnTo, code, ...returnParams } = searchParams;
 
   // Check if we're in dev mode and load saved credentials
   useEffect(() => {
@@ -165,16 +166,36 @@ export default function LoginScreen() {
             
             console.log('✅ Data loaded successfully, redirecting...');
             // Now redirect with all data loaded
-            if (returnTo === 'join' && code) {
-              router.replace(`/join/${code}`);
+            if (returnTo) {
+              // Store redirection info for after login
+              const cleanParams = Object.fromEntries(
+                Object.entries(returnParams)
+                  .filter(([_, value]) => value !== undefined)
+                  .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+              );
+              const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+              console.log('🔍 Setting redirection:', { returnToPath, cleanParams });
+              actions.setRedirection(returnToPath, cleanParams);
+              console.log('🔍 Redirection set, redirecting to main app');
+              router.replace('/(tabs)');
             } else {
               router.replace('/(tabs)');
             }
           } catch (dataError) {
             console.error('⚠️ Data loading failed, redirecting anyway:', dataError);
             // Still redirect even if data loading fails
-            if (returnTo === 'join' && code) {
-              router.replace(`/join/${code}`);
+            if (returnTo) {
+              // Store redirection info for after login
+              const cleanParams = Object.fromEntries(
+                Object.entries(returnParams)
+                  .filter(([_, value]) => value !== undefined)
+                  .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+              );
+              const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+              console.log('🔍 Setting redirection (fallback):', { returnToPath, cleanParams });
+              actions.setRedirection(returnToPath, cleanParams);
+              console.log('🔍 Redirection set (fallback), redirecting to main app');
+              router.replace('/(tabs)');
             } else {
               router.replace('/(tabs)');
             }

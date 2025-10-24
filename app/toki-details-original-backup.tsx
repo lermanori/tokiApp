@@ -14,9 +14,7 @@ import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions } from '@/utils/tokiUrls';
-import { getInitials, getActivityEmoji, getActivityLabel, formatLocationDisplay, formatTimeDisplay, canUserInvite, canUserManage, getJoinButtonText, getJoinButtonStyle } from '@/utils/tokiUtils';
 import MetaTags from '@/components/MetaTags';
-import TokiHeader from '@/components/TokiHeader';
 import { Share as RNShare } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +22,105 @@ const { width } = Dimensions.get('window');
 // Constants
 const MAX_PARTICIPANTS_DISPLAY = 2; // Maximum number of participants to show before "View more" button
 
+// Helper function to get user initials from name
+const getInitials = (name: string): string => {
+  if (!name) return '?';
+  const names = name.trim().split(' ');
+  if (names.length === 1) return names[0].charAt(0).toUpperCase();
+  return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+};
+
+// Helper function to get activity emoji
+const getActivityEmoji = (category: string): string => {
+  switch (category) {
+    case 'sports': return '⚽';
+    case 'coffee': return '☕';
+    case 'music': return '🎵';
+    case 'dinner': return '🍕';
+    case 'work': return '💼';
+    case 'culture': return '🎨';
+    case 'nature': return '🌿';
+    case 'drinks': return '🍹';
+    case 'beach': return '🏖️';
+    case 'sunset': return '🌅';
+    case 'jazz': return '🎷';
+    case 'networking': return '🤝';
+    case 'wellness': return '🧘';
+    case 'yoga': return '🧘‍♀️';
+    case 'morning': return '🌅';
+    case 'walking': return '🚶';
+    case 'culture': return '🏛️';
+    case 'party': return '🎉';
+    case 'chill': return '🏠';
+    case 'volleyball': return '🏐';
+    case 'mindfulness': return '🧘‍♂️';
+    case 'coworking': return '💻';
+    default: return '🎉';
+  }
+};
+
+// Helper function to get activity label
+const getActivityLabel = (category: string): string => {
+  switch (category) {
+    case 'sports': return 'Sports';
+    case 'coffee': return 'Coffee';
+    case 'music': return 'Music';
+    case 'dinner': return 'Dinner';
+    case 'work': return 'Work';
+    case 'culture': return 'Culture';
+    case 'nature': return 'Nature';
+    case 'drinks': return 'Drinks';
+    case 'beach': return 'Beach';
+    case 'sunset': return 'Sunset';
+    case 'jazz': return 'Jazz';
+    case 'networking': return 'Networking';
+    case 'wellness': return 'Wellness';
+    case 'yoga': return 'Yoga';
+    case 'morning': return 'Morning';
+    case 'walking': return 'Walking';
+    case 'culture': return 'Culture';
+    case 'party': return 'Party';
+    case 'chill': return 'Chill';
+    case 'volleyball': return 'Volleyball';
+    case 'mindfulness': return 'Mindfulness';
+    case 'coworking': return 'Coworking';
+    default: return 'Activity';
+  }
+};
+
+// Helper function to format location for compact display
+const formatLocationDisplay = (fullLocation: string): string => {
+  if (!fullLocation) return '';
+
+  // Split by commas and clean up
+  const parts = fullLocation.split(',').map(part => part.trim());
+
+  if (parts.length >= 2) {
+    // Try to extract city and landmark/area name
+    const city = parts[parts.length - 2]; // Usually the city is second to last
+    const landmark = parts[0]; // First part is usually the landmark/area name
+
+    // If we have a city and landmark, format as "City, Landmark"
+    if (city && landmark && city !== landmark) {
+      return `${city}, ${landmark}`;
+    }
+
+    // Fallback: just show first two meaningful parts
+    const meaningfulParts = parts.filter(part =>
+      part &&
+      !part.includes('Subdistrict') &&
+      !part.includes('District') &&
+      part.length > 2
+    );
+
+    if (meaningfulParts.length >= 2) {
+      return `${meaningfulParts[0]}, ${meaningfulParts[1]}`;
+    }
+  }
+
+  // If all else fails, just show the first meaningful part
+  return parts[0] || fullLocation;
+};
 
 interface TokiDetails {
   id: string;
@@ -31,7 +128,6 @@ interface TokiDetails {
   description: string;
   location: string;
   time: string;
-  timeSlot?: string; // Add timeSlot for compatibility
   scheduledTime?: string; // Add scheduled time for smart display
   attendees: number;
   maxAttendees: number;
@@ -219,6 +315,65 @@ export default function TokiDetailsScreen() {
   const [participantToRemove, setParticipantToRemove] = useState<{id: string, name: string} | null>(null);
 
   // Function to format time display smartly
+  const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): string => {
+    // If we have scheduled time, use it for smart display
+    if (scheduledTime) {
+      try {
+        // Parse the scheduled time as UTC to avoid timezone conversion issues
+        // The backend sends time in format "YYYY-MM-DD HH:MM" which should be treated as UTC
+        const date = new Date(scheduledTime + 'Z'); // Add 'Z' to indicate UTC
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+        // Format time as HH:MM
+        const timeString = date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'UTC' // Display time in UTC to match input
+        });
+
+        // Check if it's today, tomorrow, or later
+        if (eventDate.getTime() === today.getTime()) {
+          return `today at ${timeString}`;
+        } else if (eventDate.getTime() === tomorrow.getTime()) {
+          return `tomorrow at ${timeString}`;
+        } else {
+          // Format as DD/MM/YY HH:MM
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear().toString().slice(-2);
+          return `${day}/${month}/${year} at ${timeString}`;
+        }
+      } catch (error) {
+        console.error('Error parsing scheduled time:', error);
+        // Fallback to original time if parsing fails
+        return time || 'Time TBD';
+      }
+    }
+
+    // If no scheduled time, handle the time parameter safely
+    if (!time) {
+      return 'Time TBD';
+    }
+
+    // For relative time slots, show as is
+    if (['Now', '30 min', '1 hour', '2 hours', '3 hours', 'Tonight', 'Tomorrow'].includes(time)) {
+      return time;
+    }
+
+    // For specific time slots like "9:00 AM", show as is
+    if (time.includes(':')) {
+      return time;
+    }
+
+    // For generic slots like "morning", "afternoon", "evening"
+    return time;
+  };
 
   // Check if Toki is saved on mount
   useEffect(() => {
@@ -1204,18 +1359,18 @@ export default function TokiDetailsScreen() {
       />
       <SafeAreaView style={styles.container}>
         <ScrollView style={{...styles.content,width: '100%', maxWidth: 1000, alignSelf: 'center'}} showsVerticalScrollIndicator={false}>
-        <TokiHeader
-          toki={{
-            id: toki.id,
-            image: toki.image,
-            category: toki.category
-          }}
-          fromEdit={fromEdit}
-          isLiked={isLiked}
-          isSaving={isSaving}
-          onSaveToggle={handleSaveToggle}
-          onShare={handleShareToki}
-          onBack={() => {
+        <View style={styles.imageContainer}>
+          <Image
+            source={{
+              uri: toki.image || getActivityPhoto(toki.category || 'social')
+            }}
+            style={styles.headerImage}
+          />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'transparent']}
+            style={styles.headerGradient}
+          />
+          <TouchableOpacity style={styles.backButtonHeader} onPress={() => {
             // If coming from edit, go to home page instead of back to edit
             if (fromEdit) {
               router.push('/(tabs)');
@@ -1224,8 +1379,32 @@ export default function TokiDetailsScreen() {
             } else {
               router.push('/(tabs)');
             }
-          }}
-        />
+          }}>
+            <ArrowLeft size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, isLiked && styles.likedButton]}
+              onPress={handleSaveToggle}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <View style={styles.loadingSpinner}>
+                  <Text style={styles.loadingText}>...</Text>
+                </View>
+              ) : (
+                <Heart
+                  size={20}
+                  color={isLiked ? "#8B5CF6" : "#FFFFFF"}
+                  fill={isLiked ? "#8B5CF6" : "transparent"}
+                />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleShareToki}>
+              <Share size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <InviteModal
           visible={showInviteModal}
@@ -1262,40 +1441,34 @@ export default function TokiDetailsScreen() {
         />
 
         <View style={styles.detailsContainer}>
-          {/* Event Title and Badges */}
-          <View style={styles.eventHeaderSection}>
-            <View style={styles.eventTitleRow}>
-              <Text style={styles.eventTitle}>{toki.title}</Text>
-              <View style={styles.eventBadgesContainer}>
-                {toki.visibility === 'private' && (
-                  <View style={styles.eventPrivateBadge}>
-                    <Lock size={14} color="#8B5CF6" />
-                    <Text style={styles.eventPrivateBadgeText}>Private</Text>
-                  </View>
-                )}
-                {toki.isHostedByUser && hiddenCount > 0 && (
-                  <View style={styles.eventHiddenBadge}>
-                    <Text style={styles.eventHiddenBadgeText}>Hidden {hiddenCount}</Text>
-                  </View>
-                )}
-                <Text style={styles.eventDistance}>0.5 km away</Text>
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>{toki.title}</Text>
+            {toki.visibility === 'private' && (
+              <View style={styles.privateBadge}>
+                <Lock size={14} color="#FFFFFF" />
+                <Text style={styles.privateBadgeText}>Private</Text>
               </View>
-            </View>
+            )}
+            {toki.isHostedByUser && hiddenCount > 0 && (
+              <View style={styles.hiddenBadge}>
+                <Text style={styles.hiddenBadgeText}>Hidden {hiddenCount}</Text>
+              </View>
+            )}
+            <Text style={styles.distance}>{toki.distance} away</Text>
           </View>
 
-          {/* Event Info Section */}
-          <View style={styles.eventInfoSection}>
-            <View style={styles.eventInfoItem}>
+          <View style={styles.infoSection}>
+            <View style={styles.infoItem}>
               <MapPin size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>{formatLocationDisplay(toki.location)}</Text>
+              <Text style={styles.infoText}>{formatLocationDisplay(toki.location)}</Text>
             </View>
-            <View style={styles.eventInfoItem}>
+            <View style={styles.infoItem}>
               <Clock size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>{formatTimeDisplay(toki.time, toki.scheduledTime)}</Text>
+              <Text style={styles.infoText}>{formatTimeDisplay(toki.time, toki.scheduledTime)}</Text>
             </View>
-            <View style={styles.eventInfoItem}>
+            <View style={styles.infoItem}>
               <Users size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>
+              <Text style={styles.infoText}>
                 {toki.attendees}/{toki.maxAttendees} people
               </Text>
             </View>
@@ -1346,11 +1519,13 @@ export default function TokiDetailsScreen() {
                     {/* Remove button for hosts (only show for non-host participants) */}
                     {(() => {
                       const shouldShow = toki.isHostedByUser && participant.id !== toki.host?.id;
+                      console.log('🔍 Should show remove button:', shouldShow, 'isHostedByUser:', toki.isHostedByUser, 'participant.id:', participant.id, 'host.id:', toki.host?.id);
                       return shouldShow;
                     })() && (
                       <TouchableOpacity
                         style={styles.removeParticipantButton}
                         onPress={() => {
+                          console.log('🔴 X button pressed for participant:', participant.id, participant.name);
                           handleRemoveParticipant(participant.id, participant.name);
                         }}
                         activeOpacity={0.7}
@@ -1760,7 +1935,7 @@ export default function TokiDetailsScreen() {
             
             <View style={styles.shareModalContent}>
               <View style={styles.eventPreview}>
-                <Text style={styles.shareEventTitle}>"{toki?.title}"</Text>
+                <Text style={styles.eventTitle}>"{toki?.title}"</Text>
                 <View style={styles.eventDetails}>
                   <View style={styles.eventDetailRow}>
                     <MapPin size={14} color="#8B5CF6" />
@@ -2010,63 +2185,12 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     backgroundColor: '#FFFFFF',
-    marginTop: -20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    // marginTop: -20,
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 120,
-  },
-  eventHeaderSection: {
-    marginBottom: 24,
-  },
-  eventTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  eventTitle: {
-    fontSize: 28,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    flex: 1,
-  },
-  eventBadgesContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  eventPrivateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-  },
-  eventPrivateBadgeText: {
-    color: '#8B5CF6',
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    marginLeft: 4,
-  },
-  eventHiddenBadge: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#6B7280',
-  },
-  eventHiddenBadgeText: {
-    color: '#6B7280',
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-  },
-  eventDistance: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#6B7280',
   },
   titleSection: {
     flexDirection: 'row',
@@ -2251,21 +2375,6 @@ const styles = StyleSheet.create({
   },
   participantsSection: {
     marginBottom: 24,
-  },
-  eventInfoSection: {
-    flexDirection: 'column',
-    gap: 12,
-    marginBottom: 24,
-  },
-  eventInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  eventInfoText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontFamily: 'Inter-Medium',
   },
   participantsList: {
     flexDirection: 'row',
@@ -2819,10 +2928,9 @@ const styles = StyleSheet.create({
       backgroundColor: '#FFFFFF',
       borderRadius: 16,
       padding: 24,
-      width: '95%',
-      maxWidth: 800,
-      maxHeight: '85%',
-      alignSelf: 'center',
+      width: '90%',
+      maxWidth: 500,
+      maxHeight: '80%',
     },
     shareModalHeader: {
       flexDirection: 'row',
@@ -2848,7 +2956,7 @@ const styles = StyleSheet.create({
       borderLeftWidth: 4,
       borderLeftColor: '#8B5CF6',
     },
-    shareEventTitle: {
+    eventTitle: {
       fontSize: 18,
       fontFamily: 'Inter-Bold',
       color: '#1C1C1C',
@@ -2939,57 +3047,49 @@ const styles = StyleSheet.create({
     shareButtonsGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 6,
-      justifyContent: 'flex-start',
+      gap: 8,
+      justifyContent: 'space-between',
     },
     shareButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
       borderRadius: 12,
-      width: 95,
+      flex: 1,
+      minWidth: 90,
+      maxWidth: 110,
       alignItems: 'center',
       justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 3,
-      borderWidth: 1.5,
+      flexDirection: 'row',
+      gap: 6,
+      borderWidth: 1,
       borderColor: '#E5E7EB',
-      backgroundColor: '#FFFFFF',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 1,
-      },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
     },
     shareButtonIcon: {
-      fontSize: 16,
+      fontSize: 18,
     },
     shareButtonText: {
-      fontSize: 10,
-      fontFamily: 'Inter-Medium',
-      color: '#4B5563',
-      textAlign: 'center',
+      fontSize: 13,
+      fontFamily: 'Inter-SemiBold',
+      color: '#374151',
     },
     twitterButton: {
-      backgroundColor: '#F0F9FF',
+      backgroundColor: '#F8FAFC',
       borderColor: '#1DA1F2',
     },
     facebookButton: {
-      backgroundColor: '#F0F4FF',
+      backgroundColor: '#F8FAFC',
       borderColor: '#1877F2',
     },
     linkedinButton: {
-      backgroundColor: '#F0F7FF',
+      backgroundColor: '#F8FAFC',
       borderColor: '#0077B5',
     },
     whatsappButton: {
-      backgroundColor: '#F0FDF4',
+      backgroundColor: '#F8FAFC',
       borderColor: '#25D366',
     },
     telegramButton: {
-      backgroundColor: '#F0F9FF',
+      backgroundColor: '#F8FAFC',
       borderColor: '#0088CC',
     },
   

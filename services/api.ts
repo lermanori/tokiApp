@@ -294,7 +294,6 @@ class ApiService {
     };
 
     try {
-      console.debug(`🌐 [API] Making request to: ${endpoint}`);
       const response = await fetch(url, config);
       const data = await response.json();
 
@@ -333,7 +332,6 @@ class ApiService {
         throw error;
       }
 
-      console.debug(`✅ [API] Request successful: ${endpoint}`);
       return data;
     } catch (error) {
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);

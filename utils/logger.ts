@@ -38,7 +38,7 @@ declare global {
   };
 
   const envLevel = (process?.env as any)?.EXPO_PUBLIC_LOG_LEVEL || globalThis.__LOG_LEVEL__;
-  let currentLevel: LogLevelName = parseLevel(envLevel, 'warn');
+  let currentLevel: LogLevelName = parseLevel(envLevel, 'debug');
 
   const should = (required: LogLevelName) => LEVELS[currentLevel] >= LEVELS[required];
 

@@ -7,19 +7,73 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
+import RedirectionGuard from '@/components/RedirectionGuard';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const segments = useSegments();
   const router = useRouter();
-  const { returnTo, code } = useLocalSearchParams<{ returnTo?: string; code?: string }>();
+  const searchParams = useLocalSearchParams();
+  const { returnTo, code, ...otherParams } = searchParams;
+  
+  // Parse URL parameters directly for cases where useLocalSearchParams doesn't work
+  const getUrlParams = () => {
+    if (typeof window === 'undefined') return {};
+    const url = new URL(window.location.href);
+    const params: Record<string, string> = {};
+    url.searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+    return params;
+  };
+  
+  const urlParams = getUrlParams();
+  const effectiveReturnTo = returnTo || urlParams.returnTo;
+  const effectiveCode = code || urlParams.code;
+  const effectiveOtherParams = Object.keys(otherParams).length > 0 ? otherParams : 
+    Object.fromEntries(Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code'));
   const [isReady, setIsReady] = useState(false);
   const [lastAuthCheck, setLastAuthCheck] = useState(0);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
+  const [hasCheckedFastRedirect, setHasCheckedFastRedirect] = useState(false);
+
+  // Fast redirect check - runs immediately on mount
+  useEffect(() => {
+    if (hasCheckedFastRedirect || !effectiveReturnTo || segments[0] !== 'login') {
+      return;
+    }
+
+    // Check if user has valid tokens immediately
+    const hasValidTokens = apiService.accessToken && apiService.refreshToken;
+    if (hasValidTokens) {
+      console.log('⚡ [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
+      setHasCheckedFastRedirect(true);
+      
+      // Build the redirect URL with parameters
+      let redirectUrl = effectiveReturnTo;
+      if (Object.keys(effectiveOtherParams).length > 0) {
+        const searchParams = new URLSearchParams(effectiveOtherParams);
+        redirectUrl += `?${searchParams.toString()}`;
+      }
+      
+      router.replace(redirectUrl as any);
+      return;
+    }
+  }, [effectiveReturnTo, effectiveOtherParams, segments, router, hasCheckedFastRedirect]);
 
   useEffect(() => {
+    // Debug: Log all parameters
+    // Debug: Log all parameters
+    console.log('🔍 Layout useEffect triggered');
+    console.log('🔍 Layout params (useLocalSearchParams):', { returnTo, code, otherParams });
+    console.log('🔍 URL params (direct parsing):', urlParams);
+    console.log('🔍 Effective params:', { effectiveReturnTo, effectiveCode, effectiveOtherParams });
+    console.log('🔍 Redirection state:', state.redirection);
+    console.log('🔍 Current segments:', segments);
+    console.log('🔍 Current user ID:', state.currentUser?.id);
+    
     // Check if user is authenticated with debouncing
     const checkAuth = async () => {
       // Ensure routing has recognized the initial path (especially for deep links like /join/:code)
@@ -62,13 +116,14 @@ function RootLayoutNav() {
         setLastAuthCheck(now);
         
         const isAuthenticated = await apiService.isAuthenticated();
+        const hasUserData = state.currentUser && state.currentUser.id;
         const inLoginScreen = segments[0] === 'login';
         // Treat the URL path as join during the very first render before segments are populated
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
         const inHealthScreen = segments[0] === 'health';
         const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
         
-        console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'inHealthScreen:', inHealthScreen, 'currentUser.id:', state.currentUser.id);
+        console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'hasUserData:', hasUserData, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'inHealthScreen:', inHealthScreen, 'currentUser.id:', state.currentUser.id);
         
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
           // Redirect unauthenticated users to login; allow waitlist, join and health
@@ -77,9 +132,21 @@ function RootLayoutNav() {
         } else if (isAuthenticated && inLoginScreen) {
           // Redirect to main app if authenticated
           // Respect returnTo params (e.g., invite flow)
-          if (returnTo === 'join' && typeof code === 'string' && code.length > 0) {
-            console.log('🔄 Redirecting to join page after login with code:', code);
-            router.replace(`/join/${code}`);
+          if (effectiveReturnTo === 'join' && typeof effectiveCode === 'string' && effectiveCode.length > 0) {
+            console.log('🔄 Redirecting to join page after login with code:', effectiveCode);
+            router.replace(`/join/${effectiveCode}`);
+          } else if (effectiveReturnTo && effectiveReturnTo !== 'join') {
+            // Handle other returnTo paths by setting redirection and going to main app
+            console.log('🔄 Setting redirection for returnTo:', effectiveReturnTo);
+            const cleanParams = Object.fromEntries(
+              Object.entries(effectiveOtherParams)
+                .filter(([_, value]) => value !== undefined)
+                .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+            );
+            const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
+            actions.setRedirection(returnToPath, cleanParams);
+            console.log('🔄 Redirecting to main app with redirection set');
+            router.replace('/(tabs)');
           } else {
             console.log('🔄 Redirecting to main app - authenticated');
             router.replace('/(tabs)');
@@ -88,6 +155,40 @@ function RootLayoutNav() {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
           console.log('✅ User is authenticated and on join page - staying put');
+        } else if (isAuthenticated && state.redirection.isRedirecting && state.redirection.returnTo) {
+          // Handle pending redirection after login
+          console.log('🔄 Processing pending redirection:', state.redirection);
+          const { returnTo, returnParams } = state.redirection;
+          
+          // Build the redirect URL with parameters
+          let redirectUrl = returnTo;
+          if (returnParams && Object.keys(returnParams).length > 0) {
+            const searchParams = new URLSearchParams(returnParams);
+            redirectUrl += `?${searchParams.toString()}`;
+          }
+          
+          console.log('🔄 Redirecting to:', redirectUrl);
+          router.replace(redirectUrl as any);
+        } else if (isAuthenticated && effectiveReturnTo && !inJoinScreen) {
+          // Handle direct redirection for authenticated users (even if on login screen)
+          console.log('🔄 Direct redirection for authenticated user to:', effectiveReturnTo);
+          const cleanParams = Object.fromEntries(
+            Object.entries(effectiveOtherParams)
+              .filter(([_, value]) => value !== undefined)
+              .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+          );
+          
+          // Build the redirect URL with parameters
+          let redirectUrl = effectiveReturnTo;
+          if (Object.keys(cleanParams).length > 0) {
+            const searchParams = new URLSearchParams(cleanParams);
+            redirectUrl += `?${searchParams.toString()}`;
+          }
+          
+          console.log('🔄 Redirecting authenticated user to:', redirectUrl);
+          router.replace(redirectUrl as any);
+        } else {
+          console.log('🔍 No redirection needed - authenticated:', isAuthenticated, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'redirection:', state.redirection);
         }
       } catch (error) {
         console.error('❌ Error checking authentication:', error);
@@ -106,30 +207,74 @@ function RootLayoutNav() {
     checkAuth();
   }, [segments, state.currentUser.id]);
 
+  // Handle redirection when user data becomes available
+  useEffect(() => {
+    const handleUserDataRedirection = async () => {
+      // Only run if we have user data and we're on login screen with returnTo
+      if (!state.currentUser?.id || segments[0] !== 'login') {
+        return;
+      }
+
+      // Parse URL parameters directly for cases where useLocalSearchParams doesn't work
+      const getUrlParams = () => {
+        if (typeof window === 'undefined') return {};
+        const url = new URL(window.location.href);
+        const params: Record<string, string> = {};
+        url.searchParams.forEach((value, key) => {
+          params[key] = value;
+        });
+        return params;
+      };
+      const urlParams = getUrlParams();
+      const effectiveReturnTo = urlParams.returnTo;
+      const effectiveOtherParams = Object.fromEntries(
+        Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code')
+      );
+
+      if (effectiveReturnTo && effectiveReturnTo !== 'join') {
+        console.log('🔄 [USER DATA] User data loaded, redirecting to:', effectiveReturnTo);
+        
+        // Build the redirect URL with parameters
+        let redirectUrl = effectiveReturnTo;
+        if (Object.keys(effectiveOtherParams).length > 0) {
+          const searchParams = new URLSearchParams(effectiveOtherParams);
+          redirectUrl += `?${searchParams.toString()}`;
+        }
+        
+        console.log('🔄 [USER DATA] Redirecting to:', redirectUrl);
+        router.replace(redirectUrl as any);
+      }
+    };
+
+    handleUserDataRedirection();
+  }, [state.currentUser?.id, segments, router]);
+
   if (!isReady) {
     return null;
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="waitlist" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="create-toki" options={{ headerShown: false }} />
-      <Stack.Screen name="toki-details" options={{ headerShown: false }} />
-      <Stack.Screen name="chat" options={{ headerShown: false }} />
-      <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
-      <Stack.Screen name="my-tokis" options={{ headerShown: false }} />
-      <Stack.Screen name="saved-tokis" options={{ headerShown: false }} />
-      <Stack.Screen name="connections" options={{ headerShown: false }} />
-      <Stack.Screen name="notifications" options={{ headerShown: false }} />
-      <Stack.Screen name="user-profile/[userId]" options={{ headerShown: false }} />
-      <Stack.Screen name="join/[code]" options={{ headerShown: false }} />
-      <Stack.Screen name="join-test" options={{ headerShown: false }} />
-      <Stack.Screen name="test-route" options={{ headerShown: false }} />
-      <Stack.Screen name="health" options={{ headerShown: false }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <RedirectionGuard>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="waitlist" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="create-toki" options={{ headerShown: false }} />
+        <Stack.Screen name="toki-details" options={{ headerShown: false }} />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
+        <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
+        <Stack.Screen name="my-tokis" options={{ headerShown: false }} />
+        <Stack.Screen name="saved-tokis" options={{ headerShown: false }} />
+        <Stack.Screen name="connections" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" options={{ headerShown: false }} />
+        <Stack.Screen name="user-profile/[userId]" options={{ headerShown: false }} />
+        <Stack.Screen name="join/[code]" options={{ headerShown: false }} />
+        <Stack.Screen name="join-test" options={{ headerShown: false }} />
+        <Stack.Screen name="test-route" options={{ headerShown: false }} />
+        <Stack.Screen name="health" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </RedirectionGuard>
   );
 }
 

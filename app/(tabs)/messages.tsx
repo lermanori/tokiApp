@@ -405,6 +405,7 @@ export default function MessagesScreen() {
                         : 'https://via.placeholder.com/50' // Placeholder for Toki group avatar
                     }}
                     style={styles.avatarImage}
+                    resizeMode="cover"
                   />
                 </View>
 

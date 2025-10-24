@@ -381,12 +381,12 @@ export default function NotificationsScreen() {
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color="#1C1C1C" />
           </TouchableOpacity>
           <Text style={styles.title}>Notifications</Text>
           {unreadCount > 0 && (
-            <TouchableOpacity onPress={markAllAsRead}>
+            <TouchableOpacity onPress={markAllAsRead} style={styles.markAllReadButton}>
               <Text style={styles.markAllRead}>Mark all read</Text>
             </TouchableOpacity>
           )}
@@ -557,18 +557,33 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+  },
+  backButton: {
+    zIndex: 2,
+  },
+  markAllReadButton: {
+    zIndex: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   title: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     color: '#1C1C1C',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    zIndex: 1,
   },
   markAllRead: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#B49AFF',
+    zIndex: 2,
   },
   content: {
     flex: 1,

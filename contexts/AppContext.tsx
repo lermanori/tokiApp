@@ -108,6 +108,12 @@ interface NotificationItem {
   tokiTitle?: string;
 }
 
+interface RedirectionState {
+  returnTo: string | null;
+  returnParams: Record<string, string> | null;
+  isRedirecting: boolean;
+}
+
 interface AppState {
   tokis: Toki[];
   users: User[];
@@ -119,6 +125,7 @@ interface AppState {
   lastSyncTime: string | null;
   userRatings: { [userId: string]: { ratings: UserRating[]; stats: UserRatingStats } };
   blockedUsers: BlockedUser[];
+  redirection: RedirectionState;
   blockedByUsers: BlockedUser[];
   conversations: any[];
   tokiGroupChats: any[];
@@ -131,6 +138,8 @@ type AppAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_CONNECTION_STATUS'; payload: boolean }
+  | { type: 'SET_REDIRECTION'; payload: { returnTo: string; returnParams?: Record<string, string> } }
+  | { type: 'CLEAR_REDIRECTION' }
   | { type: 'SET_TOKIS'; payload: Toki[] }
   | { type: 'ADD_TOKI'; payload: Toki }
   | { type: 'UPDATE_TOKI'; payload: { id: string; updates: Partial<Toki> } }
@@ -265,6 +274,11 @@ const initialState: AppState = {
   lastSyncTime: null,
   userRatings: {},
   blockedUsers: [],
+  redirection: {
+    returnTo: null,
+    returnParams: null,
+    isRedirecting: false
+  },
   blockedByUsers: [],
   conversations: [],
   tokiGroupChats: [],
@@ -281,6 +295,24 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, error: action.payload };
     case 'SET_CONNECTION_STATUS':
       return { ...state, isConnected: action.payload };
+    case 'SET_REDIRECTION':
+      return {
+        ...state,
+        redirection: {
+          returnTo: action.payload.returnTo,
+          returnParams: action.payload.returnParams || null,
+          isRedirecting: true
+        }
+      };
+    case 'CLEAR_REDIRECTION':
+      return {
+        ...state,
+        redirection: {
+          returnTo: null,
+          returnParams: null,
+          isRedirecting: false
+        }
+      };
     case 'SET_TOKIS':
       // Store in AsyncStorage (async operation)
       storage.set(STORAGE_KEYS.TOKIS, action.payload);
@@ -533,6 +565,9 @@ interface AppContextType {
     loadNotifications: () => Promise<NotificationItem[]>;
     markNotificationRead: (id: string, source?: string, externalId?: string) => Promise<void>;
     markAllNotificationsRead: () => Promise<void>;
+    // Redirection actions
+    setRedirection: (returnTo: string, params?: Record<string, string>) => void;
+    clearRedirection: () => void;
   };
 
 
@@ -593,19 +628,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             
             // Load Tokis from backend with current user ID
             await loadTokis();
-            console.log('✅ Authenticated data loaded successfully');
             
             // Connect to WebSocket
-            console.log('🔌 Starting WebSocket connection...');
             await socketService.connect();
             if (currentUser.id) {
-              console.log('👤 Joining user room:', currentUser.id);
               await socketService.joinUser(currentUser.id);
               
               // Note: Global message listeners will be set up after actions are defined
-              console.log('🔌 WebSocket connection process completed');
             }
-            console.log('🔌 WebSocket connection process completed');
           } catch (error) {
             console.error('❌ Failed to load authenticated user data:', error);
             // Clear invalid tokens and use stored data
@@ -763,9 +793,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     for (const tokiChat of tokiGroupChats) {
       try {
-        console.log('🏷️ [APP CONTEXT] Joining Toki room:', tokiChat.id, '-', tokiChat.title);
         await socketService.joinToki(tokiChat.id);
-        console.log('✅ [APP CONTEXT] Successfully joined Toki room:', tokiChat.id);
       } catch (error) {
         console.error('❌ [APP CONTEXT] Failed to join Toki room:', tokiChat.id, error);
       }
@@ -883,7 +911,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
-      console.log(`📱 Loaded ${apiTokis.length} Tokis from backend`);
     } catch (error) {
       console.error('❌ Failed to load Tokis:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load activities' });
@@ -2454,6 +2481,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    // Redirection actions
+    setRedirection: (returnTo: string, params?: Record<string, string>) => {
+      dispatch({ type: 'SET_REDIRECTION', payload: { returnTo, returnParams: params } });
+    },
+    clearRedirection: () => {
+      dispatch({ type: 'CLEAR_REDIRECTION' });
+    },
   };
 
   return (

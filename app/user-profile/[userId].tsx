@@ -342,6 +342,7 @@ export default function UserProfileScreen() {
                 <Image
                   source={{ uri: userProfile.avatar }}
                   style={styles.avatarImage}
+                  resizeMode="cover"
                 />
               ) : (
                 <View style={styles.avatarFallback}>

@@ -36,9 +36,6 @@ class SocketService {
         });
 
         this.socket.on('connect', () => {
-          console.info('🔌 [FRONTEND] WebSocket connected, socket ID:', this.socket?.id);
-          console.debug('🔌 [FRONTEND] Connection URL:', wsUrl);
-          console.debug('🔌 [FRONTEND] Connection state:', this.socket?.connected);
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
@@ -126,7 +123,6 @@ class SocketService {
       const roomName = `user-${userId}`;
       this.socket.emit('join-user', userId);
       this.currentRooms.add(roomName);
-      console.debug('👤 [FRONTEND] Joined user room:', userId);
     }
   }
 
@@ -153,18 +149,12 @@ class SocketService {
   async joinToki(tokiId: string) {
     await this.ensureConnected();
     
-    console.debug('🏷️ [FRONTEND] Attempting to join Toki:', tokiId);
-    console.debug('🏷️ [FRONTEND] Socket connected:', this.isConnected);
-    console.debug('🏷️ [FRONTEND] Socket instance:', !!this.socket);
-    console.debug('🏷️ [FRONTEND] Socket ID:', this.socket?.id);
     
     if (this.socket && this.isConnected) {
       const roomName = `toki-${tokiId}`;
       console.debug('🏷️ [FRONTEND] Emitting join-toki event for room:', roomName);
       this.socket.emit('join-toki', tokiId);
       this.currentRooms.add(roomName);
-      console.debug('🏷️ [FRONTEND] Successfully joined Toki chat room:', roomName);
-      console.debug('🏷️ [FRONTEND] Current rooms:', Array.from(this.currentRooms));
     } else {
       console.warn('❌ [FRONTEND] Cannot join Toki - socket not connected');
       console.debug('❌ [FRONTEND] Socket status:', {
@@ -198,7 +188,6 @@ class SocketService {
 
   // Rejoin all rooms after reconnection
   private async rejoinRooms() {
-    console.debug('🔄 [FRONTEND] Rejoining rooms after reconnection...');
     const roomsToRejoin = Array.from(this.currentRooms);
     
     for (const roomName of roomsToRejoin) {

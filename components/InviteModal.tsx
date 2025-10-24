@@ -99,7 +99,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
                     return (
                       <View key={id} style={[styles.connectionRow, isHidden && styles.connectionRowHidden, isParticipant && styles.connectionRowParticipant]}>
                         {avatar ? (
-                          <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
+                          <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} resizeMode="cover" />
                         ) : (
                           <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
                             <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
@@ -133,7 +133,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
                   return (
                     <View key={id} style={[styles.connectionRow, selected && styles.connectionRowSelected, isHidden && styles.connectionRowHidden, isParticipant && styles.connectionRowParticipant]}>
                       {avatar ? (
-                        <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} />
+                        <Image source={{ uri: avatar }} style={[styles.connectionAvatar, isHidden && styles.connectionAvatarHidden]} resizeMode="cover" />
                       ) : (
                         <View style={[styles.connectionAvatar, styles.connectionAvatarFallback, isHidden && styles.connectionAvatarHidden]}>
                           <Text style={[styles.connectionAvatarInitials, isHidden && styles.connectionAvatarInitialsHidden]}>{initials}</Text>
