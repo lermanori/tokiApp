@@ -16,27 +16,83 @@ const upload = multer({
 });
 
 // Upload Toki image
-router.post('/upload/:tokiId', authenticateToken, upload.single('image'), async (req: Request, res: Response) => {
+router.post('/upload/:tokiId', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tokiId = req.params.tokiId;
     const userId = (req as any).user.id;
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No image file provided',
-        message: 'Please select an image to upload'
+    let imageBuffer: Buffer;
+    
+    // Check if request is multipart (React Native) or JSON (Web)
+    const contentType = req.headers['content-type'] || '';
+    const isJsonRequest = contentType.includes('application/json');
+    
+    logger.debug('🔍 Toki image request content-type:', contentType);
+    logger.debug('🔍 Is JSON request:', isJsonRequest);
+    
+    if (!isJsonRequest) {
+      // Handle multipart/form-data (React Native)
+      logger.debug('🔍 Processing toki image as multipart/form-data');
+      const multerMiddleware = upload.single('image');
+      await new Promise((resolve, reject) => {
+        multerMiddleware(req, res, (err) => {
+          if (err) reject(err);
+          else resolve(undefined);
+        });
       });
-    }
+      
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'No image file provided',
+          message: 'Please select an image to upload'
+        });
+      }
 
-    // Validate image file
-    const validation = ImageService.validateImage(req.file);
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid image file',
-        message: validation.error
-      });
+      const file = req.file as Express.Multer.File;
+      const validation = ImageService.validateImage(file);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid image file',
+          message: validation.error
+        });
+      }
+
+      imageBuffer = file.buffer;
+    } else {
+      // Handle JSON with base64 data (Web)
+      logger.debug('🔍 Processing toki image as JSON with base64 data');
+      
+      const { image } = req.body;
+      
+      if (!image) {
+        logger.error('🔍 No image data found in request body');
+        return res.status(400).json({
+          success: false,
+          error: 'No image data provided',
+          message: 'Please provide image data'
+        });
+      }
+
+      // Extract base64 data from data URI
+      let base64Data = image;
+      if (image.startsWith('data:image/')) {
+        base64Data = image.split(',')[1];
+        logger.debug('🔍 Extracted base64 data length:', base64Data.length);
+      }
+
+      // Convert base64 to buffer
+      try {
+        imageBuffer = Buffer.from(base64Data, 'base64');
+        logger.debug('🔍 Toki image buffer created, size:', imageBuffer.length);
+      } catch (error) {
+        logger.error('🔍 Base64 conversion error:', error);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid image data',
+          message: 'Failed to process image data'
+        });
+      }
     }
 
     // Check if user owns this Toki
@@ -62,7 +118,7 @@ router.post('/upload/:tokiId', authenticateToken, upload.single('image'), async 
     }
 
     // Upload image to Cloudinary
-    const uploadResult = await ImageService.uploadTokiImage(tokiId, req.file.buffer);
+    const uploadResult = await ImageService.uploadTokiImage(tokiId, imageBuffer);
     
     if (!uploadResult.success) {
       return res.status(500).json({

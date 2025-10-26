@@ -1,23 +1,39 @@
 # File: TokiImageUpload.tsx
 
 ### Summary
-This file contains the TokiImageUpload component for handling multiple Toki image uploads, processing, and deletion. It includes image picker functionality, upload to backend, and a custom delete confirmation modal.
+This component handles uploading and managing multiple images for Toki events. It supports both "create" mode (where images are stored locally until the Toki is created) and "edit" mode (where images are immediately uploaded to the backend via the `/api/toki-images/upload/:tokiId` endpoint).
 
-### Fixes Applied log
-- **problem**: Alert.alert was unreliable for delete confirmation, causing the trash button to not work properly.
-- **solution**: Replaced Alert.alert with a custom confirmation modal that provides better UX and reliability.
+### Fixes Applied Log
+- **Problem**: Images were not being uploaded to the backend when added in edit mode (e.g., from toki-details screen).
+- **Solution**: Added `uploadImageToBackend` function that handles platform-specific uploads (base64 JSON for web, FormData for React Native). Modified `handleCropComplete` to check the mode and tokiId, and if in edit mode with a valid tokiId, it immediately uploads the cropped image to the backend and updates the UI with the returned Cloudinary URL and publicId.
+
+- **Problem**: Clicking the trash icon only removed images locally, not from the backend/Cloudinary.
+- **Solution**: Updated `handleRemoveImage` to call the backend delete endpoint `/api/toki-images/delete/:tokiId/:publicId` for real uploaded images. For temporary images (with `temp_` prefix) or when no tokiId exists, it still removes locally only.
+
+- **Problem**: Trash icon was not clickable/responding to touch events.
+- **Solution**: Removed `overflow: 'hidden'` from `imageContainer` style (which was clipping the button), added `zIndex: 10` and `elevation: 5` to `removeButton` to ensure it's on top, moved `borderRadius` to the `image` style itself to maintain rounded corners, and added comprehensive debug logging to track delete operations.
+
+- **Problem**: Delete confirmation used platform-specific alerts (Alert.alert on native, window.confirm on web) which were inconsistent.
+- **Solution**: Created a custom delete confirmation modal that works consistently across both web and native platforms. The modal features a clean design with an alert icon, title, message, and Cancel/Remove buttons. Uses React Native's Modal component with transparent overlay and fade animation.
 
 ### How Fixes Were Implemented
-- **problem**: The delete functionality was using Alert.alert which can be unreliable in React Native.
-- **solution**: 
-  1. Added new state variables: `showDeleteConfirm` and `imageToDelete` to manage the custom modal.
-  2. Updated `handleDeletePress` to show the custom modal instead of calling Alert.alert.
-  3. Created `confirmDelete` and `cancelDelete` functions to handle modal actions.
-  4. Added a custom delete confirmation modal with proper styling and loading states.
-  5. Added comprehensive debugging logs to track the delete flow.
-  6. Fixed URL encoding issue with `encodeURIComponent(publicId)` for the delete API call.
-
-- **problem**: Missing styles for the new delete confirmation modal.
-- **solution**: Added all necessary styles including `deleteConfirmText`, `deleteModalButtons`, `cancelDeleteButton`, `cancelDeleteButtonText`, `confirmDeleteButton`, and `confirmDeleteButtonText`.
-
-The component now provides a reliable delete experience with a custom modal that shows confirmation before deleting images, proper loading states, and better error handling.
+- **Problem**: The component was only adding images locally with temporary IDs, regardless of mode.
+- **Solution**: 
+  1. Added imports for `Platform`, `ImageManipulator`, `getBackendUrl`, and `apiService`.
+  2. Created `uploadImageToBackend` function that:
+     - Detects platform (web vs React Native)
+     - For web: converts image to base64 using `ImageManipulator` and sends as JSON
+     - For React Native: converts to blob and sends as FormData
+     - Calls `/api/toki-images/upload/:tokiId` with proper authentication
+     - Returns the uploaded image object with Cloudinary URL and publicId
+  3. Modified `handleCropComplete` to:
+     - Check if `mode === 'edit' && tokiId` exists
+     - If yes, call `uploadImageToBackend` and update the images list with the backend response
+     - If no (create mode), add locally with temp ID as before
+  4. Modified `handleRemoveImage` to:
+     - Check if the image is temporary (starts with `temp_`) or no tokiId exists
+     - If temporary or no tokiId: remove locally only
+     - If real uploaded image: call DELETE endpoint `/api/toki-images/delete/:tokiId/:publicId`
+     - Show loading state during deletion
+     - Display success/error alerts based on backend response
+  5. Added comprehensive logging to track the upload/delete flow and debug issues.

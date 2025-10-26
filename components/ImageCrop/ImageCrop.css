@@ -1,0 +1,67 @@
+/* Custom styles for react-image-crop */
+.react-crop {
+  display: inline-block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.react-crop__crop-selection {
+  border: 2px solid #1C1C1C !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.3) !important;
+}
+
+.react-crop__drag-handle {
+  background-color: #1C1C1C !important;
+  border: 2px solid #FFFFFF !important;
+  border-radius: 6px !important;
+  width: 12px !important;
+  height: 12px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+}
+
+.react-crop__drag-handle::after {
+  background-color: #FFFFFF !important;
+  border-radius: 2px !important;
+  width: 4px !important;
+  height: 4px !important;
+  content: '' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+.react-crop__drag-handle--corner-nw {
+  cursor: nw-resize !important;
+}
+
+.react-crop__drag-handle--corner-ne {
+  cursor: ne-resize !important;
+}
+
+.react-crop__drag-handle--corner-sw {
+  cursor: sw-resize !important;
+}
+
+.react-crop__drag-handle--corner-se {
+  cursor: se-resize !important;
+}
+
+.react-crop__drag-handle--corner-n {
+  cursor: n-resize !important;
+}
+
+.react-crop__drag-handle--corner-s {
+  cursor: s-resize !important;
+}
+
+.react-crop__drag-handle--corner-e {
+  cursor: e-resize !important;
+}
+
+.react-crop__drag-handle--corner-w {
+  cursor: w-resize !important;
+}
+

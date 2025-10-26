@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { TokiMetaData, generateTokiMetaTags } from '@/utils/metaTags';
 
 interface MetaTagsProps {
@@ -19,7 +20,10 @@ export default function MetaTags({
   type = 'website' 
 }: MetaTagsProps) {
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    // Only run on web platform where document is available
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
 
     let metaTags;
 

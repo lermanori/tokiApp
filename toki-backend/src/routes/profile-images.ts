@@ -24,26 +24,92 @@ const upload = multer({
 });
 
 // Upload/Update profile image
-router.post('/upload', authenticateToken, upload.single('image'), async (req: Request, res: Response) => {
+router.post('/upload', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    let imageBuffer: Buffer;
     
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No image file provided',
-        message: 'Please select an image to upload'
+    // Check if request is multipart (React Native) or JSON (Web)
+    const contentType = req.headers['content-type'] || '';
+    const isJsonRequest = contentType.includes('application/json');
+    
+    logger.debug('🔍 Request content-type:', contentType);
+    logger.debug('🔍 All headers:', req.headers);
+    logger.debug('🔍 Is JSON request:', isJsonRequest);
+    logger.debug('🔍 Request body type:', typeof req.body);
+    logger.debug('🔍 Request body keys:', Object.keys(req.body || {}));
+    
+    if (!isJsonRequest) {
+      // Handle multipart/form-data (React Native)
+      logger.debug('🔍 Processing as multipart/form-data');
+      const multerMiddleware = upload.single('image');
+      await new Promise((resolve, reject) => {
+        multerMiddleware(req, res, (err) => {
+          if (err) reject(err);
+          else resolve(undefined);
+        });
       });
-    }
+      
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'No image file provided',
+          message: 'Please select an image to upload'
+        });
+      }
 
-    // Validate the uploaded file
-    const validation = ImageService.validateImage(req.file);
-    if (!validation.isValid) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid image file',
-        message: validation.error
-      });
+      const file = req.file as Express.Multer.File; // Type assertion to help TypeScript
+      const validation = ImageService.validateImage(file);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid image file',
+          message: validation.error
+        });
+      }
+
+      imageBuffer = file.buffer;
+    } else {
+      // Handle JSON with base64 data (Web)
+      logger.debug('🔍 Processing as JSON with base64 data');
+      logger.debug('🔍 Full request body:', JSON.stringify(req.body, null, 2));
+      logger.debug('🔍 Request body keys:', Object.keys(req.body || {}));
+      
+      const { image, userId: requestUserId } = req.body;
+      
+      logger.debug('🔍 Image data present:', !!image);
+      logger.debug('🔍 Image data type:', typeof image);
+      logger.debug('🔍 Image data length:', image?.length || 0);
+      logger.debug('🔍 UserId from body:', requestUserId);
+      
+      if (!image) {
+        logger.error('🔍 No image data found in request body');
+        return res.status(400).json({
+          success: false,
+          error: 'No image data provided',
+          message: 'Please provide image data'
+        });
+      }
+
+      // Extract base64 data from data URI
+      let base64Data = image;
+      if (image.startsWith('data:image/')) {
+        base64Data = image.split(',')[1];
+        logger.debug('🔍 Extracted base64 data length:', base64Data.length);
+      }
+
+      // Convert base64 to buffer
+      try {
+        imageBuffer = Buffer.from(base64Data, 'base64');
+        logger.debug('🔍 Image buffer created, size:', imageBuffer.length);
+      } catch (error) {
+        logger.error('🔍 Base64 conversion error:', error);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid image data',
+          message: 'Failed to process image data'
+        });
+      }
     }
 
     // Get current profile image to delete later
@@ -55,7 +121,7 @@ router.post('/upload', authenticateToken, upload.single('image'), async (req: Re
     const currentPublicId = currentImageResult.rows[0]?.profile_image_public_id;
 
     // Upload new image to Cloudinary
-    const uploadResult = await ImageService.uploadProfileImage(userId, req.file.buffer);
+    const uploadResult = await ImageService.uploadProfileImage(userId, imageBuffer);
     
     if (!uploadResult.success) {
       return res.status(500).json({
