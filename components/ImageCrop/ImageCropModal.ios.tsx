@@ -48,6 +48,18 @@ export default function ImageCropModalIOS({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
+  
+  // Resize handling
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
+  const [resizeStartData, setResizeStartData] = useState<{
+    startSize: { width: number; height: number };
+    startPosition: { x: number; y: number };
+    startTouch: { x: number; y: number };
+  } | null>(null);
+  
+  // Debounce preview updates
+  const previewUpdateTimeout = useRef<any>(null);
 
   const handleTouchStart = (evt: any) => {
     console.log('🔥 TOUCH START FIRED!', evt.nativeEvent.pageX, evt.nativeEvent.pageY);
@@ -57,42 +69,122 @@ export default function ImageCropModalIOS({
   };
 
   const handleTouchMove = (evt: any) => {
-    if (!isDragging) {
-      console.log('❌ Not dragging, ignoring touch move');
-      return;
+    if (isResizing) {
+      handleResizeMove(evt);
+    } else if (isDragging) {
+      const currentX = evt.nativeEvent.pageX;
+      const currentY = evt.nativeEvent.pageY;
+      const deltaX = currentX - dragStart.x;
+      const deltaY = currentY - dragStart.y;
+      
+      // Ensure crop box stays within image bounds
+      const maxX = Math.max(0, imageDimensions.width - cropSize.width);
+      const maxY = Math.max(0, imageDimensions.height - cropSize.height);
+      
+      const newX = Math.max(0, Math.min(startPosition.x + deltaX, maxX));
+      const newY = Math.max(0, Math.min(startPosition.y + deltaY, maxY));
+      
+      setCropPosition({ x: newX, y: newY });
     }
-    
-    const currentX = evt.nativeEvent.pageX;
-    const currentY = evt.nativeEvent.pageY;
-    const deltaX = currentX - dragStart.x;
-    const deltaY = currentY - dragStart.y;
-    
-    console.log('🔥 TOUCH MOVE FIRED!', { deltaX, deltaY, currentX, currentY, dragStart });
-    console.log('Image dimensions:', imageDimensions);
-    console.log('Crop size:', cropSize);
-    console.log('Start position:', startPosition);
-    
-    // Ensure crop box stays within image bounds
-    const maxX = Math.max(0, imageDimensions.width - cropSize.width);
-    const maxY = Math.max(0, imageDimensions.height - cropSize.height);
-    
-    const newX = Math.max(0, Math.min(
-      startPosition.x + deltaX, 
-      maxX
-    ));
-    const newY = Math.max(0, Math.min(
-      startPosition.y + deltaY, 
-      maxY
-    ));
-    
-    console.log('New position:', { newX, newY, maxX, maxY });
-    console.log('Position changed:', newX !== cropPosition.x || newY !== cropPosition.y);
-    setCropPosition({ x: newX, y: newY });
   };
 
   const handleTouchEnd = () => {
-    console.log('Touch end');
     setIsDragging(false);
+    setIsResizing(false);
+    setResizeHandle(null);
+    setResizeStartData(null);
+    
+    // Update preview immediately when user stops dragging/resizing
+    if (previewUri && imageDimensions.width > 0) {
+      if (previewUpdateTimeout.current) {
+        clearTimeout(previewUpdateTimeout.current);
+      }
+      updateProfilePreview();
+    }
+  };
+
+  const handleResizeStart = (handle: string, event: any) => {
+    setIsResizing(true);
+    setResizeHandle(handle);
+    
+    setResizeStartData({
+      startSize: { width: cropSize.width, height: cropSize.height },
+      startPosition: { x: cropPosition.x, y: cropPosition.y },
+      startTouch: { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }
+    });
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const handleResizeMove = (event: any) => {
+    if (!isResizing || !resizeHandle || !resizeStartData) return;
+
+    const { pageX, pageY } = event.nativeEvent;
+    const { width: imageWidth, height: imageHeight } = imageDimensions;
+    
+    const deltaX = pageX - resizeStartData.startTouch.x;
+    const deltaY = pageY - resizeStartData.startTouch.y;
+    
+    let newWidth = resizeStartData.startSize.width;
+    let newHeight = resizeStartData.startSize.height;
+    let newX = resizeStartData.startPosition.x;
+    let newY = resizeStartData.startPosition.y;
+    
+    const aspectRatioValue = aspectRatio === '1:1' ? 1 : 4/3;
+
+    switch (resizeHandle) {
+      case 'se': // Bottom-right corner - grow from top-left
+        const deltaSE = Math.max(deltaX, deltaY);
+        newWidth = Math.max(50, resizeStartData.startSize.width + deltaSE);
+        newHeight = newWidth / aspectRatioValue;
+        break;
+        
+      case 'sw': // Bottom-left corner - grow from top-right
+        const deltaSW = Math.max(-deltaX, deltaY);
+        newWidth = Math.max(50, resizeStartData.startSize.width + deltaSW);
+        newHeight = newWidth / aspectRatioValue;
+        newX = resizeStartData.startPosition.x + resizeStartData.startSize.width - newWidth;
+        break;
+        
+      case 'ne': // Top-right corner - grow from bottom-left
+        const deltaNE = Math.max(deltaX, -deltaY);
+        newWidth = Math.max(50, resizeStartData.startSize.width + deltaNE);
+        newHeight = newWidth / aspectRatioValue;
+        newY = resizeStartData.startPosition.y + resizeStartData.startSize.height - newHeight;
+        break;
+        
+      case 'nw': // Top-left corner - grow from bottom-right
+        const deltaNW = Math.max(-deltaX, -deltaY);
+        newWidth = Math.max(50, resizeStartData.startSize.width + deltaNW);
+        newHeight = newWidth / aspectRatioValue;
+        newX = resizeStartData.startPosition.x + resizeStartData.startSize.width - newWidth;
+        newY = resizeStartData.startPosition.y + resizeStartData.startSize.height - newHeight;
+        break;
+    }
+    
+    // Constrain to image boundaries
+    const maxX = imageWidth - newWidth;
+    const maxY = imageHeight - newHeight;
+    
+    // Clamp position to image bounds
+    newX = Math.max(0, Math.min(newX, maxX));
+    newY = Math.max(0, Math.min(newY, maxY));
+    
+    // If we hit a boundary, adjust size to fit
+    if (newX === 0 || newX === maxX) {
+      newWidth = imageWidth - newX;
+      newHeight = newWidth / aspectRatioValue;
+    }
+    if (newY === 0 || newY === maxY) {
+      newHeight = imageHeight - newY;
+      newWidth = newHeight * aspectRatioValue;
+    }
+    
+    // Ensure minimum size
+    if (newWidth >= 50 && newHeight >= 50) {
+      setCropSize({ width: newWidth, height: newHeight });
+      setCropPosition({ x: newX, y: newY });
+    }
   };
 
   // Update preview when imageUri changes
@@ -123,47 +215,78 @@ export default function ImageCropModalIOS({
     }
   }, [imageDimensions, cropSize]);
 
-  // Update profile preview when crop position changes
+  // Update profile preview when crop position changes (debounced)
   useEffect(() => {
     if (previewUri && imageDimensions.width > 0) {
-      updateProfilePreview();
+      // Clear existing timeout
+      if (previewUpdateTimeout.current) {
+        clearTimeout(previewUpdateTimeout.current);
+      }
+      
+      // Set new timeout for debounced update
+      previewUpdateTimeout.current = setTimeout(() => {
+        updateProfilePreview();
+      }, 150);
     }
+    
+    // Cleanup on unmount
+    return () => {
+      if (previewUpdateTimeout.current) {
+        clearTimeout(previewUpdateTimeout.current);
+      }
+    };
   }, [cropPosition, cropSize, previewUri, imageDimensions]);
 
   const updateProfilePreview = async () => {
-    if (!previewUri || imageDimensions.width === 0) {
-      console.log('Cannot update preview - missing data:', { previewUri: !!previewUri, imageDimensions });
+    if (!imageUri || imageDimensions.width === 0) {
+      console.log('Cannot update preview - missing data:', { imageUri: !!imageUri, imageDimensions });
       return;
     }
     
     try {
-      console.log('Updating profile preview with:', { cropPosition, cropSize, imageDimensions });
+      console.log('Updating preview with:', { cropPosition, cropSize, imageDimensions });
       
-      // The preview image is 300x200, so we need to scale from that to the actual image
-      // But we're cropping from the preview image itself, so no scaling needed!
-      const previewCropX = cropPosition.x;
-      const previewCropY = cropPosition.y;
-      const previewCropWidth = cropSize.width;
-      const previewCropHeight = cropSize.height;
+      // Get the actual image dimensions
+      const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { compress: 1 });
+      const actualImageWidth = imageInfo.width;
+      const actualImageHeight = imageInfo.height;
       
-      console.log('Preview crop coordinates (no scaling):', { previewCropX, previewCropY, previewCropWidth, previewCropHeight });
+      console.log('Actual image dimensions:', { actualImageWidth, actualImageHeight });
       
-      // Create a cropped version for the profile preview
+      // Calculate scale factors from preview (300x200) to actual image
+      const scaleX = actualImageWidth / imageDimensions.width;
+      const scaleY = actualImageHeight / imageDimensions.height;
+      
+      console.log('Scale factors:', { scaleX, scaleY });
+      
+      // Convert crop position from preview coordinates to actual image coordinates
+      const actualCropX = cropPosition.x * scaleX;
+      const actualCropY = cropPosition.y * scaleY;
+      const actualCropWidth = cropSize.width * scaleX;
+      const actualCropHeight = cropSize.height * scaleY;
+      
+      console.log('Actual crop coordinates:', { actualCropX, actualCropY, actualCropWidth, actualCropHeight });
+      
+      // Determine preview size based on aspect ratio
+      const previewWidth = aspectRatio === '1:1' ? 80 : 120;
+      const previewHeight = aspectRatio === '1:1' ? 80 : 90;
+      
+      // Create a cropped version for the preview
       const croppedPreview = await ImageManipulator.manipulateAsync(
-        previewUri,
+        imageUri,
         [
           {
             crop: {
-              originX: Math.round(previewCropX),
-              originY: Math.round(previewCropY),
-              width: Math.round(previewCropWidth),
-              height: Math.round(previewCropHeight),
+              originX: Math.round(actualCropX),
+              originY: Math.round(actualCropY),
+              width: Math.round(actualCropWidth),
+              height: Math.round(actualCropHeight),
             },
           },
           {
             resize: {
-              width: 50,
-              height: 50,
+              width: previewWidth,
+              height: previewHeight,
             },
           },
         ],
@@ -173,10 +296,10 @@ export default function ImageCropModalIOS({
         }
       );
       
-      console.log('Profile preview updated:', croppedPreview.uri);
+      console.log('Preview updated:', croppedPreview.uri);
       setCroppedPreviewUri(croppedPreview.uri);
     } catch (error) {
-      console.error('Error updating profile preview:', error);
+      console.error('Error updating preview:', error);
     }
   };
 
@@ -315,97 +438,123 @@ export default function ImageCropModalIOS({
         {/* Image Preview Area */}
         <View style={styles.iosPreviewContainer}>
           {previewUri && (
-            <View style={styles.imageWrapper}>
+            <View 
+              style={styles.imageWrapper}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                console.log('🔥 IMAGE WRAPPER LAYOUT:', { width, height });
+                // Use the fixed image dimensions from styles
+                setImageDimensions({ width: 300, height: 200 });
+              }}
+            >
               <Image 
                 source={{ uri: previewUri }} 
                 style={styles.iosPreviewImage}
-                onLayout={(event) => {
-                  const { width, height } = event.nativeEvent.layout;
-                  console.log('🔥 IMAGE LAYOUT FIRED:', { width, height });
-                  setImageDimensions({ width, height });
-                }}
+                resizeMode="cover"
               />
-              {/* Interactive crop overlay */}
-              <View style={styles.cropOverlay}>
-                {/* Image boundary indicator */}
-                <View 
-                  style={[
-                    styles.imageBoundary,
-                    {
-                      width: imageDimensions.width,
-                      height: imageDimensions.height,
-                    }
-                  ]}
-                />
-                
-                <View
-                  style={[
-                    styles.cropArea,
-                    {
-                      width: cropSize.width,
-                      height: cropSize.height,
-                      left: cropPosition.x,
-                      top: cropPosition.y,
-                    },
-                  ]}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                >
-                  <View style={styles.cropAreaInner}>
-                    <Text style={styles.dragHint}>
-                      {isDragging ? 'Dragging...' : 'Drag me'}
-                    </Text>
-                    <Text style={styles.positionText}>
-                      {Math.round(cropPosition.x)},{Math.round(cropPosition.y)}
-                    </Text>
-                    <Text style={styles.debugText}>
-                      Size: {cropSize.width}x{cropSize.height}
-                    </Text>
-                    <Text style={styles.debugText}>
-                      Image: {Math.round(imageDimensions.width)}x{Math.round(imageDimensions.height)}
-                    </Text>
-                  </View>
+              {/* Interactive crop overlay - positioned over the image */}
+              {imageDimensions.width > 0 && (
+                <View style={[styles.cropOverlay, {
+                  width: 300,
+                  height: 200,
+                }]}>
+                  <View
+                    style={[
+                      styles.cropArea,
+                      {
+                        width: cropSize.width,
+                        height: cropSize.height,
+                        left: cropPosition.x,
+                        top: cropPosition.y,
+                      },
+                    ]}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  />
+                  
+                  {/* Resize handles */}
+                  <View
+                    style={[styles.resizeHandle, styles.resizeHandleNW, {
+                      left: cropPosition.x - 10,
+                      top: cropPosition.y - 10,
+                    }]}
+                    onTouchStart={(event) => handleResizeStart('nw', event)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  />
+                  <View
+                    style={[styles.resizeHandle, styles.resizeHandleNE, {
+                      left: cropPosition.x + cropSize.width - 10,
+                      top: cropPosition.y - 10,
+                    }]}
+                    onTouchStart={(event) => handleResizeStart('ne', event)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  />
+                  <View
+                    style={[styles.resizeHandle, styles.resizeHandleSW, {
+                      left: cropPosition.x - 10,
+                      top: cropPosition.y + cropSize.height - 10,
+                    }]}
+                    onTouchStart={(event) => handleResizeStart('sw', event)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  />
+                  <View
+                    style={[styles.resizeHandle, styles.resizeHandleSE, {
+                      left: cropPosition.x + cropSize.width - 10,
+                      top: cropPosition.y + cropSize.height - 10,
+                    }]}
+                    onTouchStart={(event) => handleResizeStart('se', event)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                  />
                 </View>
-              </View>
+              )}
             </View>
           )}
         </View>
 
-        {/* Profile Preview */}
-        <View style={styles.profilePreviewContainer}>
-          <Text style={styles.profilePreviewLabel}>Profile Preview</Text>
-          <View style={styles.profilePreviewImage}>
-            {croppedPreviewUri ? (
-              <Image 
-                source={{ uri: croppedPreviewUri }} 
-                style={styles.profilePreviewThumbnail}
-                resizeMode="cover"
-              />
-            ) : previewUri && (
-              <Image 
-                source={{ uri: previewUri }} 
-                style={styles.profilePreviewThumbnail}
-                resizeMode="cover"
-              />
-            )}
+        {/* Dual Preview - Circle and Rectangle */}
+        <View style={styles.dualPreviewContainer}>
+          <View style={styles.previewItem}>
+            <Text style={styles.previewLabel}>Circle</Text>
+            <View style={styles.profilePreviewImage}>
+              {croppedPreviewUri ? (
+                <Image 
+                  source={{ uri: croppedPreviewUri }} 
+                  style={styles.profilePreviewThumbnail}
+                  resizeMode="cover"
+                />
+              ) : previewUri && (
+                <Image 
+                  source={{ uri: previewUri }} 
+                  style={styles.profilePreviewThumbnail}
+                  resizeMode="cover"
+                />
+              )}
+            </View>
           </View>
-        </View>
-
-        {/* Test Button */}
-        <View style={styles.testContainer}>
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={() => {
-              console.log('🔥 TEST: Moving crop box to random position');
-              const newX = Math.random() * (imageDimensions.width - cropSize.width);
-              const newY = Math.random() * (imageDimensions.height - cropSize.height);
-              console.log('🔥 TEST: New position:', { newX, newY });
-              setCropPosition({ x: newX, y: newY });
-            }}
-          >
-            <Text style={styles.testButtonText}>Test Move</Text>
-          </TouchableOpacity>
+          
+          <View style={styles.previewItem}>
+            <Text style={styles.previewLabel}>Rectangle</Text>
+            <View style={styles.tokiPreviewImage}>
+              {croppedPreviewUri ? (
+                <Image 
+                  source={{ uri: croppedPreviewUri }} 
+                  style={styles.profilePreviewThumbnail}
+                  resizeMode="cover"
+                />
+              ) : previewUri && (
+                <Image 
+                  source={{ uri: previewUri }} 
+                  style={styles.profilePreviewThumbnail}
+                  resizeMode="cover"
+                />
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Instructions */}

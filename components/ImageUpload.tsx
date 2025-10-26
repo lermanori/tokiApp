@@ -240,35 +240,46 @@ export default function ImageUpload({
         
         console.log('🔍 STEP 8 - Web JSON request sent, response status:', uploadResponse.status);
       } else {
-        // React Native (iOS/Android): Use FormData approach
-        console.log('🔍 STEP 5 - React Native platform: Using FormData approach...');
+        // React Native (iOS/Android): Convert to base64 and send as JSON
+        console.log('🔍 STEP 5 - React Native platform: Converting to base64...');
         
-        const formData = new FormData();
-        formData.append('image', {
-          uri: uri,
-          type: 'image/jpeg',
-          name: 'image.jpg',
-        } as any);
-        formData.append('userId', state.currentUser.id);
+        const base64Response = await ImageManipulator.manipulateAsync(
+          uri,
+          [], // No transformations needed - already processed
+          {
+            compress: 0.8,
+            format: ImageManipulator.SaveFormat.JPEG,
+            base64: true, // Get base64 data
+          }
+        );
         
-        // Add additional data to FormData
-        if (uploadConfig.additionalData) {
-          Object.entries(uploadConfig.additionalData).forEach(([key, value]) => {
-            formData.append(key, String(value));
-          });
+        console.log('🔍 STEP 6 - React Native base64 conversion result:', {
+          hasBase64: !!base64Response.base64,
+          base64Length: base64Response.base64?.length || 0,
+        });
+        
+        if (!base64Response.base64) {
+          throw new Error('Failed to convert image to base64');
         }
         
-        console.log('🔍 STEP 6 - React Native: FormData created...');
+        const uploadData = {
+          image: `data:image/jpeg;base64,${base64Response.base64}`,
+          userId: state.currentUser.id,
+          ...uploadConfig.additionalData,
+        };
+        
+        console.log('🔍 STEP 7 - React Native: Sending JSON request...');
         
         uploadResponse = await fetch(`${getBackendUrl()}${uploadConfig.endpoint}`, {
           method: uploadConfig.method,
           headers: {
             'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+            'Content-Type': 'application/json',
           },
-          body: formData,
+          body: JSON.stringify(uploadData),
         });
         
-        console.log('🔍 STEP 7 - React Native FormData request sent, response status:', uploadResponse.status);
+        console.log('🔍 STEP 8 - React Native JSON request sent, response status:', uploadResponse.status);
       }
 
       console.log('🔍 STEP 9 - Upload response:', {

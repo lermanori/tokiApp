@@ -16,6 +16,9 @@ This component handles uploading and managing multiple images for Toki events. I
 - **Problem**: Delete confirmation used platform-specific alerts (Alert.alert on native, window.confirm on web) which were inconsistent.
 - **Solution**: Created a custom delete confirmation modal that works consistently across both web and native platforms. The modal features a clean design with an alert icon, title, message, and Cancel/Remove buttons. Uses React Native's Modal component with transparent overlay and fade animation.
 
+- **Problem**: iOS toki image upload was failing with "Empty file" error from Cloudinary, using FormData with local file URIs that couldn't be read properly.
+- **Solution**: Changed iOS/React Native upload approach from FormData to base64 + JSON (matching the web approach). Both platforms now convert the image to base64 using `ImageManipulator.manipulateAsync` with `base64: true` and send it as JSON with `Content-Type: application/json`. This ensures the file content is properly read and transmitted to the backend.
+
 ### How Fixes Were Implemented
 - **Problem**: The component was only adding images locally with temporary IDs, regardless of mode.
 - **Solution**: 

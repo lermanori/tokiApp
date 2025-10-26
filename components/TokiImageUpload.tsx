@@ -164,29 +164,37 @@ export default function TokiImageUpload({
           publicId: result.data.publicId,
         };
       } else {
-        // React Native: Use FormData
-        console.log('📸 [TOKI IMAGE UPLOAD] React Native - using FormData...');
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
+        // React Native: Convert to base64 (same as web)
+        console.log('📸 [TOKI IMAGE UPLOAD] React Native - converting to base64...');
+        const manipResult = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
         
-        const formData = new FormData();
-        formData.append('image', blob as any, 'toki-image.jpg');
+        if (!manipResult.base64) {
+          throw new Error('Failed to convert image to base64');
+        }
         
-        const uploadResponse = await fetch(`${getBackendUrl()}/api/toki-images/upload/${tokiId}`, {
+        imageData = `data:image/jpeg;base64,${manipResult.base64}`;
+        
+        // Send as JSON
+        const response = await fetch(`${getBackendUrl()}/api/toki-images/upload/${tokiId}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiService.getAccessToken()}`,
+            'Content-Type': 'application/json',
           },
-          body: formData,
+          body: JSON.stringify({ image: imageData }),
         });
         
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json();
+        if (!response.ok) {
+          const errorData = await response.json();
           console.error('📸 [TOKI IMAGE UPLOAD] Upload failed:', errorData);
           throw new Error(errorData.message || 'Upload failed');
         }
         
-        const result = await uploadResponse.json();
+        const result = await response.json();
         console.log('📸 [TOKI IMAGE UPLOAD] Upload successful:', result);
         
         return {
