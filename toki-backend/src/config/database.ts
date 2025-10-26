@@ -13,7 +13,7 @@ const poolConfig: PoolConfig = {
   connectionString: databaseUrl,
   max: 10, // Maximum number of clients in the pool
   idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
-  connectionTimeoutMillis: 5000, // Give up after 5s if a connection cannot be established
+  connectionTimeoutMillis: 10000, // Give up after 5s if a connection cannot be established
   keepAlive: true,
   ssl: { rejectUnauthorized: false },
   // Ensure all database operations use UTC timezone

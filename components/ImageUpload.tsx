@@ -70,7 +70,19 @@ export default function ImageUpload({
   }, [showCropModal, selectedImageUri]);
 
   const requestPermissions = async () => {
+    console.log('ImageUpload: Checking current permission status...');
+    const currentStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
+    console.log('ImageUpload: Current permission status:', currentStatus);
+    
+    if (currentStatus.status === 'granted') {
+      console.log('ImageUpload: Permission already granted');
+      return true;
+    }
+    
+    console.log('ImageUpload: Requesting permission...');
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('ImageUpload: Permission request result:', status);
+    
     if (status !== 'granted') {
       Alert.alert('Permission Required', 'Please grant camera roll permissions to upload images.');
       return false;
@@ -91,18 +103,26 @@ export default function ImageUpload({
       if (!hasPermission) return;
 
       console.log('ImageUpload: Launching image picker with options:', {
-        mediaTypes: 'Images',
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8
       });
       
       console.log('ImageUpload: About to call ImagePicker.launchImageLibraryAsync...');
+      console.log('ImageUpload: Platform.OS =', Platform.OS);
+      
+      // Add timeout detection
+      const timeoutId = setTimeout(() => {
+        console.log('⚠️ ImageUpload: Picker has been waiting for 5 seconds - might be stuck');
+      }, 5000);
       
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images',
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8,
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('ImageUpload: Image picker launched, waiting for result...');
       console.log('ImageUpload: 🎉 NATIVE PICKER CLOSED! Result received:', result);
@@ -116,12 +136,17 @@ export default function ImageUpload({
         console.log('ImageUpload: Image selected! Showing simple alert...');
         
         if (mode === 'crop') {
-          console.log('ImageUpload: Setting 1-second timeout before showing crop modal...');
           setSelectedImageUri(asset.uri);
-          setTimeout(() => {
-            console.log('ImageUpload: 1-second timeout completed, showing crop modal now');
+          if (Platform.OS === 'ios') {
+            console.log('ImageUpload: iOS - Setting 500ms timeout before showing crop modal...');
+            setTimeout(() => {
+              console.log('ImageUpload: iOS - 500ms timeout completed, showing crop modal now');
+              setShowCropModal(true);
+            }, 500);
+          } else {
+            console.log('ImageUpload: Non-iOS - Showing crop modal immediately');
             setShowCropModal(true);
-          }, 1000);
+          }
         } else {
           // Direct upload mode
           await uploadImage(asset.uri);
@@ -419,8 +444,13 @@ export default function ImageUpload({
               <TouchableOpacity
                 style={styles.optionButton}
                 onPress={() => {
+                  console.log('ImageUpload: Library button pressed, closing modal...');
                   setShowOptions(false);
-                  handleImagePicker(false);
+                  // Add delay to let modal close before opening picker
+                  setTimeout(() => {
+                    console.log('ImageUpload: Modal closed, now opening picker...');
+                    handleImagePicker(false);
+                  }, Platform.OS === 'ios' ? 1000 : 100);
                 }}
                 disabled={isUploading}
               >
@@ -431,8 +461,13 @@ export default function ImageUpload({
               <TouchableOpacity
                 style={styles.optionButton}
                 onPress={() => {
+                  console.log('ImageUpload: Camera button pressed, closing modal...');
                   setShowOptions(false);
-                  handleImagePicker(true);
+                  // Add delay to let modal close before opening picker
+                  setTimeout(() => {
+                    console.log('ImageUpload: Modal closed, now opening camera...');
+                    handleImagePicker(true);
+                  }, Platform.OS === 'ios' ? 1000 : 100);
                 }}
                 disabled={isUploading}
               >
