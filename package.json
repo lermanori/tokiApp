@@ -1,7 +1,7 @@
 {
   "name": "toki-social-map",
   "main": "expo-router/entry",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "scripts": {
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
@@ -10,7 +10,9 @@
     "start": "npx serve -s dist -l $PORT",
     "lint": "expo lint",
     "predeploy": "expo export -p web",
-    "deploy": "gh-pages --nojekyll -d dist"
+    "deploy": "gh-pages --nojekyll -d dist",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.2.3",
@@ -74,6 +76,7 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~19.1.10",
     "concurrently": "^8.2.2",
+    "eas-cli": "^16.25.0",
     "gh-pages": "^6.3.0",
     "typescript": "~5.9.2"
   }

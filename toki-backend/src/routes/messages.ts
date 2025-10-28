@@ -829,6 +829,8 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
         t.id,
         t.title,
         t.description,
+        t.category,
+        t.image_urls,
         t.created_at,
         t.updated_at,
         u.name as host_name,
@@ -857,7 +859,8 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
       JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $1
       LEFT JOIN toki_read_state trs ON t.id = trs.toki_id AND trs.user_id = $1
-      WHERE t.host_id = $1 OR (tp.status IN ('approved', 'joined'))
+      WHERE t.status = 'active'
+        AND (t.host_id = $1 OR (tp.status IN ('approved', 'joined')))
       ORDER BY COALESCE((
         SELECT m.created_at 
         FROM messages m 
@@ -874,7 +877,8 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
       `SELECT COUNT(*) as total
       FROM tokis t
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $1
-      WHERE t.host_id = $1 OR (tp.status IN ('approved', 'joined'))`,
+      WHERE t.status = 'active'
+        AND (t.host_id = $1 OR (tp.status IN ('approved', 'joined')))`,
       [req.user!.id]
     );
 

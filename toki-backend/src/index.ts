@@ -56,8 +56,8 @@ app.use(helmet({
 app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
-      'http://localhost:3000', 
-      'http://localhost:8081', 
+      'http://localhost:3000',
+      'http://localhost:8081',
       'http://localhost:8082',
       'https://tokiapp.netlify.app',
       'https://*.netlify.app',
@@ -96,7 +96,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-        // Make io available to routes
+// Make io available to routes
 app.set('io', io);
 
 // API routes
@@ -114,22 +114,22 @@ app.use('/api/toki-images', tokiImageRoutes);
 app.use('/api/maps', mapsRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/waitlist', waitlistRoutes);
-        
-        app.get('/api', (req, res) => {
-          res.json({
-            message: 'Toki API is running!',
-            version: '1.0.0',
-            endpoints: {
-              auth: '/api/auth',
-              users: '/api/users',
-              tokis: '/api/tokis',
-              messages: '/api/messages',
-              connections: '/api/connections',
-              ratings: '/api/ratings',
-              blocks: '/api/blocks'
-            }
-          });
-        });
+
+app.get('/api', (req, res) => {
+  res.json({
+    message: 'Toki API is running!',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      users: '/api/users',
+      tokis: '/api/tokis',
+      messages: '/api/messages',
+      connections: '/api/connections',
+      ratings: '/api/ratings',
+      blocks: '/api/blocks'
+    }
+  });
+});
 
 // Error handling middleware
 app.use(notFoundHandler);
@@ -186,7 +186,7 @@ server.listen(PORT, async () => {
   logger.info(`🔗 API base: http://localhost:${PORT}/api`);
   logger.info(`🔌 WebSocket server ready`);
   logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
-  
+
   // Test database connection and set timezone
   await testDatabaseConnection();
   await setDatabaseTimezone();

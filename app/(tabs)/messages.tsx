@@ -6,6 +6,7 @@ import { Search, MessageCircle, Users, Clock, RefreshCw, X } from 'lucide-react-
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
+import { getActivityPhoto } from '@/utils/activityPhotos';
 
 
 interface Conversation {
@@ -26,6 +27,8 @@ interface TokiGroupChat {
   title: string;
   description: string;
   host_name: string;
+  category?: string;
+  image_urls?: string[];
   last_message?: string;
   last_message_time?: string;
   unread_count: number;
@@ -397,16 +400,50 @@ export default function MessagesScreen() {
                 }
               >
                 <View style={styles.conversationAvatar}>
-                  <Image
-                    source={{ 
-                      uri: chat.type === 'individual' 
-                        ? (chat as Conversation).other_user_avatar || 
+                  {chat.type === 'individual' ? (
+                    <Image
+                      source={{ 
+                        uri: (chat as Conversation).other_user_avatar || 
                           'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2'
-                        : 'https://via.placeholder.com/50' // Placeholder for Toki group avatar
-                    }}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
+                      }}
+                      style={styles.avatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    // Toki group chat - show image circles
+                    (() => {
+                      const tokiChat = chat as TokiGroupChat;
+                      const images = tokiChat.image_urls && tokiChat.image_urls.length > 0 
+                        ? tokiChat.image_urls 
+                        : [getActivityPhoto(tokiChat.category)];
+                      const isSingleImage = images.length === 1;
+                      
+                      return (
+                        <View style={styles.tokiImageCircles}>
+                          {images.slice(0, 3).map((imageUrl, index) => (
+                            <View 
+                              key={index} 
+                              style={[
+                                isSingleImage ? styles.tokiImageCircleSingle : styles.tokiImageCircle,
+                                index > 0 && styles.tokiImageCircleOverlap
+                              ]}
+                            >
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.tokiCircleImage}
+                                resizeMode="cover"
+                              />
+                            </View>
+                          ))}
+                          {images.length > 3 && (
+                            <View style={[styles.tokiImageCircle, styles.tokiImageCircleOverlap, styles.tokiMoreCircle]}>
+                              <Text style={styles.tokiMoreText}>+{images.length - 3}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })()
+                  )}
                 </View>
 
                 <View style={styles.conversationContent}>
@@ -630,12 +667,60 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   avatarImageDisabled: {
     opacity: 0.5,
+  },
+  tokiImageCircles: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 60, // Wider container for larger toki images
+    height: 60,
+  },
+  tokiImageCircleSingle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  tokiImageCircle: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+  },
+  tokiImageCircleOverlap: {
+    marginLeft: -23, // 45 + 45 + 45 - 23 - 23 = 89, constrained to 60px container
+  },
+  tokiCircleImage: {
+    width: '100%',
+    height: '100%',
+  },
+  tokiFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3E7FF',
+  },
+  tokiMoreCircle: {
+    backgroundColor: '#B49AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tokiMoreText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
   },
   groupBadge: {
     position: 'absolute',

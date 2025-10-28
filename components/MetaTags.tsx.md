@@ -18,3 +18,4 @@ This file contains the MetaTags component that handles dynamic meta tag updates 
 The fix prevents the ReferenceError by ensuring the component gracefully exits early on mobile platforms while still functioning correctly on web.
 
 
+

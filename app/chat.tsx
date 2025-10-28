@@ -64,6 +64,12 @@ export default function ChatScreen() {
 
   // Debounced function to mark chat as read
   const debouncedMarkAsRead = (chatId: string, isToki: boolean) => {
+    // Only mark as read if there are messages
+    if (messages.length === 0) {
+      console.log('⏭️ [CHAT SCREEN] Debounced mark as read skipped - no messages');
+      return;
+    }
+    
     // Clear existing timeout
     if (markAsReadTimeout) {
       clearTimeout(markAsReadTimeout);
@@ -184,12 +190,16 @@ export default function ChatScreen() {
         setMessages(messagesData);
         scrollToBottom();
         
-        // Mark Toki as read when messages are loaded
-        try {
-          await actions.markTokiAsRead(tokiId);
-          console.log('✅ [CHAT SCREEN] Toki marked as read:', tokiId);
-        } catch (error) {
-          console.error('❌ [CHAT SCREEN] Failed to mark Toki as read:', error);
+        // Mark Toki as read when messages are loaded (only if there are messages)
+        if (messagesData && messagesData.length > 0) {
+          try {
+            await actions.markTokiAsRead(tokiId);
+            console.log('✅ [CHAT SCREEN] Toki marked as read:', tokiId);
+          } catch (error) {
+            console.error('❌ [CHAT SCREEN] Failed to mark Toki as read:', error);
+          }
+        } else {
+          console.log('⏭️ [CHAT SCREEN] No messages to mark as read for Toki:', tokiId);
         }
       } catch (error) {
         console.error('❌ Failed to load Toki messages:', error);
@@ -221,12 +231,16 @@ export default function ChatScreen() {
         setMessages(messagesData);
         scrollToBottom();
         
-        // Mark conversation as read when messages are loaded
-        try {
-          await actions.markConversationAsRead(conversationId);
-          console.log('✅ [CHAT SCREEN] Conversation marked as read:', conversationId);
-        } catch (error) {
-          console.error('❌ [CHAT SCREEN] Failed to mark conversation as read:', error);
+        // Mark conversation as read when messages are loaded (only if there are messages)
+        if (messagesData && messagesData.length > 0) {
+          try {
+            await actions.markConversationAsRead(conversationId);
+            console.log('✅ [CHAT SCREEN] Conversation marked as read:', conversationId);
+          } catch (error) {
+            console.error('❌ [CHAT SCREEN] Failed to mark conversation as read:', error);
+          }
+        } else {
+          console.log('⏭️ [CHAT SCREEN] No messages to mark as read for conversation:', conversationId);
         }
       } catch (error) {
         console.error('❌ Failed to load messages:', error);
@@ -441,6 +455,12 @@ export default function ChatScreen() {
     React.useCallback(() => {
       console.log('🎯 [CHAT SCREEN] Chat screen focused, marking as read...');
       
+      // Only mark as read if there are messages
+      if (messages.length === 0) {
+        console.log('⏭️ [CHAT SCREEN] No messages yet, skipping mark as read');
+        return;
+      }
+      
       // Mark as read based on chat type
       if (isGroup && tokiId) {
         console.log('✅ [CHAT SCREEN] Marking Toki group chat as read on focus');
@@ -452,6 +472,12 @@ export default function ChatScreen() {
       
       // Set up a timer to mark as read periodically while user is viewing
       const readTimer = setInterval(() => {
+        // Only mark as read if there are messages
+        if (messages.length === 0) {
+          console.log('⏭️ [CHAT SCREEN] No messages in periodic check, skipping mark as read');
+          return;
+        }
+        
         console.log('⏰ [CHAT SCREEN] Periodic read check - marking chat as read...');
         if (isGroup && tokiId) {
           debouncedMarkAsRead(tokiId, true);
@@ -464,7 +490,7 @@ export default function ChatScreen() {
         console.log('🔄 [CHAT SCREEN] Chat screen losing focus, clearing read timer');
         clearInterval(readTimer);
       };
-    }, [isGroup, tokiId, conversationId])
+    }, [isGroup, tokiId, conversationId, messages.length])
   );
 
   const handleSendMessage = async () => {
@@ -655,7 +681,13 @@ export default function ChatScreen() {
           <View style={styles.headerInfo}>
             <TouchableOpacity 
               onPress={() => {
-                if (!isGroup && otherUserId) {
+                if (isGroup && tokiId) {
+                  // For group chats, navigate to toki details
+                  router.push({
+                    pathname: '/toki-details',
+                    params: { tokiId: tokiId }
+                  });
+                } else if (!isGroup && otherUserId) {
                   // For individual chats, navigate to user profile
                   router.push({
                     pathname: '/user-profile/[userId]',
@@ -663,11 +695,10 @@ export default function ChatScreen() {
                   });
                 }
               }}
-              disabled={isGroup}
             >
               <Text style={[
                 styles.headerTitle,
-                !isGroup && { textDecorationLine: 'underline' }
+                { textDecorationLine: 'underline' }
               ]}>
                 {otherUserName || 'Chat'}
               </Text>
