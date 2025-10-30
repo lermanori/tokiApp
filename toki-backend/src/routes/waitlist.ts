@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
     
     if (RESEND_API_KEY && isNewSignup) {
       const subject = "You're in. 🖤";
-      const text = `Hey,\n\nYou're officially on the waitlist for Toki.\nYou're number **#${userPosition}** on the **${userCity}** list.\nWe'll let you know the moment you can drop in.\n\nIn the meantime, don't be a stranger.\nTell your people. The more of us here, the better it gets.\n\n—\nToki`;
+      const text = `Hey,\n\nYou're officially on the waitlist for Toki.\nYou're number **#${userPosition+100}** on the **${userCity}** list.\nWe'll let you know the moment you can drop in.\n\nIn the meantime, don't be a stranger.\nTell your people. The more of us here, the better it gets.\n\n—\nToki`;
 
       const resendResponse = await fetch("https://api.resend.com/emails", {
         method: "POST",

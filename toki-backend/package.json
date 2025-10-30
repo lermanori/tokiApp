@@ -4,12 +4,15 @@
   "description": "Backend API for Toki social map app",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "dev": "npm run build:admin && nodemon src/index.ts",
+    "build": "npm run build:admin && tsc",
+    "build:admin": "cd admin-panel && npm install && npm run build",
+    "prestart": "npm run build:admin",
     "start": "node dist/index.js",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix"
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "migrate": "ts-node src/scripts/run-migrations.ts"
   },
   "keywords": [
     "toki",

@@ -6,9 +6,15 @@ import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import logger from './utils/logger';
+// import runMigrations from './scripts/run-migrations';
 
 // Load environment variables
 dotenv.config();
+
+// // Run migrations on startup (idempotent)
+// runMigrations().catch(err => {
+//   console.error('⚠️  Migration warning (continuing anyway):', err.message);
+// });
 
 // Import middleware and routes
 import { errorHandler } from './middleware/errorHandler';
@@ -57,6 +63,7 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:3000',
+      'http://localhost:3002',
       'http://localhost:8081',
       'http://localhost:8082',
       'https://tokiapp.netlify.app',
@@ -85,6 +92,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Serve admin panel static files (React build)
+const adminBuildPath = path.join(__dirname, '../admin-panel/build');
+app.use('/admin/static', express.static(path.join(adminBuildPath, 'static')));
+
+// Serve admin panel HTML for all routes (React Router handles routing)
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(adminBuildPath, 'index.html'));
+});
+
+app.get('/admin/*', (req, res) => {
+  res.sendFile(path.join(adminBuildPath, 'index.html'));
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
