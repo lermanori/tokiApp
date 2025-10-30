@@ -60,6 +60,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 4: User hidden activities
+    try {
+      console.log('📝 Migration 4: Creating user_hidden_activities table...');
+      const hiddenActivitiesSql = readFileSync(
+        join(sqlDir, 'create-user-hidden-activities.sql'),
+        'utf-8'
+      );
+      await pool.query(hiddenActivitiesSql);
+      console.log('✅ User hidden activities migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  user_hidden_activities already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

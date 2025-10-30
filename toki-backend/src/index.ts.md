@@ -1,3 +1,13 @@
+### Summary
+Express server setup and route registration for the Toki backend, including security, CORS, static assets, sockets, and API mounting.
+
+### Fixes Applied log
+- problem: New activity feature routes not exposed.
+- solution: Registered `activityRoutes` at `/api/activity`.
+
+### How Fixes Were Implemented
+- Imported `./routes/activity` and added `app.use('/api/activity', activityRoutes);` alongside other route mounts.
+
 # File: toki-backend/src/index.ts
 
 ### Summary

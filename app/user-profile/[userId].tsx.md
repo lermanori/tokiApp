@@ -62,5 +62,10 @@ All API methods are now integrated and the component uses real backend data inst
 ### Fixes Applied log
 - **Fixed Send Message navigation**: Changed "Send Message" button to navigate to chat with correct parameters
 - **Updated navigation behavior**: Users now go directly to chat with the specific user using otherUserId parameter
+- **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
+
+### How Fixes Were Implemented
+- Imported `TokiCard`, added `publicActivity` state, `loadPublicActivity()` and invoked it when `userId` changes.
+- Inserted the section after the statistics block with a title "<FirstName>'s Activity".
 
 This component provides the foundation for user discovery and social networking features in the app.

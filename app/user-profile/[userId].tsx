@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clo
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
+import TokiCard from '@/components/TokiCard';
 
 interface ConnectionStatus {
   status: 'none' | 'pending' | 'accepted' | 'declined';
@@ -42,6 +43,7 @@ export default function UserProfileScreen() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [publicActivity, setPublicActivity] = useState<any[]>([]);
 
   // Helper function to get user initials
   const getUserInitials = (name: string) => {
@@ -72,6 +74,7 @@ export default function UserProfileScreen() {
     if (userId) {
       loadUserProfile();
       loadConnectionStatus();
+      loadPublicActivity();
     }
   }, [userId]);
 
@@ -87,6 +90,15 @@ export default function UserProfileScreen() {
       Alert.alert('Error', 'Failed to load user profile. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadPublicActivity = async () => {
+    try {
+      const list = await apiService.getUserActivity(userId);
+      setPublicActivity(list);
+    } catch (error) {
+      console.error('❌ Failed to load public activity:', error);
     }
   };
 
@@ -421,6 +433,43 @@ export default function UserProfileScreen() {
               </Text>
               <Text style={styles.statLabel}>Rating</Text>
             </View>
+          </View>
+          {/* Public Activity */}
+          <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold', color: '#111827', marginBottom: 8 }}>
+              {userProfile.name.split(' ')[0]}'s Activity
+            </Text>
+            {publicActivity.length === 0 ? (
+              <Text style={{ color: '#6B7280' }}>No public activity</Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {publicActivity.map(a => {
+                  const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
+                  const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
+                  return (
+                  <View key={a.id} style={{ width: 360, marginRight: 16 }}>
+                    <TokiCard
+                      toki={{
+                        id: a.id,
+                        title: a.title,
+                        image: a.image_url,
+                        category: a.category,
+                        location: a.location || '',
+                        time: a.time_slot || '',
+                        attendees: a.current_attendees || 0,
+                        maxAttendees: a.max_attendees || 0,
+                        scheduledTime: a.scheduled_time,
+                        host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
+                        visibility: a.visibility,
+                        tags: a.tags || [],
+                        distance,
+                      }}
+                      onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
+                    />
+                  </View>
+                )})}
+              </ScrollView>
+            )}
           </View>
         </View>
 

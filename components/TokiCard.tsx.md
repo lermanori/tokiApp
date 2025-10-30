@@ -10,6 +10,8 @@ This file contains a reusable TokiCard component that displays Toki event inform
 - **solution**: Added `flexDirection: 'row'` and `alignItems: 'center'` to categoryBadge style for horizontal alignment.
 - **problem**: Private badge was not aligned with the heart icon in the header.
 - **solution**: Moved Private badge inside the headerActions container to align it with the heart icon on the right side.
+- **problem**: Tags row caused slight height differences across cards in horizontal lists.
+- **solution**: Made `tagsRow` single-line with fixed height (26) and overflow hidden to stabilize card height.
 
 ### How Fixes Were Implemented
 - **Added `getTextColorForBackground` function**: Converts hex colors to RGB, calculates brightness using YIQ formula, and returns appropriate text color (white for dark backgrounds, dark for light backgrounds).
@@ -18,6 +20,7 @@ This file contains a reusable TokiCard component that displays Toki event inform
 - **Removed hardcoded color**: The `categoryBadgeText` style no longer has a fixed white color, allowing dynamic color assignment.
 - **Fixed Private badge layout**: Updated `categoryBadge` style to include `flexDirection: 'row'`, `alignItems: 'center'`, and `gap: 4` to properly align the Lock icon to the left of the "Private" text horizontally instead of stacking vertically.
 - **Aligned Private badge with heart icon**: Moved the Private badge from being a separate element in `eventHeader` to inside the `headerActions` container, so it now appears next to the heart icon on the right side of the card header.
+- **Stabilized tags row height**: Updated `tagsRow` style with `flexWrap: 'nowrap'`, `minHeight`/`maxHeight: 26`, `overflow: 'hidden'`, and `alignItems: 'center'`.
 
 ### Technical Details
 - **YIQ Formula**: Used industry-standard brightness calculation: `(R*299 + G*587 + B*114) / 1000`

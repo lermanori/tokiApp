@@ -33,6 +33,7 @@ import profileImageRoutes from './routes/profile-images';
 import tokiImageRoutes from './routes/toki-images';
 import mapsRoutes from './routes/maps';
 import healthRoutes from './routes/health';
+import activityRoutes from './routes/activity';
 import waitlistRoutes from './routes/waitlist';
 
 const app = express();
@@ -133,6 +134,7 @@ app.use('/api/profile-images', profileImageRoutes);
 app.use('/api/toki-images', tokiImageRoutes);
 app.use('/api/maps', mapsRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/activity', activityRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 
 app.get('/api', (req, res) => {

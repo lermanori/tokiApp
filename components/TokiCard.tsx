@@ -657,9 +657,13 @@ const styles = StyleSheet.create({
     },
     tagsRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
         gap: 6,
         flex: 1,
+        minHeight: 26,
+        maxHeight: 26,
+        overflow: 'hidden',
+        alignItems: 'center',
     },
     tag: {
         backgroundColor: '#F3F4F6',

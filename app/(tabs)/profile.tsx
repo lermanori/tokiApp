@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, CreditCard as Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity } from 'lucide-react-native';
+import { Settings, CreditCard as Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { getBackendUrl } from '@/services/config';
 import { apiService } from '@/services/api';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
+import TokiCard from '@/components/TokiCard';
 
 export default function ProfileScreen() {
   const { state, actions, dispatch } = useApp();
@@ -17,6 +18,8 @@ export default function ProfileScreen() {
   const [savedTokisCount, setSavedTokisCount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [myActivity, setMyActivity] = useState<any[]>([]);
+  const [previewAsMember, setPreviewAsMember] = useState(false);
 
   const loadUnreadNotificationsCount = async () => {
     // Use unified count from context only
@@ -83,9 +86,31 @@ export default function ProfileScreen() {
     React.useCallback(() => {
       if (state.isConnected && state.currentUser?.id) {
         loadSavedTokisCount();
+        (async () => {
+          try {
+            const list = await apiService.getMyActivity();
+            setMyActivity(list);
+          } catch (e) {
+            console.error('Failed to load my activity', e);
+          }
+        })();
       }
     }, [state.isConnected, state.currentUser?.id])
   );
+
+  const toggleActivityVisibility = async (tokiId: string, isHidden: boolean) => {
+    try {
+      if (isHidden) {
+        await apiService.showActivity(tokiId);
+      } else {
+        await apiService.hideActivity(tokiId);
+      }
+      const list = await apiService.getMyActivity();
+      setMyActivity(list);
+    } catch (e) {
+      console.error('Failed to toggle activity visibility', e);
+    }
+  };
 
   const loadUserData = async () => {
     console.log('🔄 loadUserData called - isConnected:', state.isConnected);
@@ -653,8 +678,59 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          {/* My Activity cards + Show as member toggle */}
+          <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>My Activity</Text>
+              <TouchableOpacity onPress={() => router.push(`/user-profile/${state.currentUser.id}`)} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
+                <Text style={{ marginRight: 8, color: '#6B7280' }}>Show as member</Text>
+                <Eye size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {myActivity.length === 0 ? (
+              <Text style={{ color: '#6B7280' }}>No recent activity</Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {myActivity
+                  .map(a => {
+                    const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
+                    const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
+                    return (
+                    <View key={a.id} style={{ width: 360, marginRight: 16, opacity: a.is_hidden ? 0.5 : 1 }}>
+                      <TokiCard
+                        toki={{
+                          id: a.id,
+                          title: a.title,
+                          image: a.image_url,
+                          category: a.category,
+                          location: a.location || '',
+                          time: a.time_slot || '',
+                          attendees: a.current_attendees || 0,
+                          maxAttendees: a.max_attendees || 0,
+                          scheduledTime: a.scheduled_time,
+                          host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
+                          visibility: a.visibility,
+                          tags: a.tags || [],
+                          distance,
+                        }}
+                        onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
+                      />
+                      {(
+                        <TouchableOpacity
+                          onPress={() => toggleActivityVisibility(a.id, a.is_hidden)}
+                          style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 9999, padding: 6 }}
+                        >
+                          {a.is_hidden ? <Eye size={18} color="#111827" /> : <EyeOff size={18} color="#111827" />}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )})}
+              </ScrollView>
+            )}
+          </View>
+
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Activity</Text>
             <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
               <Bell size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Notifications</Text>

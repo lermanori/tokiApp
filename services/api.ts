@@ -935,6 +935,25 @@ class ApiService {
     return response.data;
   }
 
+  // Activity Visibility
+  async getMyActivity(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>(`/activity/me/activity`);
+    return response.data;
+  }
+
+  async getUserActivity(userId: string): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>(`/activity/users/${userId}/activity`);
+    return response.data;
+  }
+
+  async hideActivity(tokiId: string): Promise<void> {
+    await this.makeRequest<{ success: boolean }>(`/activity/me/activity/${tokiId}/hide`, { method: 'POST' });
+  }
+
+  async showActivity(tokiId: string): Promise<void> {
+    await this.makeRequest<{ success: boolean }>(`/activity/me/activity/${tokiId}/hide`, { method: 'DELETE' });
+  }
+
   async getConnectionStatus(userId: string): Promise<{
     status: 'none' | 'pending' | 'accepted' | 'declined';
     isRequester: boolean;
