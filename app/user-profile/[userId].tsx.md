@@ -63,9 +63,12 @@ All API methods are now integrated and the component uses real backend data inst
 - **Fixed Send Message navigation**: Changed "Send Message" button to navigate to chat with correct parameters
 - **Updated navigation behavior**: Users now go directly to chat with the specific user using otherUserId parameter
 - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
+ - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
+ - **Self-profile guard**: Disables action buttons when viewing your own public profile (shows disabled "Your Profile" button).
 
 ### How Fixes Were Implemented
 - Imported `TokiCard`, added `publicActivity` state, `loadPublicActivity()` and invoked it when `userId` changes.
 - Inserted the section after the statistics block with a title "<FirstName>'s Activity".
+- Added conditional `state.currentUser?.id === userId` to render `disabledButton` and avoid self-requests.
 
 This component provides the foundation for user discovery and social networking features in the app.
