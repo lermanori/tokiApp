@@ -447,7 +447,7 @@ export default function UserProfileScreen() {
                   const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
                   const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
                   return (
-                  <View key={a.id} style={{ width: 360, marginRight: 16 }}>
+                  <View key={a.id} style={{ width: 320, marginRight: 16 }}>
                     <TokiCard
                       toki={{
                         id: a.id,
