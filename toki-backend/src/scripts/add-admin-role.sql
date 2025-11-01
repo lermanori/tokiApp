@@ -9,3 +9,4 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 -- Grant admin role to specific users (run manually after migration)
 -- Example: UPDATE users SET role = 'admin' WHERE email = 'admin@toki-app.com';
 
+

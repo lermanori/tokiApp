@@ -57,3 +57,4 @@ function StatCard({ title, value, gradient }: { title: string; value: string; gr
     </div>
   );
 }
+

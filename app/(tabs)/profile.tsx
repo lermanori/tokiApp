@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, CreditCard as Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
+import { Settings, Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { getBackendUrl } from '@/services/config';
@@ -678,6 +678,34 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
+              <Bell size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>Notifications</Text>
+              <View style={styles.notificationIndicator}>
+                <Text style={styles.notificationCount}>{unreadNotifications}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleMyTokis}>
+              <Calendar size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>My Tokis</Text>
+              <Text style={styles.menuBadge}>{state.currentUser.tokisJoined + state.currentUser.tokisCreated}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleSavedTokis}>
+              <Heart size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>Saved Tokis</Text>
+              <Text style={styles.menuBadge}>
+                {savedTokisCount > 0 ? savedTokisCount : '-'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={handleConnections}>
+              <Users size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>Connections</Text>
+              <Text style={styles.menuBadge}>{state.currentUser.connections}</Text>
+            </TouchableOpacity>
+           
+          </View>
+
           {/* My Activity cards + Show as member toggle */}
           <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -730,33 +758,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          <View style={styles.section}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleNotifications}>
-              <Bell size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>Notifications</Text>
-              <View style={styles.notificationIndicator}>
-                <Text style={styles.notificationCount}>{unreadNotifications}</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleMyTokis}>
-              <Calendar size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>My Tokis</Text>
-              <Text style={styles.menuBadge}>{state.currentUser.tokisJoined + state.currentUser.tokisCreated}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleSavedTokis}>
-              <Heart size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>Saved Tokis</Text>
-              <Text style={styles.menuBadge}>
-                {savedTokisCount > 0 ? savedTokisCount : '-'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={handleConnections}>
-              <Users size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>Connections</Text>
-              <Text style={styles.menuBadge}>{state.currentUser.connections}</Text>
-            </TouchableOpacity>
-           
-          </View>
+
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Settings</Text>

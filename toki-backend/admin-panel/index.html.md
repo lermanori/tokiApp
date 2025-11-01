@@ -9,3 +9,4 @@ HTML entry point for the admin React app, responsible for loading fonts and boot
 ### How Fixes Were Implemented
 - Updated the Google Fonts `<link>` to request `Plus Jakarta Sans` with weights 400/500/600/700.
 - Global CSS updated to use the new font family.
+

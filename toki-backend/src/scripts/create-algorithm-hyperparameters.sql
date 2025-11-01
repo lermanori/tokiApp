@@ -29,3 +29,4 @@ COMMENT ON COLUMN algorithm_hyperparameters.w_geo IS 'Proximity: Closer events s
 COMMENT ON COLUMN algorithm_hyperparameters.w_novel IS 'NoveltyBoost: Boost for new/diverse event types';
 COMMENT ON COLUMN algorithm_hyperparameters.w_pen IS 'DuplicateCategoryPenalty: Penalty for too many same-category events';
 
+

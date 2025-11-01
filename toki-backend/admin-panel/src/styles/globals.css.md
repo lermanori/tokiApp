@@ -11,3 +11,4 @@ Global styles for the admin panel including color tokens, gradients, glassmorphi
 - Updated Google Fonts link in `index.html` to load `Plus Jakarta Sans`.
 - Changed `--font-family` to prefer `Plus Jakarta Sans` with a robust system fallback stack.
 - Replaced named font families with numeric weights (`--font-bold: 700`, etc.) to align with the loaded font weights.
+

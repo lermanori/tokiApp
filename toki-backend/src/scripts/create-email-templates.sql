@@ -23,3 +23,4 @@ VALUES (
 -- Add index for faster lookups by name
 CREATE INDEX IF NOT EXISTS idx_email_templates_name ON email_templates(template_name);
 
+
