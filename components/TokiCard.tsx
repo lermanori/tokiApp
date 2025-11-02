@@ -352,9 +352,15 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
 
 
                 <View style={styles.eventInfo}>
-                    <View style={styles.infoItem}>
+                    <View style={[styles.infoItem, styles.locationContainer]}>
                         {/* <MapPin size={14} color="#666666" /> */}
-                        <Text style={styles.infoText}>{formatLocationDisplay(toki.location)}</Text>
+                        <Text 
+                            style={styles.infoText} 
+                            numberOfLines={1} 
+                            ellipsizeMode="tail"
+                        >
+                            {formatLocationDisplay(toki.location)}
+                        </Text>
                     </View>
                     <View style={styles.infoItem}>
                         <Clock size={14} color="#666666" />
@@ -583,6 +589,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+    },
+    locationContainer: {
+        flex: 1,
+        minWidth: 0, // Important for flex truncation
     },
     infoText: {
         fontSize: 12,
