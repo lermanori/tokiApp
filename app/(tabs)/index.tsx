@@ -190,7 +190,7 @@ export default function ExploreScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Animated.ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}

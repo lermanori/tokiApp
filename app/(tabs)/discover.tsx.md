@@ -1,77 +1,11 @@
-# File: discover.tsx
+# File: app/(tabs)/discover.tsx
 
 ### Summary
-This file contains the Discover screen component that displays Toki events with an interactive map and list view. It includes advanced search filters, map integration, and attendee counters.
+This file contains the Discover/Map screen showing Tokis on a map view with filters and search functionality. Displays a map with Toki markers and allows filtering by category and location.
 
 ### Fixes Applied log
-- **problem**: Attendee counters showing "-" instead of actual participant numbers
-- **solution**: Fixed property name mismatch between AppContext and Discover screen data mapping
-- **problem**: Excessive debug logging cluttering the console
-- **solution**: Removed all debug console.log statements for production readiness
-- **problem**: Pressing host avatar/name initiated `startConversation`, creating conversations prematurely
-- **solution**: Updated `onHostPress` to navigate to `/chat` with `otherUserId` only; conversation is now created on first message send in `chat.tsx`
+- problem: White space appeared above the tab bar on the Discover/Map screen.
+- solution: Added `edges={['top', 'left', 'right']}` to SafeAreaView to exclude the bottom edge, preventing double spacing since the tab bar already handles bottom spacing.
 
 ### How Fixes Were Implemented
-
-#### **Attendee Counter Fix**
-The issue was a property name mismatch in the data flow:
-1. **Backend** sends `currentAttendees` and `maxAttendees`
-2. **AppContext** maps `apiToki.currentAttendees` → `attendees` property
-3. **Discover screen** was incorrectly accessing `toki.currentAttendees` instead of `toki.attendees`
-
-**Fixed by changing:**
-```typescript
-// BEFORE (wrong):
-attendees: toki.currentAttendees || 0,
-
-// AFTER (correct):
-attendees: toki.attendees || 0,
-```
-
-**Data flow now correct:**
-- Backend → `currentAttendees: 2, maxAttendees: 10`
-- AppContext → Maps to `attendees: 2, maxAttendees: 10`
-- Discover Screen → Accesses `toki.attendees` and `toki.maxAttendees`
-- Display → Shows "2/10 people" ✅
-
-#### **Debug Log Cleanup**
-Removed all debugging console.log statements:
-- `🔍 [TRANSFORM] Toki attendee data:` - Attendee data logging
-- `🗺️ [DISCOVER] Raw backend Tokis:` - Backend data logging
-- `🔍 [DEBUG] State tokis length:` - State debugging
-- `🗺️ [DISCOVER] Raw coordinate data:` - Coordinate debugging
-- `🗺️ [DISCOVER] Marker diagnostics` - Map marker diagnostics
-- `🔄 [DISCOVER] Manual refresh triggered` - Refresh logging
-- `✅ [DISCOVER] Tokis refreshed successfully` - Success logging
-- `🔄 [DISCOVER] Screen focused, refreshing Tokis...` - Focus logging
-
-**Kept essential error logging:**
-- `❌ [DISCOVER] Failed to refresh Tokis:` - Error handling
-- `🗺️ [DISCOVER] Marker diagnostics error` - Map error handling
-
-### Current Status
-- ✅ Attendee counters now display correct participant numbers
-- ✅ Debug logging cleaned up for production
-- ✅ Map integration working with custom markers
-- ✅ Advanced search filters functional (date range, sorting)
-- ✅ Auto-refresh on screen focus working
-- ⏳ Radius-based filtering deferred for future enhancement
-
-### New Change (Web map source of truth)
-- problem: Web map showed letter markers and lacked clustering because this file rendered its own Leaflet markers, diverging from `components/DiscoverMap.web.tsx`.
-- solution: Removed inline Leaflet branch and always render shared `DiscoverMap` so both web and native use the same emoji icons, colors, and proximity clustering.
-
-### New Changes (iOS Map Integration)
-- Implemented native `MapView` from `react-native-maps` for iOS/Android with `provider={PROVIDER_GOOGLE}`.
-- Centered map by user profile `location` using `geocodingService` (no device GPS permissions).
-- Replaced native placeholder UI with interactive map showing Toki markers and callouts.
-- Switched native callouts to default bubble (disabled tooltip) so callout renders with background.
-- Filters now use current map center for radius searches.
-
-### Why and How
-- We match the web look while using Google Maps on native per Expo docs.
-- Using profile location avoids permission prompts and respects the requested behavior.
-- Minimal risk: web Leaflet branch untouched; native-only code paths gated by platform.
-
-### Notes
-The linter errors shown are pre-existing CSS compatibility issues between React Native and web platforms, not related to the attendee counter fix or debug cleanup. These are cosmetic and don't affect functionality.
+- Modified SafeAreaView component to exclude the bottom edge by adding the `edges` prop. This prevents SafeAreaView from adding bottom padding for the safe area (home indicator), which was creating double spacing with the tab bar's reserved space.

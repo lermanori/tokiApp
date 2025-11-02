@@ -1,21 +1,11 @@
+# File: app/(tabs)/profile.tsx
+
 ### Summary
-Profile tab screen: renders user header, stats, quick actions, and settings. Now includes a "My Activity" horizontal list with per-item hide/show and a "Show as member" preview toggle.
+This file contains the Profile screen showing user information, activity, saved Tokis count, and profile settings. Displays user avatar, stats, activity feed, and settings options.
 
 ### Fixes Applied log
-- problem: Users could not manage visibility of activities on their profile.
-- solution: Added My Activity cards with Eye/EyeOff toggle, and a profile preview mode.
-
-- problem: Edit Profile action used a credit card icon, causing confusion.
-- solution: Switched to the proper `Edit3` icon from `lucide-react-native`.
+- problem: White space appeared above the tab bar on the Profile screen.
+- solution: Added `edges={['top', 'left', 'right']}` to SafeAreaView to exclude the bottom edge, preventing double spacing since the tab bar already handles bottom spacing.
 
 ### How Fixes Were Implemented
-- Imported `TokiCard`, `Eye`, `EyeOff` and added `myActivity` state.
-- Loaded activity on focus via `apiService.getMyActivity()`.
-- Implemented `toggleActivityVisibility` calling `hideActivity`/`showActivity` then refreshing list.
-- Inserted a section between stats and the existing sections list to render cards and a "Show as member" button that navigates to the user's public profile (`/user-profile/{id}`).
-
-### How Fixes Were Implemented (icon)
-- Replaced `CreditCard as Edit3` import with `Edit3` from `lucide-react-native` in `profile.tsx` header.
-- The middle header button continues to render `<Edit3 />`, now displaying a pencil/edit glyph.
-
-
+- Modified SafeAreaView component to exclude the bottom edge by adding the `edges` prop. This prevents SafeAreaView from adding bottom padding for the safe area (home indicator), which was creating double spacing with the tab bar's reserved space.
