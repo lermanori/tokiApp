@@ -45,3 +45,26 @@ npm i react-native-ui-datepicker dayjs
 - Added a Privacy toggle (Public / Private invite-only).
 - The toggle controls `visibility` sent on create/update (`'public'` or `'private'`).
 - In edit mode, the toggle initializes from `initialData.visibility` and stays in sync if the parent reloads data.
+
+### Location Dropdown Mobile Fix
+- problem: On mobile devices, only the secondary text (city/country) was showing in the location autocomplete dropdown, while the main text (location name) was not visible. This worked correctly on web.
+- solution: Fixed React Native Text component rendering issues by removing `flex: 1` and redundant `marginLeft` from `autocompleteText` style, and added `lineHeight` for consistent rendering.
+
+### How Fix Was Implemented
+- Removed `flex: 1` from `autocompleteText` style - Text components shouldn't have flex properties on React Native as it can cause rendering issues
+- Removed redundant `marginLeft: 8` from `autocompleteText` style (parent View already has it)
+- Added `lineHeight: 20` to ensure consistent text rendering on mobile
+- Added conditional rendering to only show main text when it exists
+- Added `marginTop: 2` to secondary text for better spacing between main and secondary text
+
+### Location Dropdown Overflow Fix and Result Limit
+- problem: Long location names were overflowing the container, and too many results (8) were being fetched from the API.
+- solution: Fixed text overflow with proper flex constraints and reduced API results from 8 to 5.
+
+### How Overflow Fix Was Implemented
+- Added `minWidth: 0` to the text container View to allow proper flex shrinking
+- Added `overflow: 'hidden'` to `autocompleteItem` style to prevent text overflow
+- Added `flexShrink: 1` to both `autocompleteText` and `autocompleteSecondaryText` styles to allow text to shrink properly
+- Added `ellipsizeMode="tail"` to both Text components for proper truncation with ellipsis
+- Created dedicated `autocompleteSecondaryText` style for consistency and maintainability
+- Reduced backend API results from 8 to 5 in `toki-backend/src/routes/maps.ts` to show fewer, more relevant results

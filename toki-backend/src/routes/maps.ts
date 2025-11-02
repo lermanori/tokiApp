@@ -79,7 +79,7 @@ router.get('/places', async (req: Request, res: Response) => {
       return res.status(502).json({ success: false, message: 'Places Autocomplete failed', status: data.status });
     }
 
-    const predictions = (data.predictions || []).slice(0, 8).map((p: any) => ({
+    const predictions = (data.predictions || []).slice(0, 5).map((p: any) => ({
       description: p.description,
       place_id: p.place_id,
       types: p.types || [],

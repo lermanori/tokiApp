@@ -730,12 +730,14 @@ export default function TokiForm({
                   onPress={() => handlePredictionSelect(p)}
                 >
                   <MapPin size={16} color="#666666" />
-                  <View style={{ marginLeft: 8, flex: 1 }}>
-                    <Text style={styles.autocompleteText} numberOfLines={1}>
-                      {p.structured?.mainText || p.description}
-                    </Text>
+                  <View style={{ marginLeft: 8, flex: 1, minWidth: 0 }}>
+                    {(p.structured?.mainText || p.description) && (
+                      <Text style={styles.autocompleteText} numberOfLines={1} ellipsizeMode="tail">
+                        {p.structured?.mainText || p.description}
+                      </Text>
+                    )}
                     {p.structured?.secondaryText && (
-                      <Text style={{ fontSize: 12, color: '#6B7280' }} numberOfLines={1}>
+                      <Text style={styles.autocompleteSecondaryText} numberOfLines={1} ellipsizeMode="tail">
                         {p.structured.secondaryText}
                       </Text>
                     )}
@@ -1177,13 +1179,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   autocompleteText: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#1C1C1C',
-    marginLeft: 8,
-    flex: 1,
+    lineHeight: 20,
+    flexShrink: 1,
+  },
+  autocompleteSecondaryText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    flexShrink: 1,
   },
   timeSlots: {
     flexDirection: 'row',
