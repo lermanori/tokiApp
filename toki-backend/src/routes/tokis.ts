@@ -63,11 +63,11 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate max attendees
-    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 100)) {
+    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 1000)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid max attendees',
-        message: 'Max attendees must be between 1 and 100'
+        message: 'Max attendees must be between 1 and 1000'
       });
     }
 
