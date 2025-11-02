@@ -33,7 +33,7 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
       SELECT 
         t.id,
         t.title,
-        t.image_url,
+        COALESCE((t.image_urls)[1], t.image_url) as image_url,
         t.category,
         t.location,
         t.latitude,
@@ -67,7 +67,7 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
         AND t.visibility <> 'private'
         AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW())
       GROUP BY 
-        t.id, t.title, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
+        t.id, t.title, t.image_urls, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
         t.scheduled_time, t.created_at, t.visibility, t.status, u2.id, u2.name, u2.avatar_url
       ORDER BY sort_ts DESC
       LIMIT 50
@@ -112,7 +112,7 @@ router.get('/users/:userId/activity', authenticateToken, async (req: Request, re
       SELECT 
         t.id,
         t.title,
-        t.image_url,
+        COALESCE((t.image_urls)[1], t.image_url) as image_url,
         t.category,
         t.location,
         t.latitude,
@@ -148,7 +148,7 @@ router.get('/users/:userId/activity', authenticateToken, async (req: Request, re
           WHERE uha.user_id = $1 AND uha.toki_id = t.id
         )
       GROUP BY 
-        t.id, t.title, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
+        t.id, t.title, t.image_urls, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
         t.scheduled_time, t.created_at, t.visibility, t.status, u2.id, u2.name, u2.avatar_url
       ORDER BY sort_ts DESC
       LIMIT 50
