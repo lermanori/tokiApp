@@ -1,6 +1,6 @@
 module.exports = {
   expo: {
-    name: "tokiApp",
+    name: "toki",
     slug: "toki",
     version: "1.0.0",
     orientation: "portrait",
