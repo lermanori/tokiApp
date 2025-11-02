@@ -1171,19 +1171,20 @@ const styles = StyleSheet.create({
     borderColor: '#EAEAEA',
     marginTop: 8,
     maxHeight: 200,
+    overflow: 'scroll',
+
   },
   autocompleteItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
     minWidth: 0,
-    overflow: 'hidden',
   },
   autocompleteText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#1C1C1C',
     lineHeight: 20,
