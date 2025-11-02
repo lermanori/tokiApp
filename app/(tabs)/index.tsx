@@ -95,7 +95,9 @@ export default function ExploreScreen() {
       (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
 
     const matchesVisibility = selectedFilters.visibility === 'all' ||
-      toki.visibility === selectedFilters.visibility;
+      (selectedFilters.visibility === 'hosted_by_me' 
+        ? toki.isHostedByUser === true
+        : toki.visibility === selectedFilters.visibility);
 
     const matchesDistance = selectedFilters.distance === 'all' ||
       (() => {

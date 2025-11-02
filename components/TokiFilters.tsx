@@ -72,7 +72,7 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     {
       title: 'Visibility',
       key: 'visibility',
-      options: ['all', 'public', 'connections', 'friends'],
+      options: ['all', 'public', 'connections', 'hosted_by_me'],
     },
     {
       title: 'Category',
@@ -127,6 +127,9 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     }
     if (sectionKey === 'sortOrder') {
       return option === 'asc' ? 'Ascending' : 'Descending';
+    }
+    if (sectionKey === 'visibility' && option === 'hosted_by_me') {
+      return 'Hosted by me';
     }
     return option.charAt(0).toUpperCase() + option.slice(1);
   };

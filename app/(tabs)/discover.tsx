@@ -371,7 +371,9 @@ export default function DiscoverScreen() {
       (selectedFilters.category === 'all' || event.category === selectedFilters.category);
 
     const matchesVisibility = selectedFilters.visibility === 'all' ||
-      event.visibility === selectedFilters.visibility;
+      (selectedFilters.visibility === 'hosted_by_me' 
+        ? event.isHostedByUser === true
+        : event.visibility === selectedFilters.visibility);
 
     const matchesDistance = selectedFilters.distance === 'all' ||
       (() => {
