@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import TokiIcon from './TokiIcon';
 import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
+import { formatDistanceDisplay } from '@/utils/distance';
 
 export interface TokiCardProps {
     toki: {
@@ -200,24 +201,6 @@ const formatLocationDisplay = (fullLocation: string): string => {
 
     // If all else fails, just show the first meaningful part
     return parts[0] || fullLocation;
-};
-
-// Helper function to format distance display
-const formatDistanceDisplay = (distance: TokiCardProps['toki']['distance']): string => {
-    if (!distance) return '';
-
-    if (typeof distance === 'string') {
-        return distance;
-    }
-
-    if (distance.km < 1) {
-        const meters = Math.round(distance.km * 1000);
-        return `${meters}m`;
-    } else if (distance.km < 10) {
-        return `${distance.km.toFixed(1)}km`;
-    } else {
-        return `${Math.round(distance.km)}km`;
-    }
 };
 
 // Helper function to format time display

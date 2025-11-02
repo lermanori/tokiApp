@@ -6,9 +6,17 @@ This file implements the Toki details screen, displaying comprehensive informati
 ### Fixes Applied log
 - **Problem**: Timezone conversion issue causing 2-hour difference between input time and display time
 - **Solution**: Added `timeZone: 'UTC'` to `toLocaleTimeString` options to display time in UTC, matching the input time format
+- **Problem**: Distance was hardcoded as "0.5 km" instead of using the actual calculated distance, causing inconsistency with card display
+- **Solution**: Updated to get distance from `state.tokis` first (matching card display), with fallback to API response, and use shared `formatDistanceDisplay` utility
 
 ### How Fixes Were Implemented
 - **Problem**: The `formatTimeDisplay` function was converting UTC time to local timezone for display
 - **Solution**: Modified `toLocaleTimeString` call to include `timeZone: 'UTC'` parameter, ensuring the displayed time matches the input time (16:15 → 4:15 PM instead of 6:15 PM)
 - **Backend Integration**: Updated backend to return `scheduledTime` in UTC format (`YYYY-MM-DD HH:MM`)
 - **Date Parsing**: Enhanced date parsing to treat backend timestamps as UTC by adding 'Z' suffix
+- **Problem**: Distance display inconsistency between card and details page
+- **Solution**: 
+  - Updated `distance` field in `transformedToki` to prioritize distance from `state.tokis` (which matches what the card shows)
+  - Changed hardcoded "0.5 km away" to use `formatDistanceDisplay(toki.distance)` for consistent formatting
+  - Updated `TokiDetails` interface to allow distance as string or object `{km, miles}`
+  - Imported shared `formatDistanceDisplay` utility from `@/utils/distance`

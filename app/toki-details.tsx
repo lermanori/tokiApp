@@ -14,6 +14,7 @@ import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions } from '@/utils/tokiUrls';
+import { formatDistanceDisplay } from '@/utils/distance';
 import { getInitials, getActivityEmoji, getActivityLabel, formatLocationDisplay, formatTimeDisplay, canUserInvite, canUserManage, getJoinButtonText, getJoinButtonStyle } from '@/utils/tokiUtils';
 import MetaTags from '@/components/MetaTags';
 import TokiHeader from '@/components/TokiHeader';
@@ -46,7 +47,7 @@ interface TokiDetails {
   };
   hostId?: string; // Alternative way to store host ID
   image: string;
-  distance: string;
+  distance?: string | { km: number; miles: number };
   visibility?: 'public' | 'private' | 'connections' | 'friends';
   isHostedByUser?: boolean;
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined' | 'completed';
@@ -306,7 +307,11 @@ export default function TokiDetailsScreen() {
           },
           hostId: tokiData.host?.id, // Store host ID for potential use
           image: tokiData.imageUrl || '', // Let Image component use getActivityPhoto fallback
-          distance: '0.5 km', // Default distance
+          distance: (() => {
+            // Try to get distance from state.tokis first (matches card display)
+            const tokiFromState = state.tokis.find(t => t.id === tokiData.id);
+            return tokiFromState?.distance || (tokiData.distance ? (typeof tokiData.distance === 'object' ? `${tokiData.distance.km} km` : tokiData.distance) : undefined);
+          })(),
           visibility: tokiData.visibility,
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
@@ -1278,7 +1283,9 @@ export default function TokiDetailsScreen() {
                     <Text style={styles.eventHiddenBadgeText}>Hidden {hiddenCount}</Text>
                   </View>
                 )}
-                <Text style={styles.eventDistance}>0.5 km away</Text>
+                <Text style={styles.eventDistance}>
+                  {toki.distance ? `${formatDistanceDisplay(toki.distance)} away` : ''}
+                </Text>
               </View>
             </View>
           </View>
