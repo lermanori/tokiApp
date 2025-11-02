@@ -60,6 +60,7 @@ interface TokiFormProps {
   onSubmit: (data: any) => Promise<string | boolean | null>;
   onCancel: () => void;
   isSubmitting: boolean;
+  onValidationError?: (details: string[]) => void; // Optional callback for validation errors
 }
 
 export default function TokiForm({
@@ -68,7 +69,8 @@ export default function TokiForm({
   initialData = {},
   onSubmit,
   onCancel,
-  isSubmitting
+  isSubmitting,
+  onValidationError
 }: TokiFormProps) {
   const { state } = useApp();
 
@@ -512,13 +514,28 @@ export default function TokiForm({
 
 
   const handleSubmit = async () => {
-    if (!title || selectedActivities.length === 0 || !location || !selectedTime) {
-      Alert.alert('Missing Information', 'Please fill in all required fields (title, at least one activity type, location, and time).');
+    // Validate required fields
+    const missingFields: string[] = [];
+    if (!title) missingFields.push('Title is required');
+    if (selectedActivities.length === 0) missingFields.push('At least one activity type is required');
+    if (!location) missingFields.push('Location is required');
+    if (!selectedTime) missingFields.push('Time is required');
+
+    if (missingFields.length > 0) {
+      if (onValidationError) {
+        onValidationError(missingFields);
+      } else {
+        Alert.alert('Missing Information', 'Please fill in all required fields (title, at least one activity type, location, and time).');
+      }
       return;
     }
 
     if (!state.isConnected) {
-      Alert.alert('Connection Error', 'Unable to connect to server. Please check your connection and try again.');
+      if (onValidationError) {
+        onValidationError(['Unable to connect to server. Please check your connection and try again.']);
+      } else {
+        Alert.alert('Connection Error', 'Unable to connect to server. Please check your connection and try again.');
+      }
       return;
     }
 

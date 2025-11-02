@@ -6,10 +6,19 @@ import { ArrowLeft } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import TokiForm from '@/components/TokiForm';
+import ErrorModal from '@/components/ErrorModal';
+import { parseApiError } from '@/utils/parseApiError';
 
 export default function CreateScreen() {
   const { actions, state } = useApp();
   const [isCreating, setIsCreating] = useState(false);
+  const [errorState, setErrorState] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    details?: string[];
+    statusCode?: number;
+  } | null>(null);
 
   const handleCreateToki = async (tokiData: any): Promise<string | null> => {
     setIsCreating(true);
@@ -17,30 +26,33 @@ export default function CreateScreen() {
     try {
       const tokiId = await actions.createToki(tokiData);
       
-      if (tokiId) {
-        // Check if there are temporary images that need to be uploaded
-        const hasTemporaryImages = tokiData.images && tokiData.images.some((img: any) => 
-          img.publicId && img.publicId.startsWith('temp_')
-        );
+      // Check if there are temporary images that need to be uploaded
+      const hasTemporaryImages = tokiData.images && tokiData.images.some((img: any) => 
+        img.publicId && img.publicId.startsWith('temp_')
+      );
+      
+      if (hasTemporaryImages) {
+        console.log('📸 [CREATE SCREEN] Toki created with temporary images, waiting for API to update...');
         
-        if (hasTemporaryImages) {
-          console.log('📸 [CREATE SCREEN] Toki created with temporary images, waiting for API to update...');
-          
-          // Wait a bit for the API to have the updated data
-          // This ensures the Toki details page gets the latest data with images
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          console.log('📸 [CREATE SCREEN] API update wait completed, navigating to details...');
-        }
-        
-        // Navigate to the new Toki details
-        router.push(`/toki-details?tokiId=${tokiId}`);
-        return tokiId;
-      } else {
-        Alert.alert('Error', 'Failed to create Toki. Please try again.');
-        return null;
+        // Wait a bit for the API to have the updated data
+        // This ensures the Toki details page gets the latest data with images
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('📸 [CREATE SCREEN] API update wait completed, navigating to details...');
       }
+      
+      // Navigate to the new Toki details
+      router.push(`/toki-details?tokiId=${tokiId}`);
+      return tokiId;
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      console.error('Create Toki error:', error);
+      const parsed = parseApiError(error, 'create');
+      setErrorState({
+        visible: true,
+        title: parsed.title,
+        message: parsed.message,
+        details: parsed.details,
+        statusCode: parsed.statusCode,
+      });
       return null;
     } finally {
       setIsCreating(false);
@@ -76,7 +88,27 @@ export default function CreateScreen() {
         onSubmit={handleCreateToki}
         onCancel={handleCancel}
         isSubmitting={isCreating}
+        onValidationError={(details) => {
+          setErrorState({
+            visible: true,
+            title: "Can't create Toki",
+            message: 'Please fix the following issues:',
+            details,
+          });
+        }}
       />
+
+      {/* Error Modal */}
+      {errorState && (
+        <ErrorModal
+          visible={errorState.visible}
+          title={errorState.title}
+          message={errorState.message}
+          details={errorState.details}
+          statusCode={errorState.statusCode}
+          onClose={() => setErrorState(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }

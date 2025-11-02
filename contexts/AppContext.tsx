@@ -1088,7 +1088,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ Failed to create Toki:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to create activity' });
-      return null;
+      // Re-throw the error so the calling screen can handle it with ErrorModal
+      throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -1270,7 +1271,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('❌ Failed to update Toki:', error);
-      return false;
+      // Re-throw the error so the calling screen can handle it with ErrorModal
+      throw error;
     }
   };
 

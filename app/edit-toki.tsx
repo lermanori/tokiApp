@@ -8,12 +8,21 @@ import { useApp } from '@/contexts/AppContext';
 import TokiForm from '@/components/TokiForm';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
+import ErrorModal from '@/components/ErrorModal';
+import { parseApiError } from '@/utils/parseApiError';
 
 export default function EditTokiScreen() {
   const { state, actions } = useApp();
   const { tokiId } = useLocalSearchParams();
   const [isUpdating, setIsUpdating] = useState(false);
   const [initialData, setInitialData] = useState<any>({});
+  const [errorState, setErrorState] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    details?: string[];
+    statusCode?: number;
+  } | null>(null);
 
   // Load Toki data when component mounts
   useEffect(() => {
@@ -92,18 +101,21 @@ export default function EditTokiScreen() {
         tags: tokiData.tags,
       };
 
-      const success = await actions.updateTokiBackend(tokiId as string, updatedTokiData);
-
-      if (success) {
-        router.push(`/toki-details?tokiId=${tokiId}&fromEdit=true`);
-        return true;
-      } else {
-        Alert.alert('Error', 'Failed to update Toki. Please try again.');
-        return false;
-      }
+      await actions.updateTokiBackend(tokiId as string, updatedTokiData);
+      
+      // If we get here, update was successful
+      router.push(`/toki-details?tokiId=${tokiId}&fromEdit=true`);
+      return true;
     } catch (error) {
       console.error('Error updating Toki:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      const parsed = parseApiError(error, 'edit');
+      setErrorState({
+        visible: true,
+        title: parsed.title,
+        message: parsed.message,
+        details: parsed.details,
+        statusCode: parsed.statusCode,
+      });
       return false;
     } finally {
       setIsUpdating(false);
@@ -141,7 +153,27 @@ export default function EditTokiScreen() {
         onSubmit={handleUpdateToki}
         onCancel={handleCancel}
         isSubmitting={isUpdating}
+        onValidationError={(details) => {
+          setErrorState({
+            visible: true,
+            title: "Can't update Toki",
+            message: 'Please fix the following issues:',
+            details,
+          });
+        }}
       />
+
+      {/* Error Modal */}
+      {errorState && (
+        <ErrorModal
+          visible={errorState.visible}
+          title={errorState.title}
+          message={errorState.message}
+          details={errorState.details}
+          statusCode={errorState.statusCode}
+          onClose={() => setErrorState(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
