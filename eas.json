@@ -1,21 +1,26 @@
 {
-  "cli": {
-    "version": ">= 16.25.0",
-    "appVersionSource": "remote"
-  },
+  "cli": { "version": ">= 16.25.0", "appVersionSource": "remote" },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
+    "development": { "developmentClient": true, "distribution": "internal" },
+    "preview": { "distribution": "internal" },
+
+    "beta": {
+      "distribution": "store",
+      "channel": "beta",
+      "autoIncrement": true,
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     },
-    "preview": {
-      "distribution": "internal"
-    },
+
     "production": {
+      "distribution": "store",
+      "channel": "production",
       "autoIncrement": true
     }
   },
   "submit": {
+    "beta": {},
     "production": {}
   }
 }

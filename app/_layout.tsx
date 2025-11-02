@@ -21,12 +21,19 @@ function RootLayoutNav() {
   // Parse URL parameters directly for cases where useLocalSearchParams doesn't work
   const getUrlParams = () => {
     if (typeof window === 'undefined') return {};
-    const url = new URL(window.location.href);
-    const params: Record<string, string> = {};
-    url.searchParams.forEach((value, key) => {
-      params[key] = value;
-    });
-    return params;
+    // Check if window.location exists and has href (web only)
+    if (typeof window.location === 'undefined' || !window.location.href) return {};
+    try {
+      const url = new URL(window.location.href);
+      const params: Record<string, string> = {};
+      url.searchParams.forEach((value, key) => {
+        params[key] = value;
+      });
+      return params;
+    } catch (error) {
+      // If URL parsing fails (React Native), return empty object
+      return {};
+    }
   };
   
   const urlParams = getUrlParams();
@@ -77,7 +84,9 @@ function RootLayoutNav() {
     // Check if user is authenticated with debouncing
     const checkAuth = async () => {
       // Ensure routing has recognized the initial path (especially for deep links like /join/:code)
-      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const path = typeof window !== 'undefined' && window.location?.pathname 
+        ? window.location.pathname 
+        : '';
       const pathIsJoin = path.startsWith('/join');
       const pathIsLogin = path.startsWith('/login');
 
@@ -218,12 +227,18 @@ function RootLayoutNav() {
       // Parse URL parameters directly for cases where useLocalSearchParams doesn't work
       const getUrlParams = () => {
         if (typeof window === 'undefined') return {};
-        const url = new URL(window.location.href);
-        const params: Record<string, string> = {};
-        url.searchParams.forEach((value, key) => {
-          params[key] = value;
-        });
-        return params;
+        if (typeof window.location === 'undefined' || !window.location.href) return {};
+        try {
+          const url = new URL(window.location.href);
+          const params: Record<string, string> = {};
+          url.searchParams.forEach((value, key) => {
+            params[key] = value;
+          });
+          return params;
+        } catch (error) {
+          // If URL parsing fails (React Native), return empty object
+          return {};
+        }
       };
       const urlParams = getUrlParams();
       const effectiveReturnTo = urlParams.returnTo;
@@ -259,7 +274,6 @@ function RootLayoutNav() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="waitlist" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="create-toki" options={{ headerShown: false }} />
         <Stack.Screen name="toki-details" options={{ headerShown: false }} />
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile" options={{ headerShown: false }} />

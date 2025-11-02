@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useCallback } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Platform } from 'react-native';
-import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE,PROVIDER_DEFAULT } from 'react-native-maps';
 import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/utils/categories';
 
 type EventItem = {
@@ -63,7 +63,7 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
   return (
     <View style={styles.container}>
       <MapView
-        provider={PROVIDER_GOOGLE}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         style={styles.map}
         initialRegion={region}
         region={region}

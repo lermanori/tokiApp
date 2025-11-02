@@ -335,6 +335,8 @@ class ApiService {
       return data;
     } catch (error) {
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);
+      console.error(`❌ [API] Full URL attempted: ${url}`);
+      console.error(`❌ [API] Base URL: ${API_BASE_URL}`);
       
       // Enhance error with more context
       if (error instanceof Error) {

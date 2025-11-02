@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>myapp</string>
-          <string>com.toki.app</string>
+          <string>com.toki.socialmap</string>
         </array>
       </dict>
     </array>

@@ -812,7 +812,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkConnection = async () => {
     try {
-      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const path = typeof window !== 'undefined' && window.location?.pathname 
+        ? window.location.pathname 
+        : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping health check on auth/join routes');
         return;
@@ -835,7 +837,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
     } catch (error) {
+      const backendUrl = getBackendUrl();
       console.error('❌ Backend connection failed:', error);
+      console.error('❌ Backend URL attempted:', backendUrl);
+      console.error('❌ Health check endpoint:', `${backendUrl}/api/health`);
       dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
       dispatch({ type: 'SET_ERROR', payload: 'Unable to connect to server' });
     } finally {
@@ -857,7 +862,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadTokis = async () => {
     try {
       // Avoid hammering the API when entering via invite links or login
-      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const path = typeof window !== 'undefined' && window.location?.pathname 
+        ? window.location.pathname 
+        : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping loadTokis on auth/join routes');
         return;
@@ -922,7 +929,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadTokisWithFilters = async (filters: any) => {
     try {
-      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const path = typeof window !== 'undefined' && window.location?.pathname 
+        ? window.location.pathname 
+        : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping loadTokisWithFilters on auth/join routes');
         return;
@@ -1474,7 +1483,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkAuthStatus = async (): Promise<boolean> => {
     try {
-      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const path = typeof window !== 'undefined' && window.location?.pathname 
+        ? window.location.pathname 
+        : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping auth status on auth/join routes');
         return false;

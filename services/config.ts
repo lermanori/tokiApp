@@ -1,6 +1,8 @@
 import { getCurrentDeploymentConfig } from './deployment-config';
 
 // Configuration for the Toki app
+
+
 export const config = {
   // Frontend configuration
   frontend: {
@@ -75,3 +77,6 @@ export const getFrontendBasePath = () => {
 export const getFrontendUrl = () => {
   return config.frontend.baseUrl;
 };
+
+console.log('🔍 [CONFIG] __DEV__:', __DEV__);
+console.log('🔍 [CONFIG] Backend URL:', getBackendUrl());
