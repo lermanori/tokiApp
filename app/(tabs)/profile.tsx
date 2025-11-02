@@ -975,11 +975,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    padding: 16,
+    padding: 10,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+    minWidth: 70,
   },
   statNumber: {
     fontSize: 20,
@@ -996,7 +997,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: '#E5E7EB',
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   enhancedStatsContainer: {
     backgroundColor: '#F9FAFB',
