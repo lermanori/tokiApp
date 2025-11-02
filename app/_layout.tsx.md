@@ -10,6 +10,8 @@ Root layout that initializes app providers and navigation. Now also initializes 
 - solution: In `RootLayoutNav`, detect the raw `window.location.pathname` and treat paths starting with `/join` as being on the join screen during the first auth check. This prevents premature redirects and allows invite pages to load unauthenticated.
 - problem: `window.location.href` access in `getUrlParams()` functions crashed on React Native because `window.location` doesn't exist or doesn't have `href` property in native environments.
 - solution: Added safety checks to verify `window.location` exists and has `href` before accessing it, and wrapped URL parsing in try-catch to handle React Native environments gracefully.
+- problem: Status bar had a white background (`backgroundColor="#FFFFFF"`) that didn't match the gradient background used in the login screen, creating a visual mismatch.
+- solution: Removed the `backgroundColor` prop and set `style="dark"` so the status bar is transparent (translucent defaults to true) and allows the gradient to show through naturally, while ensuring dark text/icons for visibility.
 
 ### How Fixes Were Implemented
 - Added `import '@/utils/logger'` as the first import so console patching happens before other modules run. This ensures existing `console.*` calls across the app are filtered by level.
@@ -23,5 +25,9 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - Wrap `new URL()` parsing in try-catch block to gracefully handle React Native where URL parsing may fail.
   - Return empty object `{}` if any check fails, preventing crashes on native platforms.
 - Fixed `window.location.pathname` access in `checkAuth()` function to use optional chaining (`window.location?.pathname`) for safe access on React Native.
+- Updated `StatusBar` component configuration:
+  - Changed `style="auto"` to `style="dark"` to explicitly set dark text/icons for light backgrounds.
+  - Removed `backgroundColor` prop so the status bar is transparent (translucent defaults to `true`), allowing the gradient backgrounds (like the login screen's `#FFF1EB` to `#E5DCFF` gradient) to show through naturally.
+  - This eliminates the white status bar background that was visually mismatched with the app's gradient backgrounds.
 
 

@@ -231,11 +231,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
-        style={styles.gradient}
-      >
+    <LinearGradient
+      colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -375,8 +375,8 @@ export default function LoginScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
-      </LinearGradient>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -386,6 +386,8 @@ const styles = StyleSheet.create({
   },
   gradient: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   keyboardView: {
     flex: 1,

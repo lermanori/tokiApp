@@ -19,6 +19,9 @@ This file contains the login and registration screen with enhanced autofill func
 - **problem**: Time-consuming manual login for multiple dev accounts
 - **solution**: Created dev mode with pre-configured test users and one-click login functionality
 
+- **problem**: White spaces appearing at the top and bottom of the screen in dev builds due to SafeAreaView default background
+- **solution**: Restructured component hierarchy to wrap SafeAreaView inside LinearGradient instead of the other way around, allowing the gradient to extend into safe areas (status bar and home indicator areas)
+
 ### How Fixes Were Implemented
 - **Autofill Integration**: Added `textContentType` for iOS (name, emailAddress, password/newPassword) and `autoComplete` for Android compatibility
 - **Password Visibility**: Created a password container with toggle button using eye/hide emojis for intuitive UX
@@ -27,3 +30,4 @@ This file contains the login and registration screen with enhanced autofill func
 - **Dev Environment**: Added localStorage-based credential saving/loading with automatic form population
 - **Quick Login**: Implemented dev mode with 4 pre-configured test users and one-click login buttons
 - **Persistent State**: Credentials are automatically saved after successful login and restored on page load
+- **Gradient Background Fix**: Moved LinearGradient to be the outermost wrapper component, with SafeAreaView nested inside. This ensures the gradient covers the entire screen including safe areas (status bar at top, home indicator at bottom), eliminating white spaces. The gradient now extends edge-to-edge while SafeAreaView handles content padding for safe areas.

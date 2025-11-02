@@ -315,7 +315,7 @@ export default function RootLayout() {
   return (
     <AppProvider>
       <RootLayoutNav />
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </AppProvider>
   );
 }
