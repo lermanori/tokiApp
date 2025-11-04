@@ -924,7 +924,7 @@ class ApiService {
 
   // Health Check
   async healthCheck(): Promise<{ message: string; version: string; endpoints: any }> {
-    const response = await this.makeRequest<{ message: string; version: string; endpoints: any }>('');
+    const response = await this.makeRequest<{ message: string; version: string; endpoints: any }>('/health');
     return response;
   }
 

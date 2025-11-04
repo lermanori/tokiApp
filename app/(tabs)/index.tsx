@@ -25,10 +25,33 @@ export default function ExploreScreen() {
     availability: 'all',
     participants: 'all',
   });
+  const [userConnections, setUserConnections] = useState<string[]>([]); // Store connection user IDs
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const categories = ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
+
+  // Load user connections to check if hosts are connections
+  useEffect(() => {
+    const loadConnections = async () => {
+      try {
+        const result = await actions.getConnections();
+        // Connection structure: { id, createdAt, user: { id, name, avatar, ... } }
+        const connectionIds = result.connections.map((conn: any) => {
+          // Handle both structures: conn.user.id or conn.id (if user is flattened)
+          return conn.user?.id || conn.id;
+        }).filter((id: string) => id); // Filter out any undefined values
+        setUserConnections(connectionIds);
+        console.log('👥 [EXPLORE] Loaded connections:', connectionIds.length, 'users');
+        console.log('👥 [EXPLORE] Connection IDs:', connectionIds);
+      } catch (error) {
+        console.error('❌ [EXPLORE] Failed to load connections:', error);
+      }
+    };
+    if (state.isConnected && state.currentUser?.id) {
+      loadConnections();
+    }
+  }, [state.isConnected, state.currentUser?.id]);
 
   // Refresh Tokis when screen comes into focus (e.g., after creating a new Toki)
   useFocusEffect(
@@ -83,6 +106,46 @@ export default function ExploreScreen() {
     });
   };
 
+  // Debug: Log filter changes and results with detailed toki information
+  React.useEffect(() => {
+    console.log('🔍 [EXPLORE] Visibility filter changed:', selectedFilters.visibility);
+    console.log('🔍 [EXPLORE] Total tokis:', state.tokis.length);
+    
+    // Count tokis by visibility for debugging
+    const visibilityCounts = {
+      all: state.tokis.length,
+      public: state.tokis.filter(t => t.visibility === 'public').length,
+      connections: state.tokis.filter(t => userConnections.includes(t.host.id)).length, // Count by host connection status
+      connections_visibility: state.tokis.filter(t => t.visibility === 'connections').length, // Count by visibility setting
+      hosted_by_me: state.tokis.filter(t => t.isHostedByUser === true).length,
+    };
+    console.log('🔍 [EXPLORE] Visibility counts:', visibilityCounts);
+    
+    // Detailed log for each toki
+    console.log('📋 [EXPLORE] Detailed toki visibility information:');
+    state.tokis.forEach((toki, index) => {
+      const hostIsConnection = userConnections.includes(toki.host.id);
+      const tokiInfo = {
+        index: index + 1,
+        name: toki.title,
+        host: toki.host.name,
+        hostId: toki.host.id,
+        visibility: toki.visibility,
+        isPublic: toki.visibility === 'public',
+        isConnection: hostIsConnection, // Check if host is actually a connection
+        visibilityIsConnections: toki.visibility === 'connections', // The visibility setting
+        isHostedByMe: toki.isHostedByUser === true,
+        matchesCurrentFilter: (() => {
+          if (selectedFilters.visibility === 'all') return true;
+          if (selectedFilters.visibility === 'hosted_by_me') return toki.isHostedByUser === true;
+          if (selectedFilters.visibility === 'connections') return hostIsConnection;
+          return toki.visibility === selectedFilters.visibility;
+        })(),
+      };
+      console.log(`  ${index + 1}.`, tokiInfo);
+    });
+  }, [selectedFilters.visibility, state.tokis, userConnections]);
+
   const filteredTokis = state.tokis.filter(toki => {
     const matchesSearch = searchQuery === '' ||
       toki.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -94,10 +157,25 @@ export default function ExploreScreen() {
     const matchesCategory = (selectedCategory === 'all' || toki.category === selectedCategory) &&
       (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
 
-    const matchesVisibility = selectedFilters.visibility === 'all' ||
-      (selectedFilters.visibility === 'hosted_by_me' 
-        ? toki.isHostedByUser === true
-        : toki.visibility === selectedFilters.visibility);
+    const matchesVisibility = (() => {
+      if (selectedFilters.visibility === 'all') {
+        return true; // Show all tokis
+      }
+      
+      if (selectedFilters.visibility === 'hosted_by_me') {
+        // Filter to show only tokis hosted by the current user
+        return toki.isHostedByUser === true;
+      }
+      
+      if (selectedFilters.visibility === 'connections') {
+        // Filter to show tokis where the host is in the user's connections list
+        const hostIsConnection = userConnections.includes(toki.host.id);
+        return hostIsConnection;
+      }
+      
+      // Match exact visibility value (public, etc.)
+      return toki.visibility === selectedFilters.visibility;
+    })();
 
     const matchesDistance = selectedFilters.distance === 'all' ||
       (() => {
@@ -134,6 +212,32 @@ export default function ExploreScreen() {
 
     return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
   });
+
+  // Debug: Log filtered results with details
+  React.useEffect(() => {
+    console.log('✅ [EXPLORE] Filtered tokis count:', filteredTokis.length);
+    if (selectedFilters.visibility !== 'all') {
+      console.log(`✅ [EXPLORE] Visibility filter "${selectedFilters.visibility}" showing ${filteredTokis.length} tokis`);
+    }
+    
+    // Show which tokis are displayed after filtering
+    console.log('📋 [EXPLORE] Tokis displayed after filtering:');
+    filteredTokis.forEach((toki, index) => {
+      const hostIsConnection = userConnections.includes(toki.host.id);
+      const displayInfo = {
+        index: index + 1,
+        name: toki.title,
+        host: toki.host.name,
+        hostId: toki.host.id,
+        visibility: toki.visibility,
+        isPublic: toki.visibility === 'public',
+        isConnection: hostIsConnection, // Check if host is actually a connection
+        visibilityIsConnections: toki.visibility === 'connections', // The visibility setting
+        isHostedByMe: toki.isHostedByUser === true,
+      };
+      console.log(`  ✅ ${index + 1}.`, displayInfo);
+    });
+  }, [filteredTokis, selectedFilters.visibility, userConnections]);
 
   const handleTokiPress = (toki: any) => {
     router.push({
