@@ -1,3 +1,22 @@
+# File: index.ts
+
+### Summary
+Main Express server entrypoint. Configures security (Helmet), CORS, parsing, static asset serving (uploads and admin panel), API routes, WebSocket server, and error handlers.
+
+### Fixes Applied log
+- problem: Admin page blocked Google Fonts by CSP, breaking external stylesheet load.
+- solution: Allowed `https://fonts.googleapis.com` in `style-src`/`style-src-elem` and `https://fonts.gstatic.com` in `font-src`.
+- problem: Admin CSS under `/admin/static/...` returned JSON 500/404 and wrong MIME type.
+- solution: Serve the entire admin build directory under `/admin` so all assets resolve correctly.
+ - problem: CORS middleware intercepted static admin asset requests causing 500 JSON responses.
+ - solution: Scope CORS to `/api` routes only and implement a strict allowlist including same deploy domains.
+
+### How Fixes Were Implemented
+- Updated Helmet configuration to include:
+  - `styleSrc` and `styleSrcElem`: `"https://fonts.googleapis.com"`
+  - `fontSrc`: `"https://fonts.gstatic.com"`, plus `data:` for inlined fonts if needed
+- Replaced `app.use('/admin/static', express.static(path.join(adminBuildPath, 'static')))` with `app.use('/admin', express.static(adminBuildPath))` to expose the full admin build (including `index.html` and `static` assets) at `/admin`.
+ - Limited CORS to API routes via `corsMiddleware` and an `origin` allowlist (localhost, Netlify, toki-app.com, Railway domains). Added `/favicon.ico` route to serve admin build favicon.
 ### Summary
 Express server setup and route registration for the Toki backend, including security, CORS, static assets, sockets, and API mounting.
 

@@ -52,40 +52,42 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
     },
   },
 }));
 
-// CORS configuration
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3002',
-      'http://localhost:8081',
-      'http://localhost:8082',
-      'https://tokiapp.netlify.app',
-      'https://*.netlify.app',
-      'https://toki-app.com'
-    ];
-    if (!origin || allowedOrigins.some(allowed => {
-      if (allowed.includes('*')) {
-        return origin.includes(allowed.replace('*', ''));
-      }
-      return origin === allowed;
-    })) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+// CORS configuration (apply ONLY to API routes; do not interfere with static/admin)
+const originFunction: cors.CorsOptions['origin'] = function (origin, callback) {
+  const allowList: (string | RegExp)[] = [
+    'http://localhost:3000',
+    'http://localhost:3002',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'https://tokiapp.netlify.app',
+    /https:\/\/.*\.netlify\.app$/,
+    'https://toki-app.com',
+    /https:\/\/.*\.railway\.app$/,
+  ];
+  if (!origin) return callback(null, true);
+  const isAllowed = allowList.some(entry => {
+    if (typeof entry === 'string') return origin === entry;
+    return entry.test(origin);
+  });
+  if (isAllowed) return callback(null, true);
+  return callback(new Error('Not allowed by CORS'));
+};
+
+const corsMiddleware = cors({
+  origin: originFunction,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -96,7 +98,12 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Serve admin panel static files (React build)
 const adminBuildPath = path.join(__dirname, '../admin-panel/build');
-app.use('/admin/static', express.static(path.join(adminBuildPath, 'static')));
+app.use('/admin', express.static(adminBuildPath));
+
+// Serve favicon for root requests (admin build's favicon)
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(adminBuildPath, 'favicon.ico'));
+});
 
 // Serve admin panel HTML for all routes (React Router handles routing)
 app.get('/admin', (req, res) => {
@@ -121,21 +128,21 @@ app.get('/health', (req, res) => {
 app.set('io', io);
 
 // API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/tokis', tokiRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/connections', connectionRoutes);
-app.use('/api/blocks', blockRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/ratings', ratingRoutes);
-app.use('/api/saved-tokis', savedTokiRoutes);
-app.use('/api/profile-images', profileImageRoutes);
-app.use('/api/toki-images', tokiImageRoutes);
-app.use('/api/maps', mapsRoutes);
-app.use('/api/health', healthRoutes);
-app.use('/api/activity', activityRoutes);
-app.use('/api/waitlist', waitlistRoutes);
+app.use('/api/auth', corsMiddleware, authRoutes);
+app.use('/api/tokis', corsMiddleware, tokiRoutes);
+app.use('/api/messages', corsMiddleware, messageRoutes);
+app.use('/api/connections', corsMiddleware, connectionRoutes);
+app.use('/api/blocks', corsMiddleware, blockRoutes);
+app.use('/api/admin', corsMiddleware, adminRoutes);
+app.use('/api/notifications', corsMiddleware, notificationRoutes);
+app.use('/api/ratings', corsMiddleware, ratingRoutes);
+app.use('/api/saved-tokis', corsMiddleware, savedTokiRoutes);
+app.use('/api/profile-images', corsMiddleware, profileImageRoutes);
+app.use('/api/toki-images', corsMiddleware, tokiImageRoutes);
+app.use('/api/maps', corsMiddleware, mapsRoutes);
+app.use('/api/health', corsMiddleware, healthRoutes);
+app.use('/api/activity', corsMiddleware, activityRoutes);
+app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 
 app.get('/api', (req, res) => {
   res.json({

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 import { Lock, Mail } from 'lucide-react';
 
@@ -9,7 +8,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAdminAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +17,8 @@ export default function Login() {
     const result = await login(email, password);
 
     if (result.success) {
-      navigate('/');
+      // Force reload so App's auth check reads the stored token and updates routing
+      window.location.replace('/admin/');
     } else {
       setError(result.message || 'Login failed');
     }
