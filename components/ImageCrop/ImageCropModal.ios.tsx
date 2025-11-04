@@ -31,6 +31,12 @@ export default function ImageCropModalIOS({
 }: ImageCropModalProps) {
   console.log('ImageCropModalIOS: Component rendered with visible:', visible, 'imageUri:', imageUri);
   
+  // Preview container size (drawn image sits inside with contain-fit)
+  // Make it as large as possible without overflowing screen
+  const screen = Dimensions.get('window');
+  const CONTAINER_W = Math.min(screen.width - 40, 600);
+  const CONTAINER_H = Math.min(Math.round(screen.height * 0.38), 420);
+
   const insets = useSafeAreaInsets();
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
@@ -57,6 +63,7 @@ export default function ImageCropModalIOS({
     startPosition: { x: number; y: number };
     startTouch: { x: number; y: number };
   } | null>(null);
+  const MIN_CROP_SIZE = 60;
   
   // Debounce preview updates
   const previewUpdateTimeout = useRef<any>(null);
@@ -77,7 +84,7 @@ export default function ImageCropModalIOS({
       const deltaX = currentX - dragStart.x;
       const deltaY = currentY - dragStart.y;
       
-      // Ensure crop box stays within image bounds
+      // Keep crop within drawn image bounds (coordinates are relative to overlay origin)
       const maxX = Math.max(0, imageDimensions.width - cropSize.width);
       const maxY = Math.max(0, imageDimensions.height - cropSize.height);
       
@@ -135,53 +142,43 @@ export default function ImageCropModalIOS({
     switch (resizeHandle) {
       case 'se': // Bottom-right corner - grow from top-left
         const deltaSE = Math.max(deltaX, deltaY);
-        newWidth = Math.max(50, resizeStartData.startSize.width + deltaSE);
+        newWidth = Math.max(MIN_CROP_SIZE, resizeStartData.startSize.width + deltaSE);
         newHeight = newWidth / aspectRatioValue;
         break;
         
       case 'sw': // Bottom-left corner - grow from top-right
         const deltaSW = Math.max(-deltaX, deltaY);
-        newWidth = Math.max(50, resizeStartData.startSize.width + deltaSW);
+        newWidth = Math.max(MIN_CROP_SIZE, resizeStartData.startSize.width + deltaSW);
         newHeight = newWidth / aspectRatioValue;
         newX = resizeStartData.startPosition.x + resizeStartData.startSize.width - newWidth;
         break;
         
       case 'ne': // Top-right corner - grow from bottom-left
         const deltaNE = Math.max(deltaX, -deltaY);
-        newWidth = Math.max(50, resizeStartData.startSize.width + deltaNE);
+        newWidth = Math.max(MIN_CROP_SIZE, resizeStartData.startSize.width + deltaNE);
         newHeight = newWidth / aspectRatioValue;
         newY = resizeStartData.startPosition.y + resizeStartData.startSize.height - newHeight;
         break;
         
       case 'nw': // Top-left corner - grow from bottom-right
         const deltaNW = Math.max(-deltaX, -deltaY);
-        newWidth = Math.max(50, resizeStartData.startSize.width + deltaNW);
+        newWidth = Math.max(MIN_CROP_SIZE, resizeStartData.startSize.width + deltaNW);
         newHeight = newWidth / aspectRatioValue;
         newX = resizeStartData.startPosition.x + resizeStartData.startSize.width - newWidth;
         newY = resizeStartData.startPosition.y + resizeStartData.startSize.height - newHeight;
         break;
     }
     
-    // Constrain to image boundaries
-    const maxX = imageWidth - newWidth;
-    const maxY = imageHeight - newHeight;
-    
-    // Clamp position to image bounds
-    newX = Math.max(0, Math.min(newX, maxX));
-    newY = Math.max(0, Math.min(newY, maxY));
-    
-    // If we hit a boundary, adjust size to fit
-    if (newX === 0 || newX === maxX) {
-      newWidth = imageWidth - newX;
-      newHeight = newWidth / aspectRatioValue;
-    }
-    if (newY === 0 || newY === maxY) {
-      newHeight = imageHeight - newY;
-      newWidth = newHeight * aspectRatioValue;
-    }
+    // Clamp size to image bounds while keeping top-left at newX/newY
+    newWidth = Math.min(newWidth, imageWidth - Math.max(0, newX));
+    newHeight = Math.min(newHeight, imageHeight - Math.max(0, newY));
+
+    // Recompute position to stay inside bounds
+    newX = Math.max(0, Math.min(newX, imageWidth - newWidth));
+    newY = Math.max(0, Math.min(newY, imageHeight - newHeight));
     
     // Ensure minimum size
-    if (newWidth >= 50 && newHeight >= 50) {
+    if (newWidth >= MIN_CROP_SIZE && newHeight >= MIN_CROP_SIZE) {
       setCropSize({ width: newWidth, height: newHeight });
       setCropPosition({ x: newX, y: newY });
     }
@@ -259,11 +256,19 @@ export default function ImageCropModalIOS({
       
       console.log('Scale factors:', { scaleX, scaleY });
       
-      // Convert crop position from preview coordinates to actual image coordinates
-      const actualCropX = cropPosition.x * scaleX;
-      const actualCropY = cropPosition.y * scaleY;
-      const actualCropWidth = cropSize.width * scaleX;
-      const actualCropHeight = cropSize.height * scaleY;
+      // Convert crop position from overlay coordinates to actual image coordinates and clamp
+      let actualCropX = Math.max(0, Math.round(cropPosition.x * scaleX));
+      let actualCropY = Math.max(0, Math.round(cropPosition.y * scaleY));
+      let actualCropWidth = Math.round(cropSize.width * scaleX);
+      let actualCropHeight = Math.round(cropSize.height * scaleY);
+
+      // Ensure crop rectangle stays within image bounds to avoid errors
+      if (actualCropX + actualCropWidth > actualImageWidth) {
+        actualCropWidth = actualImageWidth - actualCropX;
+      }
+      if (actualCropY + actualCropHeight > actualImageHeight) {
+        actualCropHeight = actualImageHeight - actualCropY;
+      }
       
       console.log('Actual crop coordinates:', { actualCropX, actualCropY, actualCropWidth, actualCropHeight });
       
@@ -323,11 +328,18 @@ export default function ImageCropModalIOS({
       const scaleX = imageWidth / imageDimensions.width;
       const scaleY = imageHeight / imageDimensions.height;
       
-      // Convert crop position from preview coordinates to actual image coordinates
-      const actualCropX = cropPosition.x * scaleX;
-      const actualCropY = cropPosition.y * scaleY;
-      const actualCropWidth = cropSize.width * scaleX;
-      const actualCropHeight = cropSize.height * scaleY;
+      // Convert crop position from overlay coordinates to actual image coordinates and clamp
+      let actualCropX = Math.max(0, Math.round(cropPosition.x * scaleX));
+      let actualCropY = Math.max(0, Math.round(cropPosition.y * scaleY));
+      let actualCropWidth = Math.round(cropSize.width * scaleX);
+      let actualCropHeight = Math.round(cropSize.height * scaleY);
+
+      if (actualCropX + actualCropWidth > imageWidth) {
+        actualCropWidth = imageWidth - actualCropX;
+      }
+      if (actualCropY + actualCropHeight > imageHeight) {
+        actualCropHeight = imageHeight - actualCropY;
+      }
       
       console.log('ImageCropModal iOS: Actual crop dimensions:', { 
         actualCropX, 
@@ -438,26 +450,47 @@ export default function ImageCropModalIOS({
         {/* Image Preview Area */}
         <View style={styles.iosPreviewContainer}>
           {previewUri && (
-            <View 
-              style={styles.imageWrapper}
-              onLayout={(event) => {
-                const { width, height } = event.nativeEvent.layout;
-                console.log('🔥 IMAGE WRAPPER LAYOUT:', { width, height });
-                // Use the fixed image dimensions from styles
-                setImageDimensions({ width: 300, height: 200 });
-              }}
-            >
-              <Image 
-                source={{ uri: previewUri }} 
-                style={styles.iosPreviewImage}
-                resizeMode="cover"
-              />
+            <View style={styles.previewCard}>
+              <View 
+                style={styles.imageWrapper}
+                onLayout={async () => {
+                // Measure drawn image size for contain-fit inside 300x200 container
+                try {
+                  const info = await ImageManipulator.manipulateAsync(previewUri!, [], { compress: 1 });
+                  const imgW = info.width;
+                  const imgH = info.height;
+                  const containerW = CONTAINER_W;
+                  const containerH = CONTAINER_H;
+                  const scale = Math.min(containerW / imgW, containerH / imgH);
+                  const drawnW = Math.round(imgW * scale);
+                  const drawnH = Math.round(imgH * scale);
+
+                  setImageDimensions({ width: drawnW, height: drawnH });
+
+                  // Center crop area within overlay coordinates
+                  setCropPosition({
+                    x: Math.max(0, (drawnW - cropSize.width) / 2),
+                    y: Math.max(0, (drawnH - cropSize.height) / 2),
+                  });
+                } catch (e) {
+                  // fallback to container size
+                  setImageDimensions({ width: CONTAINER_W, height: CONTAINER_H });
+                }
+                }}
+              >
+                <Image 
+                  source={{ uri: previewUri }} 
+                  style={[styles.iosPreviewImage, { width: CONTAINER_W, height: CONTAINER_H }]}
+                  resizeMode="contain"
+                />
               {/* Interactive crop overlay - positioned over the image */}
               {imageDimensions.width > 0 && (
                 <View style={[styles.cropOverlay, {
-                  width: 300,
-                  height: 200,
-                }]}>
+                  width: imageDimensions.width,
+                  height: imageDimensions.height,
+                  left: Math.round((CONTAINER_W - imageDimensions.width) / 2),
+                  top: Math.round((CONTAINER_H - imageDimensions.height) / 2),
+                }]}> 
                   <View
                     style={[
                       styles.cropArea,
@@ -512,6 +545,7 @@ export default function ImageCropModalIOS({
                   />
                 </View>
               )}
+              </View>
             </View>
           )}
         </View>
