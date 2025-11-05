@@ -136,6 +136,12 @@ export default function EditProfileScreen() {
     }
   };
 
+  const handleClearLocation = () => {
+    updateProfile('location', '');
+    updateProfile('latitude', undefined as unknown as number);
+    updateProfile('longitude', undefined as unknown as number);
+  };
+
 
 
   const getSocialIcon = (platform: keyof SocialLinks) => {
@@ -257,6 +263,17 @@ export default function EditProfileScreen() {
                 placeholder="Your location"
                 placeholderTextColor="#9CA3AF"
               />
+              {!!profile.location && (
+                <TouchableOpacity
+                  onPress={handleClearLocation}
+                  style={styles.clearButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear location"
+                  accessibilityHint="Clears the location text"
+                >
+                  <Text style={styles.clearText}>×</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={styles.locateButton} onPress={useCurrentLocation} disabled={isLocating}>
                 {isLocating ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -446,6 +463,23 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  clearButton: {
+    backgroundColor: '#E5E7EB',
+    width: 32,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  clearText: {
+    color: '#6B7280',
+    fontFamily: 'Inter-Bold',
+    fontSize: 18,
+    lineHeight: 18,
   },
   locateButton: {
     backgroundColor: '#8B5CF6',
