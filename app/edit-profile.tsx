@@ -8,6 +8,7 @@ import { useApp } from '@/contexts/AppContext';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
 import * as Location from 'expo-location';
 import { getBackendUrl } from '@/services/config';
+// Use same Google Places-backed flow as Toki create/edit
 
 interface SocialLinks {
   instagram?: string;
@@ -22,6 +23,9 @@ export default function EditProfileScreen() {
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [placesPredictions, setPlacesPredictions] = useState<Array<{ description: string; place_id: string; types?: string[]; structured?: { mainText?: string; secondaryText?: string } }>>([]);
+  const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
 
   // Update profile state when currentUser changes (e.g., when data is loaded from backend)
   useEffect(() => {
@@ -49,6 +53,76 @@ export default function EditProfileScreen() {
       }
     }));
     setHasChanges(true);
+  };
+
+  const handleLocationTextChange = async (value: string) => {
+    // Update text and clear stale coords
+    updateProfile('location', value);
+    updateProfile('latitude', undefined as unknown as number);
+    updateProfile('longitude', undefined as unknown as number);
+
+    const q = (value || '').trim();
+    if (!q) {
+      setPlacesPredictions([]);
+      setShowAutocomplete(false);
+      return;
+    }
+    if (q.length < 2) {
+      setPlacesPredictions([]);
+      setShowAutocomplete(false);
+      return;
+    }
+
+    try {
+      // Bias by user's current stored coordinates if available
+      const biasLat = (state.currentUser as any)?.latitude;
+      const biasLng = (state.currentUser as any)?.longitude;
+      const params = new URLSearchParams({ input: q });
+      if (biasLat && biasLng) {
+        params.append('lat', String(biasLat));
+        params.append('lng', String(biasLng));
+      }
+      if (placesSessionToken) params.append('sessiontoken', placesSessionToken);
+
+      const resp = await fetch(`${getBackendUrl()}/api/maps/places?${params.toString()}`);
+      const json = await resp.json();
+      if (json?.success) {
+        setPlacesPredictions(json.data?.predictions || []);
+        setPlacesSessionToken(json.data?.sessionToken || placesSessionToken);
+        setShowAutocomplete((json.data?.predictions || []).length > 0);
+      } else {
+        setPlacesPredictions([]);
+        setShowAutocomplete(false);
+      }
+    } catch (error) {
+      setPlacesPredictions([]);
+      setShowAutocomplete(false);
+    }
+  };
+
+  const handlePredictionSelect = async (prediction: { description: string; place_id: string; structured?: { mainText?: string; secondaryText?: string } }) => {
+    try {
+      const params = new URLSearchParams({ placeId: prediction.place_id });
+      if (placesSessionToken) params.append('sessiontoken', placesSessionToken);
+      const resp = await fetch(`${getBackendUrl()}/api/maps/place-details?${params.toString()}`);
+      const json = await resp.json();
+      if (json?.success) {
+        const d = json.data;
+        const main = prediction.structured?.mainText;
+        const secondary = prediction.structured?.secondaryText;
+        const pickedLabel = main && secondary ? `${main}, ${secondary}` : (d.shortLabel || d.formatted_address || prediction.description);
+        updateProfile('location', pickedLabel);
+        updateProfile('latitude', d.location?.lat as number);
+        updateProfile('longitude', d.location?.lng as number);
+      } else {
+        updateProfile('location', prediction.description);
+      }
+    } catch (error) {
+      updateProfile('location', prediction.description);
+    } finally {
+      setShowAutocomplete(false);
+      setPlacesPredictions([]);
+    }
   };
 
   const handleSave = async () => {
@@ -259,7 +333,7 @@ export default function EditProfileScreen() {
               <TextInput
                 style={[styles.input, { flex: 1, marginRight: 8 }]}
                 value={profile.location}
-                onChangeText={(value) => updateProfile('location', value)}
+                onChangeText={handleLocationTextChange}
                 placeholder="Your location"
                 placeholderTextColor="#9CA3AF"
               />
@@ -274,7 +348,9 @@ export default function EditProfileScreen() {
                   <Text style={styles.clearText}>×</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.locateButton} onPress={useCurrentLocation} disabled={isLocating}>
+              <TouchableOpacity style={styles.locateButton} onPress={useCurrentLocation} disabled={isLocating}
+                onFocus={() => setShowAutocomplete(true)}
+              >
                 {isLocating ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
@@ -282,6 +358,26 @@ export default function EditProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            {showAutocomplete && placesPredictions.length > 0 && (
+              <View style={styles.autocompleteContainer}>
+                {placesPredictions.map((p, index) => (
+                  <TouchableOpacity
+                    key={`${p.place_id}-${index}`}
+                    style={styles.autocompleteItem}
+                    onPress={() => handlePredictionSelect(p)}
+                  >
+                    <Text style={styles.autocompleteText} numberOfLines={1}>
+                      {p.structured?.mainText || p.description}
+                    </Text>
+                    {!!p.structured?.secondaryText && (
+                      <Text style={styles.autocompleteSecondaryText} numberOfLines={1}>
+                        {p.structured.secondaryText}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         </View>
 
@@ -493,5 +589,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
+  },
+  autocompleteContainer: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  autocompleteItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  autocompleteText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  autocompleteSecondaryText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginTop: 2,
   },
 });

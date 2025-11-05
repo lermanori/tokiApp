@@ -325,6 +325,32 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
           message: 'Latitude must be between -90 and 90, longitude between -180 and 180'
         });
       }
+    } else if (location && typeof location === 'string' && location.trim().length > 0) {
+      // Derive coordinates from location if provided without explicit coords
+      try {
+        const key = process.env.GOOGLE_MAPS_API_KEY;
+        if (key) {
+          const params = new URLSearchParams({ address: location.trim(), key, language: 'en' });
+          const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+          const resp = await fetch(url);
+          const data: any = await resp.json();
+          if (data.status === 'OK') {
+            const r = (data.results || [])[0];
+            const lat = r?.geometry?.location?.lat;
+            const lng = r?.geometry?.location?.lng;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              latNumber = lat;
+              lngNumber = lng;
+            }
+          } else {
+            logger.warn('Geocode on /me update failed:', { status: data.status, message: data.error_message });
+          }
+        } else {
+          logger.warn('GOOGLE_MAPS_API_KEY is not configured; skipping geocode for profile update');
+        }
+      } catch (e) {
+        logger.error('Error geocoding location in /me update:', e);
+      }
     }
 
     // Build dynamic update

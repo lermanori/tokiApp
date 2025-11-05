@@ -1,14 +1,17 @@
 ### Summary
-`auth.ts` defines authentication and user profile routes. We augmented `PUT /auth/me` to support updating the user's location and precise coordinates, enabling backend distance calculations that depend on `users.latitude` and `users.longitude`.
+`auth.ts` defines authentication and user profile routes. We further enhanced `PUT /auth/me` so that when a user submits a location string without coordinates, the backend derives `latitude`/`longitude` via Google Geocoding.
 
 ### Fixes Applied log
-- problem: No single endpoint to set `latitude`/`longitude`; distance showed 0.0 for users without stored coords.
-- solution: Extended `PUT /auth/me` to accept optional `latitude` and `longitude`, validate ranges, and persist both together with existing fields.
+- problem: Typed location updates from the client often lacked coordinates, leaving stale/missing lat/lng.
+- solution: If only `location` is provided, `PUT /auth/me` now geocodes the address server-side (when `GOOGLE_MAPS_API_KEY` is configured) and persists the derived coordinates.
 
 ### How Fixes Were Implemented
-- Added optional request fields `latitude` and `longitude` with validation: both required together, numeric, lat ∈ [-90, 90], lng ∈ [-180, 180].
-- Switched to a dynamic update builder to only modify provided fields and always bump `updated_at`.
-- Response now includes `latitude` and `longitude` so the client can immediately update state.
+- Kept existing validation: if either coordinate is present, both are required and validated (numeric and in-range).
+- Added geocoding branch: when `location` is a non-empty string and no coords are provided, call Google Geocoding and, on success, set `latNumber`/`lngNumber` for persistence.
+- Did not overwrite the submitted `location` string; only enriched with coordinates.
+
+### Notes
+- If `GOOGLE_MAPS_API_KEY` is missing or geocoding fails, the update proceeds without coordinates.
 # File: toki-backend/src/routes/auth.ts
 
 ### Summary

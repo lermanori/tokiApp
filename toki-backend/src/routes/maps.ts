@@ -152,6 +152,65 @@ router.get('/place-details', async (req: Request, res: Response) => {
   }
 });
 
+// Forward geocode: address -> lat/lng (Google Geocoding)
+router.get('/geocode', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.query as { address?: string };
+    if (!address || address.trim().length < 2) {
+      return res.status(400).json({ success: false, message: 'address must be at least 2 characters' });
+    }
+
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(500).json({ success: false, message: 'GOOGLE_MAPS_API_KEY is not configured' });
+
+    const clean = address.trim();
+    const cacheKey = `geocode:${clean}`;
+    const cached = getFromCache(cacheKey);
+    if (cached) return res.json({ success: true, data: cached });
+
+    const params = new URLSearchParams({
+      address: clean,
+      key,
+      language: 'en'
+    });
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+    const response = await fetch(url);
+    const data: any = await response.json();
+
+    if (data.status !== 'OK') {
+      logger.error('Geocode error:', data);
+      return res.status(502).json({ success: false, message: 'Geocode failed', status: data.status });
+    }
+
+    const r = (data.results || [])[0];
+    const components = r?.address_components || [];
+    const formatted_address = r?.formatted_address || clean;
+    const shortLabel = buildShortLabel(components, formatted_address);
+    const location = {
+      lat: r?.geometry?.location?.lat,
+      lng: r?.geometry?.location?.lng,
+    };
+
+    if (typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return res.status(404).json({ success: false, message: 'No coordinates found' });
+    }
+
+    const payload = {
+      formatted_address,
+      shortLabel,
+      location,
+      components: components.map((c: any) => ({ long_name: c.long_name, short_name: c.short_name, types: c.types }))
+    };
+
+    setCache(cacheKey, payload);
+    return res.json({ success: true, data: payload });
+  } catch (error) {
+    logger.error('Geocode proxy error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Reverse geocode lat/lng to a concise neighborhood/city label
 router.get('/reverse-geocode', async (req: Request, res: Response) => {
   try {
