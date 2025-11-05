@@ -14,7 +14,7 @@ import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions } from '@/utils/tokiUrls';
-import { formatDistanceDisplay } from '@/utils/distance';
+import { formatDistanceDisplay, calculateDistance } from '@/utils/distance';
 import { getInitials, getActivityEmoji, getActivityLabel, formatLocationDisplay, formatTimeDisplay, canUserInvite, canUserManage, getJoinButtonText, getJoinButtonStyle } from '@/utils/tokiUtils';
 import MetaTags from '@/components/MetaTags';
 import TokiHeader from '@/components/TokiHeader';
@@ -178,6 +178,7 @@ export default function TokiDetailsScreen() {
   const params = useLocalSearchParams();
   const [toki, setToki] = useState<TokiDetails | null>(null);
   const fromEdit = params.fromEdit === 'true';
+  const fromCreate = params.fromCreate === 'true';
   const [isLoading, setIsLoading] = useState(true);
   
   const [isLiked, setIsLiked] = useState(false);
@@ -308,9 +309,31 @@ export default function TokiDetailsScreen() {
           hostId: tokiData.host?.id, // Store host ID for potential use
           image: tokiData.imageUrl || '', // Let Image component use getActivityPhoto fallback
           distance: (() => {
-            // Try to get distance from state.tokis first (matches card display)
+            // Priority 1: Use distance from API response (most accurate, always up-to-date)
+            if (tokiData.distance) {
+              return typeof tokiData.distance === 'object' 
+                ? `${tokiData.distance.km} km` 
+                : tokiData.distance;
+            }
+            
+            // Priority 2: Try to get distance from state.tokis (matches card display)
             const tokiFromState = state.tokis.find(t => t.id === tokiData.id);
-            return tokiFromState?.distance || (tokiData.distance ? (typeof tokiData.distance === 'object' ? `${tokiData.distance.km} km` : tokiData.distance) : undefined);
+            if (tokiFromState?.distance) {
+              return tokiFromState.distance;
+            }
+            
+            // Priority 3: Calculate distance from user's location to toki location if both have coordinates
+            const userLat = (state.currentUser as any)?.latitude;
+            const userLng = (state.currentUser as any)?.longitude;
+            const tokiLat = tokiData.latitude;
+            const tokiLng = tokiData.longitude;
+            
+            if (userLat && userLng && tokiLat && tokiLng) {
+              const distanceKm = calculateDistance(userLat, userLng, tokiLat, tokiLng);
+              return `${distanceKm} km`;
+            }
+            
+            return undefined;
           })(),
           visibility: tokiData.visibility,
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
@@ -340,6 +363,17 @@ export default function TokiDetailsScreen() {
 
         // Check saved status after Toki data is loaded
         checkSavedStatus();
+
+        // If this is a newly created Toki and distance is missing or 0, retry after a delay
+        // This handles the case where the toki was just created and needs to be fully persisted
+        const hasNoDistance = !tokiData.distance || (typeof tokiData.distance === 'object' && (tokiData.distance.km === 0 || tokiData.distance.km === null));
+        
+        if (fromCreate && hasNoDistance && retryCount < 3) {
+          console.log(`📍 [TOKI DETAILS] No distance found for newly created toki, retrying in 1.5 seconds... (attempt ${retryCount + 1}/3)`);
+          setTimeout(() => {
+            loadTokiData(tokiId, retryCount + 1);
+          }, 1500);
+        }
 
         // If this is a newly created Toki and it doesn't have images yet, retry after a delay
         // This handles the case where images are still being uploaded
@@ -390,14 +424,29 @@ export default function TokiDetailsScreen() {
     }
   }, [params.tokiId, state.currentUser?.id]);
 
+  // Force reload when coming from create (works on all platforms)
+  useEffect(() => {
+    if (fromCreate && params.tokiId) {
+      const tokiId = params.tokiId as string;
+      // Add a small delay to ensure database is ready, then force a fresh fetch
+      const timer = setTimeout(() => {
+        console.log('📍 [TOKI DETAILS] Forcing fresh data load after creation');
+        loadTokiData(tokiId, 0); // Start fresh, retry logic will handle distance
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [fromCreate, params.tokiId]);
+
   // Refresh data when screen comes into focus (e.g., after editing)
   useFocusEffect(
     React.useCallback(() => {
       const tokiId = params.tokiId as string;
-      if (tokiId) {
+      if (tokiId && !fromCreate) {
+        // Only auto-refresh on focus if not coming from create (we handle that separately)
         loadTokiData(tokiId);
       }
-    }, [params.tokiId])
+    }, [params.tokiId, fromCreate])
   );
 
   const handleJoinRequest = async () => {
@@ -1175,8 +1224,8 @@ export default function TokiDetailsScreen() {
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Toki not found</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => {
-            // If coming from edit, go to home page instead of back to edit
-            if (fromEdit) {
+            // If coming from edit or create, go to home page instead of back to form
+            if (fromEdit || fromCreate) {
               router.push('/(tabs)');
             } else if (router.canGoBack()) {
               router.back();
@@ -1221,8 +1270,8 @@ export default function TokiDetailsScreen() {
           onSaveToggle={handleSaveToggle}
           onShare={handleShareToki}
           onBack={() => {
-            // If coming from edit, go to home page instead of back to edit
-            if (fromEdit) {
+            // If coming from edit or create, go to home page instead of back to form
+            if (fromEdit || fromCreate) {
               router.push('/(tabs)');
             } else if (router.canGoBack()) {
               router.back();

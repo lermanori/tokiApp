@@ -40,8 +40,12 @@ export default function CreateScreen() {
         console.log('📸 [CREATE SCREEN] API update wait completed, navigating to details...');
       }
       
+      // Wait a moment for the toki to be fully persisted in the database
+      // This ensures distance calculation works correctly
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Navigate to the new Toki details
-      router.push(`/toki-details?tokiId=${tokiId}`);
+      router.push(`/toki-details?tokiId=${tokiId}&fromCreate=true`);
       return tokiId;
     } catch (error) {
       console.error('Create Toki error:', error);

@@ -442,11 +442,11 @@ class ApiService {
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
-    const response = await this.makeRequest<{ success: boolean; data: User }>('/auth/me/profile', {
+    const response = await this.makeRequest<{ success: boolean; data: { user: User } }>('/auth/me', {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-    return response.data;
+    return response.data.user;
   }
 
   async getUserStats(): Promise<UserStats> {
@@ -502,8 +502,9 @@ class ApiService {
     title: string;
     description: string;
     location: string;
-    latitude?: number;
-    longitude?: number;
+    latitude?: number | null;
+    longitude?: number | null;
+    placeId?: string | null;
     timeSlot: string;
     category: string;
     maxAttendees: number;

@@ -7,27 +7,27 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		10A6615BB4F30BB23F199645 /* libPods-Toki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 06B93A04D452B6ADED0F65F4 /* libPods-Toki.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		209223B63C42B845D40FEC80 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3895DB7518CCC2C2482835 /* ExpoModulesProvider.swift */; };
+		2EC222A936D184B5CA785A17 /* libPods-Toki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9074D1216341DFDAFBBDBA49 /* libPods-Toki.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		5DB03BC978A1608F32DEA49A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4B3BA943E2DB5604847CB94D /* PrivacyInfo.xcprivacy */; };
-		63D0730F1915C5C223AAC67E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEE13D4E79C27BC1957C3024 /* ExpoModulesProvider.swift */; };
+		AD3E077184C00D0F4A7DC5BC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F03781511E9B390B877151D6 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		06B93A04D452B6ADED0F65F4 /* libPods-Toki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Toki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		01F22A38CAF37DBB254E541E /* Pods-Toki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.debug.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Toki.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Toki.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Toki/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Toki/Info.plist; sourceTree = "<group>"; };
-		4B3BA943E2DB5604847CB94D /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Toki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		811707F7F64B8CFD4C1BA09A /* Pods-Toki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.debug.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.debug.xcconfig"; sourceTree = "<group>"; };
+		4F3895DB7518CCC2C2482835 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		9074D1216341DFDAFBBDBA49 /* libPods-Toki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Toki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Toki/SplashScreen.storyboard; sourceTree = "<group>"; };
+		B0DC326522153EC699C34620 /* Pods-Toki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.release.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.release.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		BC6BD95611F6C8C28ADB725C /* Pods-Toki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.release.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.release.xcconfig"; sourceTree = "<group>"; };
-		DEE13D4E79C27BC1957C3024 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F03781511E9B390B877151D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Toki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Toki/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Toki-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Toki-Bridging-Header.h"; path = "Toki/Toki-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -37,13 +37,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				10A6615BB4F30BB23F199645 /* libPods-Toki.a in Frameworks */,
+				2EC222A936D184B5CA785A17 /* libPods-Toki.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0E142A2ED778AD32A8D42E96 /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				6E726E51265D8151DA1F1627 /* Toki */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* Toki */ = {
 			isa = PBXGroup;
 			children = (
@@ -53,36 +61,36 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				4B3BA943E2DB5604847CB94D /* PrivacyInfo.xcprivacy */,
+				F03781511E9B390B877151D6 /* PrivacyInfo.xcprivacy */,
 			);
 			name = Toki;
+			sourceTree = "<group>";
+		};
+		233C6320813136360BCBCC04 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				01F22A38CAF37DBB254E541E /* Pods-Toki.debug.xcconfig */,
+				B0DC326522153EC699C34620 /* Pods-Toki.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				06B93A04D452B6ADED0F65F4 /* libPods-Toki.a */,
+				9074D1216341DFDAFBBDBA49 /* libPods-Toki.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		71C35086EBBAAF1A5ECB4B0E /* Pods */ = {
+		6E726E51265D8151DA1F1627 /* Toki */ = {
 			isa = PBXGroup;
 			children = (
-				811707F7F64B8CFD4C1BA09A /* Pods-Toki.debug.xcconfig */,
-				BC6BD95611F6C8C28ADB725C /* Pods-Toki.release.xcconfig */,
+				4F3895DB7518CCC2C2482835 /* ExpoModulesProvider.swift */,
 			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		81FE91C408C0ABF0F8A79B39 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				8F222B1829C0605AD4D5CDA4 /* Toki */,
-			);
-			name = ExpoModulesProviders;
+			name = Toki;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -99,8 +107,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				71C35086EBBAAF1A5ECB4B0E /* Pods */,
-				81FE91C408C0ABF0F8A79B39 /* ExpoModulesProviders */,
+				233C6320813136360BCBCC04 /* Pods */,
+				0E142A2ED778AD32A8D42E96 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -113,14 +121,6 @@
 				13B07F961A680F5B00A75B9A /* Toki.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		8F222B1829C0605AD4D5CDA4 /* Toki */ = {
-			isa = PBXGroup;
-			children = (
-				DEE13D4E79C27BC1957C3024 /* ExpoModulesProvider.swift */,
-			);
-			name = Toki;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Toki" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				C232C2F82A55C8391A48635F /* [Expo] Configure project */,
+				09335325FE1E6DD88A397C64 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				EEDF5725A5100DF3D5C01512 /* [CP] Embed Pods Frameworks */,
+				297B078DECF64E5917372413 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -198,7 +198,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				5DB03BC978A1608F32DEA49A /* PrivacyInfo.xcprivacy in Resources */,
+				AD3E077184C00D0F4A7DC5BC /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +244,52 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		09335325FE1E6DD88A397C64 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/Toki/Toki.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Toki/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Toki/expo-configure-project.sh\"\n";
+		};
+		297B078DECF64E5917372413 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -284,52 +330,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C232C2F82A55C8391A48635F /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/Toki/Toki.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-Toki/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Toki/expo-configure-project.sh\"\n";
-		};
-		EEDF5725A5100DF3D5C01512 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -338,7 +338,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				63D0730F1915C5C223AAC67E /* ExpoModulesProvider.swift in Sources */,
+				209223B63C42B845D40FEC80 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -347,7 +347,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 811707F7F64B8CFD4C1BA09A /* Pods-Toki.debug.xcconfig */;
+			baseConfigurationReference = 01F22A38CAF37DBB254E541E /* Pods-Toki.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -386,7 +386,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = BC6BD95611F6C8C28ADB725C /* Pods-Toki.release.xcconfig */;
+			baseConfigurationReference = B0DC326522153EC699C34620 /* Pods-Toki.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

@@ -8,6 +8,8 @@ This screen allows users to create new Tokis. It displays a TokiForm component a
 - solution: Integrated ErrorModal component to display backend and validation errors with branded styling
 - problem: Error handling didn't catch errors thrown from AppContext.createToki
 - solution: Simplified error handling to catch thrown errors directly, removing null check logic
+- problem: After creating a toki and viewing details, pressing back would return to create screen instead of home screen
+- solution: Added `fromCreate=true` parameter when navigating to toki-details, so back button redirects to home screen (same behavior as edit mode)
 
 ### How Fixes Were Implemented
 - problem: Error handling was basic with Alert.alert calls that didn't show detailed error information
@@ -22,3 +24,8 @@ This screen allows users to create new Tokis. It displays a TokiForm component a
   - Rendered ErrorModal at bottom of component tree with errorState props
   - Modal shows user-friendly error messages with optional bullet-point details for validation issues
   - Backend validation errors (e.g., "Max attendees must be between 1 and 100") now display correctly in ErrorModal
+- problem: Navigation after creating a toki would go back to create screen when pressing back button in details
+- solution:
+  - Updated navigation in handleCreateToki to include `fromCreate=true` parameter: `router.push(\`/toki-details?tokiId=${tokiId}&fromCreate=true\`)`
+  - This matches the pattern used in edit mode (`fromEdit=true`) to ensure consistent back navigation behavior
+  - Toki details screen now checks for `fromCreate` and redirects to home `/(tabs)` instead of going back to create form

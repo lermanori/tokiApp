@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Camera, Instagram, Facebook, Linkedin, User } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
+import * as Location from 'expo-location';
+import { getBackendUrl } from '@/services/config';
 
 interface SocialLinks {
   instagram?: string;
@@ -19,6 +21,7 @@ export default function EditProfileScreen() {
   const [profile, setProfile] = useState(state.currentUser);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
   // Update profile state when currentUser changes (e.g., when data is loaded from backend)
   useEffect(() => {
@@ -72,21 +75,14 @@ export default function EditProfileScreen() {
         name: profile.name,
         bio: profile.bio,
         location: profile.location,
+        latitude: profile.latitude,
+        longitude: profile.longitude,
         socialLinks: profile.socialLinks,
       });
 
       if (success) {
-        Alert.alert(
-          'Profile Updated',
-          'Your profile has been successfully updated!',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.back()
-            }
-          ]
-        );
         setHasChanges(false);
+        router.back();
       } else {
         Alert.alert('Error', 'Failed to update profile. Please try again.');
       }
@@ -94,6 +90,49 @@ export default function EditProfileScreen() {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const useCurrentLocation = async () => {
+    try {
+      setIsLocating(true);
+      // Request permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please enable location permission to use current location.');
+        return;
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = pos.coords;
+
+      // Reverse geocode to a friendly, descriptive label (Google-backed via backend for web reliability)
+      let label = profile.location || '';
+      try {
+        // Prefer our backend Google proxy on all platforms for consistent labels
+        const resp = await fetch(`${getBackendUrl()}/api/maps/reverse-geocode?lat=${latitude}&lng=${longitude}`);
+        const json = await resp.json();
+        if (resp.ok && json?.success) {
+          label = json.data?.shortLabel || json.data?.formatted_address || '';
+        } else {
+          // Fallback to Expo reverse geocode locally
+          const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+          const r = results?.[0];
+          const neighborhood = r?.district || (r as any)?.subregion || '';
+          const city = r?.city || '';
+          const region = r?.region || '';
+          const streetish = r?.name || r?.street || '';
+          label = neighborhood || city || region || streetish || '';
+        }
+      } catch {}
+
+      updateProfile('location', label);
+      updateProfile('latitude', latitude);
+      updateProfile('longitude', longitude);
+    } catch (e) {
+      Alert.alert('Location error', 'Could not fetch your current location.');
+    } finally {
+      setIsLocating(false);
     }
   };
 
@@ -210,13 +249,22 @@ export default function EditProfileScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Location</Text>
-            <TextInput
-              style={styles.input}
-              value={profile.location}
-              onChangeText={(value) => updateProfile('location', value)}
-              placeholder="Your location"
-              placeholderTextColor="#9CA3AF"
-            />
+            <View style={styles.row}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginRight: 8 }]}
+                value={profile.location}
+                onChangeText={(value) => updateProfile('location', value)}
+                placeholder="Your location"
+                placeholderTextColor="#9CA3AF"
+              />
+              <TouchableOpacity style={styles.locateButton} onPress={useCurrentLocation} disabled={isLocating}>
+                {isLocating ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.locateText}>Use current</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -394,5 +442,22 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locateButton: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locateText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
   },
 });

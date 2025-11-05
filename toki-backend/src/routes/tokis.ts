@@ -847,14 +847,40 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = (req as any).user.id;
 
-    const result = await pool.query(
-      `SELECT 
+    // First get the user's coordinates for distance calculation
+    const userResult = await pool.query(
+      'SELECT latitude, longitude FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    const userLat = userResult.rows[0]?.latitude;
+    const userLng = userResult.rows[0]?.longitude;
+
+    // Build query with distance calculation if user has coordinates
+    let query = `
+      SELECT 
         t.*,
         u.name as host_name,
         u.avatar_url as host_avatar,
         u.bio as host_bio,
         u.location as host_location,
-        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags`;
+    
+    // Add distance calculation if user has coordinates
+    if (userLat && userLng) {
+      query += `,
+        (
+          6371 * acos(
+            cos(radians($3)) * 
+            cos(radians(t.latitude)) * 
+            cos(radians(t.longitude) - radians($4)) + 
+            sin(radians($3)) * 
+            sin(radians(t.latitude))
+          )
+        ) as distance_km`;
+    }
+    
+    query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
@@ -875,9 +901,19 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
           SELECT 1 FROM toki_hidden_users hu
           WHERE hu.toki_id = t.id AND hu.user_id = $2
         )
-      GROUP BY t.id, u.name, u.avatar_url, u.bio, u.location`,
-      [id, userId]
-    );
+      GROUP BY t.id, u.name, u.avatar_url, u.bio, u.location`;
+    
+    // Add latitude and longitude to GROUP BY if calculating distance
+    if (userLat && userLng) {
+      query += `, t.latitude, t.longitude`;
+    }
+
+    const queryParams: any[] = [id, userId];
+    if (userLat && userLng) {
+      queryParams.push(userLat, userLng);
+    }
+
+    const result = await pool.query(query, queryParams);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -926,6 +962,15 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
     const participantCount = parseInt(participantResult.rows[0].participant_count);
     const currentAttendees = 1 + participantCount; // Host + participants
 
+    // Calculate distance if available
+    let distance = null;
+    if (toki.distance_km !== null && toki.distance_km !== undefined) {
+      distance = {
+        km: Math.round(toki.distance_km * 10) / 10,
+        miles: Math.round((toki.distance_km * 0.621371) * 10) / 10
+      };
+    }
+
     const responseData = {
       id: toki.id,
       title: toki.title,
@@ -939,12 +984,13 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       currentAttendees: currentAttendees, // Fixed: includes host
       category: toki.category,
       visibility: toki.visibility,
-              imageUrl: toki.image_urls && toki.image_urls.length > 0 ? toki.image_urls[0] : toki.image_url,
+      imageUrl: toki.image_urls && toki.image_urls.length > 0 ? toki.image_urls[0] : toki.image_url,
       image_urls: toki.image_urls || [],
       image_public_ids: toki.image_public_ids || [],
       status: toki.status,
       createdAt: toki.created_at,
       updatedAt: toki.updated_at,
+      distance: distance,
       host: {
         id: toki.host_id,
         name: toki.host_name,

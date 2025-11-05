@@ -1047,6 +1047,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         title: tokiData.title,
         description: tokiData.description,
         location: tokiData.location,
+        latitude: tokiData.latitude || null,
+        longitude: tokiData.longitude || null,
+        placeId: tokiData.placeId || null,
         timeSlot: tokiData.time,
         scheduledTime: tokiData.customDateTime || getScheduledTimeFromSlot(tokiData.time), // Use custom date/time if provided
         category: tokiData.activity,

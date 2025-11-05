@@ -263,23 +263,121 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// Update current user profile
+// Update current user profile (single endpoint)
 router.put('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { name, bio, location } = req.body;
-    if (!name) {
+    const { name, bio, location, latitude, longitude } = req.body as {
+      name?: string;
+      bio?: string | null;
+      location?: string | null;
+      latitude?: number | string;
+      longitude?: number | string;
+    };
+
+    // Validate inputs (only when provided)
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid name',
+          message: 'Name must be at least 2 characters long'
+        });
+      }
+    }
+
+    if (location !== undefined) {
+      if (location !== null && (typeof location !== 'string' || location.length > 255)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid location',
+          message: 'Location must be a string up to 255 characters'
+        });
+      }
+    }
+
+    // Coordinates validation (require both if either is present)
+    const latProvided = latitude !== undefined && latitude !== null && latitude !== '';
+    const lngProvided = longitude !== undefined && longitude !== null && longitude !== '';
+    if ((latProvided && !lngProvided) || (!latProvided && lngProvided)) {
       return res.status(400).json({
         success: false,
-        error: 'Name required',
-        message: 'Name is required'
+        error: 'Invalid coordinates',
+        message: 'Both latitude and longitude must be provided together'
       });
     }
+
+    let latNumber: number | undefined;
+    let lngNumber: number | undefined;
+    if (latProvided && lngProvided) {
+      latNumber = typeof latitude === 'number' ? latitude : parseFloat(String(latitude));
+      lngNumber = typeof longitude === 'number' ? longitude : parseFloat(String(longitude));
+      if (Number.isNaN(latNumber) || Number.isNaN(lngNumber)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid coordinates',
+          message: 'Latitude and longitude must be valid numbers'
+        });
+      }
+      if (latNumber < -90 || latNumber > 90 || lngNumber < -180 || lngNumber > 180) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid coordinates range',
+          message: 'Latitude must be between -90 and 90, longitude between -180 and 180'
+        });
+      }
+    }
+
+    // Build dynamic update
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
+    let paramCount = 0;
+
+    if (name !== undefined) {
+      paramCount++;
+      updateFields.push(`name = $${paramCount}`);
+      updateValues.push(name.trim());
+    }
+    if (bio !== undefined) {
+      paramCount++;
+      updateFields.push(`bio = $${paramCount}`);
+      updateValues.push(bio);
+    }
+    if (location !== undefined) {
+      paramCount++;
+      updateFields.push(`location = $${paramCount}`);
+      updateValues.push(location);
+    }
+    if (latNumber !== undefined && lngNumber !== undefined) {
+      paramCount++;
+      updateFields.push(`latitude = $${paramCount}`);
+      updateValues.push(latNumber);
+      paramCount++;
+      updateFields.push(`longitude = $${paramCount}`);
+      updateValues.push(lngNumber);
+    }
+
+    // If nothing to update, return 400
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields to update',
+        message: 'Provide at least one updatable field'
+      });
+    }
+
+    // Always update updated_at
+    paramCount++;
+    updateFields.push(`updated_at = $${paramCount}`);
+    updateValues.push(new Date());
+
+    // WHERE clause param
+    paramCount++;
+    updateValues.push(req.user!.id);
+
     const result = await pool.query(
-      `UPDATE users 
-       SET name = $1, bio = $2, location = $3, updated_at = NOW()
-       WHERE id = $4
-       RETURNING id, email, name, bio, location, avatar_url, verified, rating, member_since, updated_at`,
-      [name, bio || null, location || null, req.user!.id]
+      `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramCount}
+       RETURNING id, email, name, bio, location, avatar_url, verified, rating, member_since, updated_at, latitude, longitude`,
+      updateValues
     );
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -300,6 +398,8 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
           bio: user.bio,
           location: user.location,
           avatar: user.avatar_url,
+          latitude: user.latitude,
+          longitude: user.longitude,
           verified: user.verified,
           rating: user.rating,
           memberSince: user.member_since,

@@ -1,3 +1,14 @@
+### Summary
+`auth.ts` defines authentication and user profile routes. We augmented `PUT /auth/me` to support updating the user's location and precise coordinates, enabling backend distance calculations that depend on `users.latitude` and `users.longitude`.
+
+### Fixes Applied log
+- problem: No single endpoint to set `latitude`/`longitude`; distance showed 0.0 for users without stored coords.
+- solution: Extended `PUT /auth/me` to accept optional `latitude` and `longitude`, validate ranges, and persist both together with existing fields.
+
+### How Fixes Were Implemented
+- Added optional request fields `latitude` and `longitude` with validation: both required together, numeric, lat ∈ [-90, 90], lng ∈ [-180, 180].
+- Switched to a dynamic update builder to only modify provided fields and always bump `updated_at`.
+- Response now includes `latitude` and `longitude` so the client can immediately update state.
 # File: toki-backend/src/routes/auth.ts
 
 ### Summary

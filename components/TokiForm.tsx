@@ -18,6 +18,7 @@ import TokiImageUpload from './TokiImageUpload';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { getBackendUrl } from '@/services/config';
 import { apiService } from '@/services/api';
+import * as ImageManipulator from 'expo-image-manipulator';
 import DateTimePicker from 'react-native-ui-datepicker';
 import RNDateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 // Web-only analog time picker
@@ -626,19 +627,28 @@ export default function TokiForm({
       try {
         console.log(`📸 [TOKI FORM] Uploading image: ${image.publicId}`);
 
-        // Convert the local URI to blob and upload
-        const response = await fetch(image.url);
-        const blob = await response.blob();
+        // Convert image to base64 using ImageManipulator (same approach as edit mode)
+        const manipResult = await ImageManipulator.manipulateAsync(
+          image.url,
+          [],
+          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        
+        if (!manipResult.base64) {
+          console.error(`📸 [TOKI FORM] Failed to convert image to base64: ${image.publicId}`);
+          continue;
+        }
+        
+        const imageData = `data:image/jpeg;base64,${manipResult.base64}`;
 
-        const formData = new FormData();
-        formData.append('image', blob as any, 'toki-image.jpg');
-
+        // Send as JSON (works for both web and React Native)
         const uploadResponse = await fetch(`${getBackendUrl()}/api/toki-images/upload/${tokiId}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+            'Content-Type': 'application/json',
           },
-          body: formData,
+          body: JSON.stringify({ image: imageData }),
         });
 
         if (uploadResponse.ok) {
@@ -649,7 +659,8 @@ export default function TokiForm({
             console.error(`📸 [TOKI FORM] Image upload failed: ${result.message}`);
           }
         } else {
-          console.error(`📸 [TOKI FORM] Image upload failed with status: ${uploadResponse.status}`);
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          console.error(`📸 [TOKI FORM] Image upload failed with status: ${uploadResponse.status}`, errorData);
         }
       } catch (error) {
         console.error(`📸 [TOKI FORM] Error uploading image ${image.publicId}:`, error);

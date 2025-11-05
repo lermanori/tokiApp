@@ -60,7 +60,7 @@ router.get('/places', async (req: Request, res: Response) => {
     const params = new URLSearchParams({
       input: input.trim(),
       key,
-    //   types: 'geocode',
+      //   types: 'geocode',
       language: 'en',
       sessiontoken: sessiontoken || (typeof (global as any).crypto?.randomUUID === 'function' ? (global as any).crypto.randomUUID() : fallbackUUID()),
     });
@@ -148,6 +148,77 @@ router.get('/place-details', async (req: Request, res: Response) => {
     return res.json({ success: true, data: payload });
   } catch (error) {
     logger.error('Place details proxy error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Reverse geocode lat/lng to a concise neighborhood/city label
+router.get('/reverse-geocode', async (req: Request, res: Response) => {
+  try {
+    const { lat, lng } = req.query as { lat?: string; lng?: string };
+    if (!lat || !lng) return res.status(400).json({ success: false, message: 'lat and lng are required' });
+
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(500).json({ success: false, message: 'GOOGLE_MAPS_API_KEY is not configured' });
+
+    // const cacheKey = `rev:${lat},${lng}`;
+    // const cached = getFromCache(cacheKey);
+    // if (cached) return res.json({ success: true, data: cached });
+
+    const params = new URLSearchParams({ latlng: `${lat},${lng}`, key, language: 'en' });
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+    const response = await fetch(url);
+    const data: any = await response.json();
+
+    if (data.status !== 'OK') {
+      logger.error('Reverse geocode error:', data);
+      return res.status(502).json({ success: false, message: 'Reverse geocode failed', status: data.status });
+    }
+
+    const result = (data.results || [])[0];
+    const components = result?.address_components || [];
+    const formatted = result?.formatted_address || `${lat},${lng}`;
+
+    // Helper to fetch component by type
+    const byType = (type: string) => components.find((c: any) => (c.types || []).includes(type))?.long_name;
+
+    const neighborhood = byType('neighborhood') || byType('sublocality') || byType('sublocality_level_1') || byType('administrative_area_level_3');
+    const city = byType('locality') || byType('postal_town') || byType('administrative_area_level_2');
+    const region = byType('administrative_area_level_1');
+    const country = byType('country');
+
+    // Build an approximate, non-precise label (never includes house numbers or streets)
+    let approximateLabel = '';
+    if (neighborhood && city) approximateLabel = `${neighborhood}, ${city}`;
+    else if (city && region) approximateLabel = `${city}, ${region}`;
+    else if (city && country) approximateLabel = `${city}, ${country}`;
+    else approximateLabel = neighborhood || city || region || country || 'Current area';
+
+    const shortLabel = approximateLabel; // keep compatibility name
+
+    // Filter components to exclude precise address parts
+    const allowedTypes = new Set([
+      'neighborhood', 'sublocality', 'sublocality_level_1', 'locality', 'postal_town',
+      'administrative_area_level_3', 'administrative_area_level_2', 'administrative_area_level_1', 'country'
+    ]);
+    const coarseComponents = components
+      .map((c: any) => ({ long_name: c.long_name, short_name: c.short_name, types: c.types }))
+      .filter((c: any) => (c.types || []).some((t: string) => allowedTypes.has(t)));
+
+    const payload = {
+      shortLabel,           // approximate label safe for UI
+      neighborhood: neighborhood || null,
+      city: city || null,
+      region: region || null,
+      country: country || null,
+      components: coarseComponents // only coarse-grained components
+      // Note: formatted_address intentionally omitted to avoid exposing precise address
+    };
+
+    // setCache(cacheKey, payload);
+    return res.json({ success: true, data: payload });
+  } catch (error) {
+    logger.error('Reverse geocode proxy error:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });

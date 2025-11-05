@@ -6,6 +6,8 @@ This component provides a comprehensive form for creating and editing Tokis. It 
 ### Fixes Applied log
 - problem: Validation errors used Alert.alert, inconsistent with new error modal approach
 - solution: Added onValidationError callback prop to allow parent screens to handle validation errors via ErrorModal
+- problem: Cloudinary image upload failed during toki creation (500 error) - used blob/FormData approach that doesn't work on web
+- solution: Updated uploadImagesToToki to use ImageManipulator base64 conversion and JSON payload (same approach as edit mode)
 
 ### How Fixes Were Implemented
 - problem: Form validation errors were displayed via Alert.alert, not matching the new branded error modal UX
@@ -18,3 +20,11 @@ This component provides a comprehensive form for creating and editing Tokis. It 
   - Applied same pattern for connection error handling
   - Parent screens (create.tsx, edit-toki.tsx) now provide onValidationError callback that sets errorState for ErrorModal display
   - Validation errors now show as bullet points in ErrorModal with clear, actionable messages
+- problem: The uploadImagesToToki function was using fetch(image.url) to get a blob, then creating FormData. This approach failed on web platforms because local file URIs aren't always fetchable, and the backend expects either multipart/form-data (React Native) or JSON with base64 (Web)
+- solution:
+  - Added import for ImageManipulator from expo-image-manipulator
+  - Replaced blob/FormData approach with ImageManipulator.manipulateAsync() to convert images to base64
+  - Changed upload request to send JSON with base64 data URI (same format as edit mode in TokiImageUpload.tsx)
+  - Added Content-Type: application/json header to ensure backend correctly identifies request type
+  - Improved error handling to catch and log JSON parsing errors
+  - This ensures consistent behavior across web and React Native platforms, matching the working edit mode implementation
