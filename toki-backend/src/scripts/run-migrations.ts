@@ -77,6 +77,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 5: Push tokens
+    try {
+      console.log('📝 Migration 5: Creating push_tokens table...');
+      const pushTokensSql = readFileSync(
+        join(sqlDir, 'create-push-tokens.sql'),
+        'utf-8'
+      );
+      await pool.query(pushTokensSql);
+      console.log('✅ Push tokens migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Push tokens table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

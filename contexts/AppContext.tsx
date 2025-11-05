@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, UserRatingStats, BlockedUser, BlockStatus } from '../services/api';
 import { socketService } from '../services/socket';
 import { getBackendUrl } from '../services/config';
+import { registerForPushNotificationsAsync, configureForegroundNotificationHandler } from '../utils/notifications';
 
 interface Toki {
   id: string;
@@ -636,6 +639,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               
               // Note: Global message listeners will be set up after actions are defined
             }
+
+            // Configure foreground notifications to show alert banners while app is open
+            try { configureForegroundNotificationHandler(); } catch {}
           } catch (error) {
             console.error('❌ Failed to load authenticated user data:', error);
             // Clear invalid tokens and use stored data
@@ -665,6 +671,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     loadInitialData();
   }, []);
+
+  // Register and send push token once connected and user is available
+  useEffect(() => {
+    const ensurePushRegistration = async () => {
+      try {
+        const reg = await registerForPushNotificationsAsync();
+        if (reg.token) {
+          console.log('📱 [PUSH] Registering token:', reg.token.substring(0, 20) + '...');
+          const response = await fetch(`${getBackendUrl()}/api/push/register`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await apiService.getAccessToken()}`
+            },
+            body: JSON.stringify({ token: reg.token, platform: reg.platform })
+          });
+          if (response.ok) {
+            console.log('✅ [PUSH] Token registered successfully');
+          } else {
+            console.warn('⚠️ [PUSH] Token registration failed:', response.status);
+          }
+        } else {
+          console.warn('⚠️ [PUSH] No token available (may be simulator or permissions denied)');
+        }
+      } catch (e) {
+        console.warn('❌ [PUSH] Push registration failed:', e);
+      }
+    };
+    if (state.isConnected && state.currentUser?.id) {
+      ensurePushRegistration();
+    }
+  }, [state.isConnected, state.currentUser?.id]);
+
+  // Listen for incoming push notifications
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!state.isConnected || !state.currentUser?.id) return;
+
+    console.log('🔔 [PUSH] Setting up notification listeners...');
+
+    // Listener for when notification is received (app is open/foreground)
+    const receivedSubscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('📬 [PUSH] Notification received:', {
+        title: notification.request.content.title,
+        body: notification.request.content.body,
+        data: notification.request.content.data,
+      });
+      
+      // Refresh notifications list to show new notification in UI
+      loadNotifications().catch(err => console.warn('Failed to refresh notifications:', err));
+    });
+
+    // Listener for when user taps on notification
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      console.log('👆 [PUSH] Notification tapped:', data);
+      
+      // Refresh notifications when user taps (they'll navigate via notifications screen)
+      loadNotifications().catch(err => console.warn('Failed to refresh notifications:', err));
+    });
+
+    return () => {
+      console.log('🧹 [PUSH] Cleaning up notification listeners');
+      receivedSubscription.remove();
+      responseSubscription.remove();
+    };
+  }, [state.isConnected, state.currentUser?.id]);
 
   // Set up global message listeners for real-time notifications
   // This function is now defined after actions are available

@@ -26,3 +26,12 @@ This file contains the backend routes for managing Tokis, including creation, re
   - Changed from: `['sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks', 'social', 'wellness', 'culture', 'morning']`
   - Changed to: `['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning']`
 - **Error handling**: Comprehensive error responses for various failure scenarios (toki not found, access denied, participant not found, etc.)
+- problem: Invite and join request notifications were not sending push notifications to users.
+- solution: Replaced direct `INSERT INTO notifications` queries with `createSystemNotificationAndPush` for invites, and added `sendPushToUsers` calls for join requests, approvals, and declines.
+- solution:
+  - Imported `createSystemNotificationAndPush` from `../utils/notify` and `sendPushToUsers` from `../utils/push`.
+  - Invite creation: replaced pool.query with `createSystemNotificationAndPush` to send both in-app and push notifications atomically.
+  - Invite accepted: replaced pool.query with `createSystemNotificationAndPush`, then mark as read since it's a confirmation.
+  - Join request (pending): added push to host when user requests to join (shows as join_request in unified feed).
+  - Join approve: replaced TODO with `sendPushToUsers` to notify participant of approval.
+  - Join decline: replaced TODO with `sendPushToUsers` to notify participant of decline.

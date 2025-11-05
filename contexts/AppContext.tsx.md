@@ -24,3 +24,18 @@ This file provides the global application context with state management and acti
   - Added placeId: tokiData.placeId || null to apiTokiData in createToki function
   - Updated apiService.createToki type definition to include placeId?: string | null for type safety
   - Now create and edit modes both send coordinates consistently to the backend
+- problem: No push notification token registration on app startup/login.
+- solution: Added useEffect hook that calls `registerForPushNotificationsAsync` when user is connected and authenticated, then POSTs token to `/api/push/register`. Also configured foreground notification handler to show alerts when app is open.
+- solution: 
+  - Imported `registerForPushNotificationsAsync` and `configureForegroundNotificationHandler` from utils/notifications.
+  - Called `configureForegroundNotificationHandler()` after successful authentication to enable foreground alerts.
+  - Added useEffect that runs when `state.isConnected && state.currentUser?.id` changes, registers for push token, and sends it to backend with platform info.
+  - Token registration happens automatically on login without user intervention.
+- problem: Push notifications were not being received or logged - no listeners were set up to handle incoming notifications.
+- solution: Added notification event listeners using `Notifications.addNotificationReceivedListener` and `Notifications.addNotificationResponseReceivedListener` to log and handle incoming push notifications.
+- solution:
+  - Imported `Platform` from `react-native` and `* as Notifications` from `expo-notifications`.
+  - Added useEffect that sets up two listeners: one for when notifications arrive (foreground) and one for when user taps notifications.
+  - Both listeners log notification details and refresh the notifications list via `loadNotifications()`.
+  - Added console logging throughout the push registration flow for debugging.
+  - Listeners are cleaned up on unmount or when user disconnects.

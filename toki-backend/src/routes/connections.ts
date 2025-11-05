@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
+import { sendPushToUsers } from '../utils/push';
 
 const router = Router();
 
@@ -312,8 +313,12 @@ router.post('/:userId', authenticateToken, async (req: Request, res: Response) =
       [req.user!.id, userId]
     );
 
-    // Note: No system notification created here - the combined endpoint
-    // pulls pending requests directly from user_connections table
+    // Push to recipient (unified feed shows connection_request)
+    await sendPushToUsers([userId], {
+      title: 'New Connection Request',
+      body: `${(req as any).user.name || 'Someone'} sent you a connection request` ,
+      data: { type: 'connection_request', source: 'connection_pending', externalId: result.rows[0].id }
+    });
 
     return res.status(201).json({
       success: true,
@@ -586,14 +591,27 @@ router.put('/:userId', authenticateToken, async (req: Request, res: Response) =>
       [newStatus, new Date(), existingResult.rows[0].id]
     );
 
-    // Get requester info
+    // Get requester and current user info
     const requesterResult = await pool.query(
       'SELECT id, name FROM users WHERE id = $1',
       [userId]
     );
+    const currentUserResult = await pool.query(
+      'SELECT name FROM users WHERE id = $1',
+      [req.user!.id]
+    );
 
-    // Note: No system notification created here - the combined endpoint
-    // pulls accepted/declined connections directly from user_connections table
+    // Notify requester about the outcome
+    const requesterId = userId;
+    const currentUserName = currentUserResult.rows[0]?.name || 'Someone';
+    const body = action === 'accept'
+      ? `${currentUserName} accepted your connection request`
+      : `${currentUserName} declined your connection request`;
+    await sendPushToUsers([requesterId], {
+      title: 'Connection Update',
+      body,
+      data: { type: action === 'accept' ? 'connection_accepted' : 'connection_declined', source: 'connection_accepted' }
+    });
 
     return res.status(200).json({
       success: true,

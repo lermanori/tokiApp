@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
+import { createSystemNotificationAndPush } from '../utils/notify';
+import { sendPushToUsers } from '../utils/push';
 import { authenticateToken } from '../middleware/auth';
 import { uploadSingleImage, handleUploadError } from '../middleware/upload';
 import { calculateDistance, formatDistance } from '../utils/distance';
@@ -1292,17 +1294,15 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     const inviterName = (req as any).user.name;
     const inviterType = isHost ? 'the host' : 'an attendee';
     
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, message, type, related_toki_id, related_user_id, read, created_at)
-       VALUES ($1, $2, $3, 'invite', $4, $5, false, NOW())`,
-      [
-        invitedUserId,
-        'New Toki Invite',
-        `You've been invited to join "${tokiTitle}" by ${inviterName} (${inviterType})`,
-        id, // related_toki_id
-        userId // related_user_id (inviter)
-      ]
-    );
+    await createSystemNotificationAndPush({
+      userId: invitedUserId,
+      type: 'invite',
+      title: 'New Toki Invite',
+      message: `You've been invited to join "${tokiTitle}" by ${inviterName} (${inviterType})`,
+      relatedTokiId: id,
+      relatedUserId: userId,
+      pushData: { source: 'system' }
+    });
 
     return res.status(201).json({ success: true, data: { invite: result.rows[0] } });
   } catch (error) {
@@ -1430,20 +1430,19 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
         [tokiId, userId]
       );
 
-      // Create a new invite_accepted notification
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message, read, related_toki_id, related_user_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-        [
-          userId,
-          'invite_accepted',
-          'Invite Accepted',
-          `You've accepted the invite to join "${notificationRow.rows[0].message.split('"')[1] || 'event'}"`,
-          true,
-          tokiId,
-          notificationRow.rows[0].related_user_id
-        ]
-      );
+      // Create a new invite_accepted notification + push
+      const tokiTitle = notificationRow.rows[0].message.split('"')[1] || 'event';
+      await createSystemNotificationAndPush({
+        userId,
+        type: 'invite_accepted',
+        title: 'Invite Accepted',
+        message: `You've accepted the invite to join "${tokiTitle}"`,
+        relatedTokiId: String(tokiId),
+        relatedUserId: String(notificationRow.rows[0].related_user_id),
+        pushData: { source: 'system' }
+      });
+      // Mark as read since it's just a confirmation
+      await pool.query('UPDATE notifications SET read = true WHERE user_id = $1 AND type = $2 AND related_toki_id = $3 ORDER BY created_at DESC LIMIT 1', [userId, 'invite_accepted', tokiId]);
     }
 
     return res.status(200).json({ 
@@ -1600,6 +1599,15 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
       [id, userId, joinStatus, new Date()]
     );
 
+    // If pending, notify host (unified feed will show join_request for host)
+    if (joinStatus === 'pending') {
+      await sendPushToUsers([toki.host_id], {
+        title: 'New Join Request',
+        body: `${req.user!.name || 'Someone'} wants to join your ${toki.title} event`,
+        data: { type: 'join_request', source: 'host_join_request', tokiId: id, requestId: joinResult.rows[0].id }
+      });
+    }
+
     // If user had an active invite, update the invite status to accepted
     if (hasActiveInvite) {
       await pool.query(
@@ -1711,9 +1719,13 @@ router.put('/:id/join/:requestId/approve', authenticateToken, async (req: Reques
     );
 
     if (userResult.rows.length > 0) {
-      const { user_name, toki_title } = userResult.rows[0];
-      console.log(`✅ Notifying user ${user_name} that their join request for "${toki_title}" was approved`);
-      // TODO: Send push notification or in-app notification to the user
+      const { toki_title } = userResult.rows[0];
+      const participantId = requestResult.rows[0].user_id;
+      await sendPushToUsers([participantId], {
+        title: 'Join Request Approved',
+        body: `You can now join "${toki_title}"`,
+        data: { type: 'join_approved', source: 'user_join_approved', tokiId: id, requestId }
+      });
     }
 
     return res.status(200).json({
@@ -1792,9 +1804,13 @@ router.put('/:id/join/:requestId/decline', authenticateToken, async (req: Reques
     );
 
     if (userResult.rows.length > 0) {
-      const { user_name, toki_title } = userResult.rows[0];
-      console.log(`❌ Notifying user ${user_name} that their join request for "${toki_title}" was declined`);
-      // TODO: Send push notification or in-app notification to the user
+      const { toki_title } = userResult.rows[0];
+      const participantId = requestResult.rows[0].user_id;
+      await sendPushToUsers([participantId], {
+        title: 'Join Request Declined',
+        body: `Your request to join "${toki_title}" was declined`,
+        data: { type: 'join_declined', source: 'user_join_pending', tokiId: id, requestId }
+      });
     }
 
     return res.status(200).json({

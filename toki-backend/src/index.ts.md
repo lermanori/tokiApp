@@ -39,5 +39,11 @@ Main server and Socket.IO entrypoint. Now uses centralized logger and reduces ve
 ### How Fixes Were Implemented
 - Imported `utils/logger` and replaced `console.*` with `logger.*`.
 - Demoted room membership details to `debug` while preserving key lifecycle messages.
+- problem: Push notification routes not registered in server.
+- solution: Imported `pushRoutes` and added `app.use('/api/push', corsMiddleware, pushRoutes);` to expose token registration and test endpoints.
+- solution:
+  - Imported `./routes/push` as `pushRoutes`.
+  - Mounted routes at `/api/push` with CORS middleware.
+  - Enables client to register/unregister tokens and send test notifications.
 
 

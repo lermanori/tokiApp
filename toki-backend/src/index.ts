@@ -35,6 +35,7 @@ import mapsRoutes from './routes/maps';
 import healthRoutes from './routes/health';
 import activityRoutes from './routes/activity';
 import waitlistRoutes from './routes/waitlist';
+import pushRoutes from './routes/push';
 
 const app = express();
 const server = createServer(app);
@@ -143,6 +144,7 @@ app.use('/api/maps', corsMiddleware, mapsRoutes);
 app.use('/api/health', corsMiddleware, healthRoutes);
 app.use('/api/activity', corsMiddleware, activityRoutes);
 app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
+app.use('/api/push', corsMiddleware, pushRoutes);
 
 app.get('/api', (req, res) => {
   res.json({
