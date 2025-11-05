@@ -24,6 +24,8 @@ export default function ExploreScreen() {
     distance: 'all',
     availability: 'all',
     participants: 'all',
+    dateFrom: '',
+    dateTo: '',
   });
   const [userConnections, setUserConnections] = useState<string[]>([]); // Store connection user IDs
 
@@ -90,6 +92,8 @@ export default function ExploreScreen() {
       distance: 'all',
       availability: 'all',
       participants: 'all',
+      dateFrom: '',
+      dateTo: '',
     });
     setSelectedCategory('all');
     setSearchQuery('');
@@ -177,24 +181,53 @@ export default function ExploreScreen() {
       return toki.visibility === selectedFilters.visibility;
     })();
 
-    const matchesDistance = selectedFilters.distance === 'all' ||
-      (() => {
-        // This would need actual distance calculation in a real app
-        // For now, just return true as we don't have distance data
-        return true;
-      })();
+    // Distance filtering using backend-provided km (e.g., "2.5 km")
+    const matchesDistance = (() => {
+      if (selectedFilters.distance === 'all') return true;
 
+      // Parse numeric km from string like "2.3 km" or "0.0 km"
+      const km = typeof toki.distance === 'string'
+        ? parseFloat(toki.distance)
+        : (typeof (toki as any).distanceKm === 'number' ? (toki as any).distanceKm : NaN);
+
+      if (!Number.isFinite(km)) return false; // cannot evaluate → exclude when a specific range chosen
+
+      const opt = selectedFilters.distance;
+      if (opt === 'Under 1km') return km < 1;
+      if (opt === '1-3km') return km >= 1 && km < 3;
+      if (opt === '3-5km') return km >= 3 && km < 5;
+      if (opt === '5km+') return km >= 5;
+      return true;
+    })();
+
+    // Availability based on percentage full: currentAttendees / maxAttendees
     const matchesAvailability = selectedFilters.availability === 'all' ||
       (() => {
-        const attendees = toki.attendees || 0;
-        const maxAttendees = toki.maxAttendees || 10;
-        const spotsLeft = maxAttendees - attendees;
+        // currentAttendees may arrive as string; attendees is our mapped value
+        const current = (() => {
+          const a = (toki as any).attendees;
+          if (Number.isFinite(a)) return a as number;
+          const ca = (toki as any).currentAttendees;
+          const parsed = typeof ca === 'string' ? parseInt(ca, 10) : ca;
+          return Number.isFinite(parsed) ? (parsed as number) : 0;
+        })();
+        const max = Number.isFinite(toki.maxAttendees) ? toki.maxAttendees : 0;
+        if (!max || max <= 0) return true; // can't evaluate meaningfully
+
+        const percent = (current / max) * 100;
 
         switch (selectedFilters.availability) {
-          case 'spots available': return spotsLeft > 0;
-          case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
-          case 'waitlist': return spotsLeft <= 0;
-          default: return true;
+          case 'spots available':
+            // Any room left
+            return current < max;
+          case 'almost full':
+            // At least 80% full but not yet full
+            return percent >= 80 && current < max;
+          case 'waitlist':
+            // Full or over capacity
+            return current >= max;
+          default:
+            return true;
         }
       })();
 
@@ -210,7 +243,27 @@ export default function ExploreScreen() {
         }
       })();
 
-    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
+    // Time (date) filter using scheduledTime and dateFrom/dateTo
+    const matchesTime = (() => {
+      const df = (selectedFilters as any).dateFrom;
+      const dt = (selectedFilters as any).dateTo;
+      if (!df && !dt) return true; // no time filter
+
+      const scheduled = toki.scheduledTime ? new Date(toki.scheduledTime).getTime() : NaN;
+      if (!Number.isFinite(scheduled)) return false; // cannot evaluate
+
+      if (df && scheduled < new Date(df).getTime()) return false;
+      if (dt && scheduled > new Date(dt).getTime()) return false;
+      return true;
+    })();
+
+    return matchesSearch 
+      && matchesCategory 
+      && matchesVisibility 
+      && matchesDistance 
+      && matchesAvailability 
+      && matchesParticipants
+      && matchesTime;
   });
 
   // Debug: Log filtered results with details

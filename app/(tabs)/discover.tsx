@@ -121,6 +121,7 @@ export default function DiscoverScreen() {
   });
   const [showMap, setShowMap] = useState(true);
   const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
+  const [userConnections, setUserConnections] = useState<string[]>([]);
 
   // Load Tokis from backend and transform them to events
   useEffect(() => {
@@ -136,6 +137,7 @@ export default function DiscoverScreen() {
         maxAttendees: toki.maxAttendees || 0,
         category: toki.category,
         distance: toki.distance,
+        visibility: toki.visibility, // include visibility for filtering
         host: {
           id: toki.host.id, // Add host.id for conversation functionality
           name: toki.host.name,
@@ -153,6 +155,20 @@ export default function DiscoverScreen() {
       setEvents(transformedEvents);
     }
   }, [state.tokis]);
+
+  // Load user connections to support visibility filtering by host connection
+  useEffect(() => {
+    const loadConnections = async () => {
+      try {
+        const result = await actions.getConnections();
+        const ids = (result.connections || []).map((c: any) => c.user?.id || c.id).filter((v: string) => v);
+        setUserConnections(ids);
+      } catch (e) {}
+    };
+    if (state.isConnected && state.currentUser?.id) {
+      loadConnections();
+    }
+  }, [state.isConnected, state.currentUser?.id]);
 
   // Marker diagnostics: count how many markers should render and detect overlapping coordinates
   useEffect(() => {
@@ -370,29 +386,44 @@ export default function DiscoverScreen() {
     const matchesCategory = (selectedCategory === 'all' || event.category === selectedCategory) &&
       (selectedFilters.category === 'all' || event.category === selectedFilters.category);
 
-    const matchesVisibility = selectedFilters.visibility === 'all' ||
-      (selectedFilters.visibility === 'hosted_by_me' 
-        ? event.isHostedByUser === true
-        : event.visibility === selectedFilters.visibility);
+    const matchesVisibility = (() => {
+      if (selectedFilters.visibility === 'all') return true;
+      if (selectedFilters.visibility === 'hosted_by_me') return event.isHostedByUser === true;
+      if (selectedFilters.visibility === 'connections') {
+        const hostIsConnection = userConnections.includes(event.host.id);
+        return hostIsConnection;
+      }
+      return event.visibility === selectedFilters.visibility;
+    })();
 
-    const matchesDistance = selectedFilters.distance === 'all' ||
-      (() => {
-        // This would need actual distance calculation in a real app
-        // For now, just return true as we don't have distance data
-        return true;
-      })();
+    // Distance from backend string (e.g., "2.3 km")
+    const matchesDistance = (() => {
+      if (selectedFilters.distance === 'all') return true;
+      const km = typeof event.distance === 'string' ? parseFloat(event.distance) : NaN;
+      if (!Number.isFinite(km)) return false;
+      const opt = selectedFilters.distance;
+      if (opt === 'Under 1km') return km < 1;
+      if (opt === '1-3km') return km >= 1 && km < 3;
+      if (opt === '3-5km') return km >= 3 && km < 5;
+      if (opt === '5km+') return km >= 5;
+      return true;
+    })();
 
     const matchesAvailability = selectedFilters.availability === 'all' ||
       (() => {
-        const attendees = event.attendees || 0;
-        const maxAttendees = event.maxAttendees || 10;
-        const spotsLeft = maxAttendees - attendees;
-
+        const current = Number.isFinite(event.attendees) ? event.attendees : 0;
+        const max = Number.isFinite(event.maxAttendees) ? event.maxAttendees : 0;
+        if (!max || max <= 0) return true;
+        const percent = (current / max) * 100;
         switch (selectedFilters.availability) {
-          case 'spots available': return spotsLeft > 0;
-          case 'almost full': return spotsLeft <= 2 && spotsLeft > 0;
-          case 'waitlist': return spotsLeft <= 0;
-          default: return true;
+          case 'spots available':
+            return current < max;
+          case 'almost full':
+            return percent >= 80 && current < max;
+          case 'waitlist':
+            return current >= max;
+          default:
+            return true;
         }
       })();
 
@@ -408,7 +439,18 @@ export default function DiscoverScreen() {
         }
       })();
 
-    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants;
+    const matchesTime = (() => {
+      const df = selectedFilters.dateFrom;
+      const dt = selectedFilters.dateTo;
+      if (!df && !dt) return true;
+      const scheduled = event.scheduledTime ? new Date(event.scheduledTime).getTime() : NaN;
+      if (!Number.isFinite(scheduled)) return false;
+      if (df && scheduled < new Date(df).getTime()) return false;
+      if (dt && scheduled > new Date(dt).getTime()) return false;
+      return true;
+    })();
+
+    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime;
   });
 
   const getJoinStatusText = (event: TokiEvent) => {
