@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Dimensions, Platform, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Dimensions, Platform, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MapPin, Filter, Plus, Minus, Search, RefreshCw, Navigation, Crosshair, Clock, Users } from 'lucide-react-native';
@@ -123,37 +123,65 @@ export default function DiscoverScreen() {
   const [showMap, setShowMap] = useState(true);
   const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
   const [userConnections, setUserConnections] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasInitiallyLoadedRef = useRef(false);
+  const mapRegionInitializedRef = useRef(false);
+  const previousEventIdsRef = useRef<string>('');
 
   // Load Tokis from backend and transform them to events
   useEffect(() => {
     if (state.tokis.length > 0) {
-      const transformedEvents = state.tokis.map(toki => ({
-        id: toki.id,
-        title: toki.title,
-        description: toki.description,
-        location: toki.location,
-        time: toki.time,
-        scheduledTime: toki.scheduledTime, // Add scheduledTime for smart formatting
-        attendees: toki.attendees || 0,
-        maxAttendees: toki.maxAttendees || 0,
-        category: toki.category,
-        distance: toki.distance,
-        visibility: toki.visibility, // include visibility for filtering
-        host: {
-          id: toki.host.id, // Add host.id for conversation functionality
-          name: toki.host.name,
-          avatar: toki.host.avatar, // Let TokiCard handle fallback with initials
-        },
-        image: toki.image || getActivityPhoto(toki.category),
-        tags: toki.tags || [toki.category],
-        coordinate: {
-          latitude: toki.latitude || 32.0853,
-          longitude: toki.longitude || 34.7818
-        },
-        isHostedByUser: toki.isHostedByUser || false,
-        joinStatus: toki.joinStatus || 'not_joined',
-      }));
-      setEvents(transformedEvents);
+      const transformedEvents = state.tokis.map(toki => {
+        // Use toki.image if it exists and is not empty, otherwise use fallback
+        // Only use fallback if toki.image is truly empty (not a valid URL)
+        const hasValidImage = toki.image && toki.image.trim() !== '' && !toki.image.includes('activityPhotos');
+        const imageUrl = hasValidImage ? toki.image : getActivityPhoto(toki.category);
+        
+        return {
+          id: toki.id,
+          title: toki.title,
+          description: toki.description,
+          location: toki.location,
+          time: toki.time,
+          scheduledTime: toki.scheduledTime, // Add scheduledTime for smart formatting
+          attendees: toki.attendees || 0,
+          maxAttendees: toki.maxAttendees || 0,
+          category: toki.category,
+          distance: toki.distance,
+          visibility: toki.visibility, // include visibility for filtering
+          host: {
+            id: toki.host.id, // Add host.id for conversation functionality
+            name: toki.host.name,
+            avatar: toki.host.avatar, // Let TokiCard handle fallback with initials
+          },
+          image: imageUrl,
+          tags: toki.tags || [toki.category],
+          coordinate: {
+            latitude: toki.latitude || 32.0853,
+            longitude: toki.longitude || 34.7818
+          },
+          isHostedByUser: toki.isHostedByUser || false,
+          joinStatus: toki.joinStatus || 'not_joined',
+        };
+      });
+      
+      // Only update if events actually changed (prevent unnecessary re-renders that cause jumping)
+      const newEventIds = transformedEvents.map(e => e.id).sort().join(',');
+      
+      if (previousEventIdsRef.current !== newEventIds) {
+        setEvents(transformedEvents);
+        previousEventIdsRef.current = newEventIds;
+      }
+    } else if (state.tokis.length === 0) {
+      // Clear events if tokis are cleared
+      if (previousEventIdsRef.current !== '') {
+        setEvents([]);
+        previousEventIdsRef.current = '';
+      }
     }
   }, [state.tokis]);
 
@@ -198,33 +226,122 @@ export default function DiscoverScreen() {
     }
   }, [events]);
 
-  // Load Tokis when component mounts
+  // Load nearby tokis on mount and when user location is available
   useEffect(() => {
-    if (state.isConnected) {
-      actions.loadTokis();
+    if (state.isConnected && (state.currentUser?.latitude && state.currentUser?.longitude || mapRegion.latitude && mapRegion.longitude)) {
+      const lat = state.currentUser?.latitude || mapRegion.latitude;
+      const lng = state.currentUser?.longitude || mapRegion.longitude;
+      loadNearbyTokis(1, false, lat, lng);
+      hasInitiallyLoadedRef.current = true;
     }
-  }, [state.isConnected]);
+  }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude]);
 
-  // Refresh Tokis when screen comes into focus
+  // Refresh Tokis when screen comes into focus (only if we don't have data)
   useFocusEffect(
     React.useCallback(() => {
-      if (state.isConnected) {
-        actions.loadTokis();
+      // Only reload if we don't have any data yet (prevents jumping when switching tabs)
+      if (state.isConnected && state.tokis.length === 0 && (state.currentUser?.latitude && state.currentUser?.longitude || mapRegion.latitude && mapRegion.longitude)) {
+        const lat = state.currentUser?.latitude || mapRegion.latitude;
+        const lng = state.currentUser?.longitude || mapRegion.longitude;
+        loadNearbyTokis(1, false, lat, lng);
       }
-    }, [state.isConnected])
+    }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length])
   );
+
+  const loadNearbyTokis = useCallback(async (page: number, append: boolean, latitude?: number, longitude?: number) => {
+    const lat = latitude || state.currentUser?.latitude || mapRegion.latitude;
+    const lng = longitude || state.currentUser?.longitude || mapRegion.longitude;
+    
+    if (!lat || !lng) {
+      console.log('⚠️ [DISCOVER] No location available');
+      return;
+    }
+
+    // Prevent duplicate requests
+    if (isLoadingMore && append) {
+      return;
+    }
+
+    try {
+      if (!append) {
+        // Loading state is handled by the action
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const radius = parseFloat(selectedFilters.radius) || 10;
+      const response = await actions.loadNearbyTokis({
+        latitude: lat,
+        longitude: lng,
+        radius: radius,
+        page: page
+      }, append);
+
+      setCurrentPage(page);
+      setHasMore(response.pagination.hasMore);
+    } catch (error) {
+      console.error('❌ [DISCOVER] Failed to load nearby tokis:', error);
+      setHasMore(false); // Stop trying if there's an error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, isLoadingMore, selectedFilters.radius, actions]);
+
+  const handleLoadMore = useCallback(() => {
+    // FlatList's onEndReached can fire multiple times, so we need to guard against duplicates
+    if (isLoadingMore || !hasMore) {
+      return;
+    }
+    
+    const lat = state.currentUser?.latitude || mapRegion.latitude;
+    const lng = state.currentUser?.longitude || mapRegion.longitude;
+    
+    if (!lat || !lng) {
+      return;
+    }
+    
+    // Use functional update to ensure we get the latest currentPage
+    setCurrentPage(prevPage => {
+      const nextPage = prevPage + 1;
+      loadNearbyTokis(nextPage, true, lat, lng).catch(err => {
+        console.error('❌ [DISCOVER] Error in handleLoadMore:', err);
+      });
+      return nextPage;
+    });
+  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Manual refresh function
   const handleRefresh = async () => {
     try {
-      await actions.loadTokis();
+      setRefreshing(true);
+      const lat = state.currentUser?.latitude || mapRegion.latitude;
+      const lng = state.currentUser?.longitude || mapRegion.longitude;
+      if (lat && lng) {
+        await loadNearbyTokis(1, false, lat, lng);
+      }
     } catch (error) {
       console.error('❌ [DISCOVER] Failed to refresh Tokis:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  // Center map from user's profile location (not device GPS)
+  // Center map from user's profile location (not device GPS) - only once on mount
   useEffect(() => {
+    // Only set map region if it hasn't been initialized yet (prevents jumping)
+    if (mapRegionInitializedRef.current) {
+      return;
+    }
+    
     const setFromProfile = async () => {
       try {
         const profileLoc = state.currentUser?.location?.trim();
@@ -238,23 +355,32 @@ export default function DiscoverScreen() {
               latitudeDelta: 0.0922,
               longitudeDelta: 0.0421,
             });
+            mapRegionInitializedRef.current = true;
             return;
           }
         }
-        // fallback to Tel Aviv
-        setMapRegion({
-          latitude: 32.0853,
-          longitude: 34.7818,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        });
+        // fallback to Tel Aviv (only if still at default)
+        const isDefaultLocation = mapRegion.latitude === 32.0853 && mapRegion.longitude === 34.7818;
+        if (isDefaultLocation) {
+          setMapRegion({
+            latitude: 32.0853,
+            longitude: 34.7818,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
+          mapRegionInitializedRef.current = true;
+        }
       } catch (error) {
-        setMapRegion({
-          latitude: 32.0853,
-          longitude: 34.7818,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        });
+        const isDefaultLocation = mapRegion.latitude === 32.0853 && mapRegion.longitude === 34.7818;
+        if (isDefaultLocation) {
+          setMapRegion({
+            latitude: 32.0853,
+            longitude: 34.7818,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
+          mapRegionInitializedRef.current = true;
+        }
       }
     };
     setFromProfile();
@@ -485,7 +611,11 @@ export default function DiscoverScreen() {
     <View style={styles.mapContainer}>
       <DiscoverMap
         region={mapRegion}
-        onRegionChange={(r: any) => setMapRegion(r)}
+        onRegionChange={(r: any) => {
+          setMapRegion(r);
+          // Mark map region as user-initialized (user has interacted with map)
+          mapRegionInitializedRef.current = true;
+        }}
         events={filteredEvents as any}
         onEventPress={handleEventPress}
         onMarkerPress={handleMapMarkerPress}
@@ -535,82 +665,71 @@ export default function DiscoverScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Map Section - Toggleable */}
-        {showMap ? renderInteractiveMap() : (
-          <View style={styles.listViewContainer}>
-            <Text style={styles.listViewTitle}>Activities Near You</Text>
-            <View style={styles.eventsContainer}>
-              {filteredEvents.map((event) => (
-                <View key={event.id} style={styles.cardWrapper}>
-                  <TokiCard
-                    toki={event}
-                    onPress={() => handleEventPress(event)}
-                    onHostPress={() => {
-                      if (event.host.id && event.host.id !== state.currentUser?.id) {
-                        router.push({
-                          pathname: '/chat',
-                          params: {
-                            otherUserId: event.host.id,
-                            otherUserName: event.host.name,
-                            isGroup: 'false'
-                          }
-                        });
-                      }
-                    }}
-                  />
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Categories */}
-        <View style={styles.categoriesContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesScroll}
-          >
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryButton,
-                  selectedCategory === category && styles.categoryButtonActive
-                ]}
-                onPress={() => setSelectedCategory(category)}
+      <FlatList
+        data={filteredEvents}
+        keyExtractor={(item) => item.id}
+        style={styles.content}
+        ListHeaderComponent={() => (
+          <>
+            {/* Map Section - Toggleable */}
+            {showMap && renderInteractiveMap()}
+            {/* {!showMap && (
+              <View style={styles.listViewContainer}>
+                <Text style={styles.listViewTitle}>Activities Near You</Text>
+              </View>
+            )} */}
+            {/* Categories */}
+            <View style={[styles.categoriesContainer, showMap && styles.categoriesContainerNoTopPadding]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesScroll}
               >
-                <Text style={[
-                  styles.categoryText,
-                  selectedCategory === category && styles.categoryTextActive
-                ]}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-        <View>
-          <Text style={styles.sectionTitle}>
-            {filteredEvents.length} Toki{filteredEvents.length !== 1 ? 's' : ''} nearby
-          </Text>
-        </View>
-        {/* Events List */}
-        <View style={styles.eventsContainer}>
-
-          {filteredEvents.map((event) => (
-            <View key={event.id} style={styles.cardWrapper}>
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    style={[
+                      styles.categoryButton,
+                      selectedCategory === category && styles.categoryButtonActive
+                    ]}
+                    onPress={() => setSelectedCategory(category)}
+                  >
+                    <Text style={[
+                      styles.categoryText,
+                      selectedCategory === category && styles.categoryTextActive
+                    ]}>
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <View>
+              <Text style={styles.sectionTitle}>
+                {(state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
+                 (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)
+                  ? 'Loading...' 
+                  : state.totalNearbyCount > 0
+                  ? `${state.totalNearbyCount} Toki${state.totalNearbyCount !== 1 ? 's' : ''} nearby`
+                  : state.tokis.length > 0
+                  ? `${state.tokis.length} Toki${state.tokis.length !== 1 ? 's' : ''} nearby`
+                  : 'No Tokis nearby'}
+              </Text>
+            </View>
+          </>
+        )}
+          renderItem={({ item }) => (
+            <View style={styles.cardWrapper}>
               <TokiCard
-                toki={event}
-                onPress={() => handleEventPress(event)}
+                toki={item}
+                onPress={() => handleEventPress(item)}
                 onHostPress={() => {
-                  if (event.host.id && event.host.id !== state.currentUser?.id) {
+                  if (item.host.id && item.host.id !== state.currentUser?.id) {
                     router.push({
                       pathname: '/chat',
                       params: {
-                        otherUserId: event.host.id,
-                        otherUserName: event.host.name,
+                        otherUserId: item.host.id,
+                        otherUserName: item.host.name,
                         isGroup: 'false'
                       }
                     });
@@ -618,11 +737,43 @@ export default function DiscoverScreen() {
                 }}
               />
             </View>
-          ))}
-        </View>
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+          )}
+          ListFooterComponent={() => (
+            <>
+              {isLoadingMore && (
+                <View style={styles.loadingMoreContainer}>
+                  <Text style={styles.loadingMoreText}>Loading more...</Text>
+                </View>
+              )}
+              <View style={styles.bottomSpacing} />
+            </>
+          )}
+          contentContainerStyle={filteredEvents.length === 0 ? styles.contentEmpty : styles.contentList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          // iOS-friendly infinite scroll props
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.2} // Trigger when 20% from bottom (very aggressive for iOS)
+          // Performance optimizations
+          removeClippedSubviews={false} // Disable on iOS to prevent rendering issues
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={20}
+          // Backup trigger for iOS
+          onScroll={(event) => {
+            const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+            if (contentSize.height > 0 && !isLoadingMore && hasMore) {
+              const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+              // Trigger when within 1000px of bottom (very aggressive)
+              if (distanceFromBottom <= 1000) {
+                handleLoadMore();
+              }
+            }
+          }}
+          scrollEventThrottle={16}
+        />
 
       <TokiFilters
         visible={showFilterModal}
@@ -679,10 +830,17 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  contentEmpty: {
+    flexGrow: 1,
+  },
+  contentList: {
+    paddingBottom: 20,
+  },
   mapContainer: {
     position: 'relative',
     backgroundColor: '#FFFFFF',
-    marginBottom: 8,
+    // height: '400', // Fixed height for map
+    paddingBottom: 20,
   },
   mapPlaceholder: {
     height: 300,
@@ -850,9 +1008,13 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#EAEAEA',
+  },
+  categoriesContainerNoTopPadding: {
+    paddingTop: 0,
   },
   categoriesScroll: {
     paddingHorizontal: 20,
@@ -887,11 +1049,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   cardWrapper: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 360,
-    maxWidth: 520,
     width: '100%',
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 20,
@@ -1565,5 +1725,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     color: '#B49AFF',
     textDecorationLine: 'underline',
+  },
+  loadingMoreContainer: {
+    width: '100%',
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666666',
   },
 });

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { createSystemNotificationAndPush } from '../utils/notify';
 import { sendPushToUsers } from '../utils/push';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { uploadSingleImage, handleUploadError } from '../middleware/upload';
 import { calculateDistance, formatDistance } from '../utils/distance';
 import { 
@@ -393,6 +393,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const queryParams: any[] = [];
     let paramCount = 0;
 
+    // Calculate where userId parameter will be (after distance params if they exist)
+    const userIdParamPos = (userLat && userLng ? 3 : 1);
+
     // Build the base query
     let query = `
       SELECT 
@@ -401,7 +404,11 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
         COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees,
-        COALESCE(jp.status, 'not_joined') as join_status
+        COALESCE(jp.status, 'not_joined') as join_status,
+        EXISTS(
+          SELECT 1 FROM saved_tokis st 
+          WHERE st.toki_id = t.id AND st.user_id = $${userIdParamPos}
+        ) as is_saved
     `;
     
     // Always add distance calculation if user has coordinates
@@ -465,6 +472,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     )`;
     paramCount++;
     queryParams.push(userId);
+
+    // Filter out tokis that are more than 12 hours past their scheduled time
+    // Show tokis that are in the future or within 12 hours of their start time
+    query += ` AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')`;
 
     // Add filters
     if (category) {
@@ -567,6 +578,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       SELECT COUNT(DISTINCT t.id) as total
       FROM tokis t
       WHERE t.status = 'active'
+      AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
     `;
     const countParams: any[] = [];
     let countParamCount = 0;
@@ -654,7 +666,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         avatar: row.host_avatar
       },
       tags: row.tags || [],
-      joinStatus: row.join_status || 'not_joined'
+      joinStatus: row.join_status || 'not_joined',
+      is_saved: row.is_saved || false
     }));
 
     return res.status(200).json({
@@ -681,13 +694,14 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // Get nearby Tokis based on coordinates
-router.get('/nearby', async (req: Request, res: Response) => {
+router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
   try {
     const {
       latitude,
       longitude,
       radius = '10', // Default 10km radius
       limit = '20',
+      page = '1',
       category,
       timeSlot
     } = req.query;
@@ -705,6 +719,11 @@ router.get('/nearby', async (req: Request, res: Response) => {
     const lng = parseFloat(longitude as string);
     const radiusKm = Math.min(parseFloat(radius as string) || 10, 100); // Max 100km
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
+    const pageNum = Math.max(parseInt(page as string) || 1, 1);
+    const offset = (pageNum - 1) * limitNum;
+    
+    // Get userId from optional auth (may be undefined)
+    const userId = (req as any).user?.id || null;
 
     // Validate coordinates
     if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
@@ -715,10 +734,54 @@ router.get('/nearby', async (req: Request, res: Response) => {
       });
     }
 
-    // Build the query with distance calculation
+    // Build WHERE conditions for both COUNT and SELECT queries
+    let whereConditions = `
+      WHERE t.status = 'active'
+        AND t.latitude IS NOT NULL 
+        AND t.longitude IS NOT NULL
+        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
+        AND (
+          6371 * acos(
+            cos(radians($1)) * 
+            cos(radians(t.latitude)) * 
+            cos(radians(t.longitude) - radians($2)) + 
+            sin(radians($1)) * 
+            sin(radians(t.latitude))
+          )
+        ) <= $3
+    `;
+
+    const baseParams: any[] = [lat, lng, radiusKm];
+    let paramCount = 3;
+
+    // Add category filter
+    if (category) {
+      paramCount++;
+      whereConditions += ` AND t.category = $${paramCount}`;
+      baseParams.push(category);
+    }
+
+    // Add time slot filter
+    if (timeSlot) {
+      paramCount++;
+      whereConditions += ` AND t.time_slot = $${paramCount}`;
+      baseParams.push(timeSlot);
+    }
+
+    // First, get the total count
+    const countQuery = `
+      SELECT COUNT(DISTINCT t.id) as total
+      FROM tokis t
+      ${whereConditions}
+    `;
+    const countResult = await pool.query(countQuery, baseParams);
+    const totalCount = parseInt(countResult.rows[0].total);
+
+    // Build the main query with distance calculation
     let query = `
       SELECT 
         t.*,
+        t.image_urls,
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
@@ -731,50 +794,45 @@ router.get('/nearby', async (req: Request, res: Response) => {
             sin(radians($1)) * 
             sin(radians(t.latitude))
           )
-        ) as distance_km
+        ) as distance_km`;
+    
+    // Add is_saved check if user is authenticated
+    if (userId) {
+      paramCount++;
+      query += `,
+        EXISTS(
+          SELECT 1 FROM saved_tokis st 
+          WHERE st.toki_id = t.id AND st.user_id = $${paramCount}
+        ) as is_saved`;
+    } else {
+      query += `,
+        false as is_saved`;
+    }
+    
+    query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'joined'
-      WHERE t.status = 'active'
-        AND t.latitude IS NOT NULL 
-        AND t.longitude IS NOT NULL
-        AND (
-          6371 * acos(
-            cos(radians($1)) * 
-            cos(radians(t.latitude)) * 
-            cos(radians(t.longitude) - radians($2)) + 
-            sin(radians($1)) * 
-            sin(radians(t.latitude))
-          )
-        ) <= $3
+      ${whereConditions}
     `;
 
-    const queryParams: any[] = [lat, lng, radiusKm];
-    let paramCount = 3;
-
-    // Add category filter
-    if (category) {
-      paramCount++;
-      query += ` AND t.category = $${paramCount}`;
-      queryParams.push(category);
-    }
-
-    // Add time slot filter
-    if (timeSlot) {
-      paramCount++;
-      query += ` AND t.time_slot = $${paramCount}`;
-      queryParams.push(timeSlot);
+    const queryParams = [...baseParams];
+    if (userId) {
+      queryParams.push(userId);
     }
 
     // Group by and order by distance
-    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude`;
+    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, t.image_urls`;
     query += ` ORDER BY distance_km ASC`;
 
-    // Add limit
+    // Add pagination
     paramCount++;
     query += ` LIMIT $${paramCount}`;
     queryParams.push(limitNum);
+    paramCount++;
+    query += ` OFFSET $${paramCount}`;
+    queryParams.push(offset);
 
     const result = await pool.query(query, queryParams);
 
@@ -792,7 +850,7 @@ router.get('/nearby', async (req: Request, res: Response) => {
       currentAttendees: row.current_attendees,
       category: row.category,
       visibility: row.visibility,
-      imageUrl: row.image_url,
+      imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -805,18 +863,29 @@ router.get('/nearby', async (req: Request, res: Response) => {
         name: row.host_name,
         avatar: row.host_avatar
       },
-      tags: row.tags || []
+      tags: row.tags || [],
+      is_saved: row.is_saved || false
     }));
+
+    const totalPages = Math.ceil(totalCount / limitNum);
+    const hasMore = pageNum * limitNum < totalCount;
 
     return res.status(200).json({
       success: true,
       data: {
         tokis,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: totalCount,
+          totalPages: totalPages,
+          hasMore: hasMore
+        },
         searchParams: {
           latitude: lat,
           longitude: lng,
           radiusKm,
-          totalFound: tokis.length
+          totalFound: totalCount
         }
       }
     });
@@ -854,7 +923,11 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
         u.avatar_url as host_avatar,
         u.bio as host_bio,
         u.location as host_location,
-        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags`;
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
+        EXISTS(
+          SELECT 1 FROM saved_tokis st 
+          WHERE st.toki_id = t.id AND st.user_id = $2
+        ) as is_saved`;
     
     // Add distance calculation if user has coordinates
     if (userLat && userLng) {
@@ -990,6 +1063,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       },
       tags: toki.tags || [],
       joinStatus: joinStatus,
+      is_saved: toki.is_saved || false,
       participants: participantsResult.rows.map(p => ({
         id: p.id,
         name: p.name,

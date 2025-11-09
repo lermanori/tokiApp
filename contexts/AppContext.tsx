@@ -32,6 +32,7 @@ interface Toki {
   latitude?: number;
   longitude?: number;
   scheduledTime?: string; // Add scheduled time for better display
+  isSaved?: boolean;
 }
 
 interface User {
@@ -135,6 +136,7 @@ interface AppState {
   savedTokis: SavedToki[];
   notifications: NotificationItem[];
   unreadNotificationsCount: number;
+  totalNearbyCount: number;
 }
 
 type AppAction =
@@ -164,7 +166,8 @@ type AppAction =
   | { type: 'SET_NOTIFICATIONS'; payload: NotificationItem[] }
   | { type: 'SET_UNREAD_NOTIFICATIONS_COUNT'; payload: number }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
-  | { type: 'MARK_ALL_NOTIFICATIONS_READ' };
+  | { type: 'MARK_ALL_NOTIFICATIONS_READ' }
+  | { type: 'SET_TOTAL_NEARBY_COUNT'; payload: number };
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -288,6 +291,7 @@ const initialState: AppState = {
   savedTokis: [],
   notifications: [],
   unreadNotificationsCount: 0,
+  totalNearbyCount: 0,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -459,6 +463,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const updated = state.notifications.map(n => ({ ...n, isRead: true, read: true }));
       return { ...state, notifications: updated, unreadNotificationsCount: 0 };
     }
+    case 'SET_TOTAL_NEARBY_COUNT':
+      return { ...state, totalNearbyCount: action.payload };
     default:
       return state;
   }
@@ -471,6 +477,7 @@ interface AppContextType {
     checkConnection: () => Promise<void>;
     loadTokis: () => Promise<void>;
     loadTokisWithFilters: (filters: any) => Promise<void>;
+    loadNearbyTokis: (params: { latitude: number; longitude: number; radius?: number; page?: number; category?: string; timeSlot?: string }, append?: boolean) => Promise<{ pagination: any }>;
     createToki: (tokiData: any) => Promise<string | null>;
     updateToki: (id: string, updates: any) => Promise<boolean>;
     deleteToki: (id: string) => Promise<boolean>;
@@ -627,10 +634,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             
             // Get the current user ID from the updated state
             const currentUserId = state.currentUser?.id;
-            console.log('👤 Current user ID for loading Tokis:', currentUserId);
+            console.log('👤 Current user ID:', currentUserId);
             
-            // Load Tokis from backend with current user ID
-            await loadTokis();
+            // Note: Tokis are loaded by individual screens (Explore/Discover use loadNearbyTokis)
+            // This prevents unnecessary /tokis API calls when screens will use /tokis/nearby
             
             // Connect to WebSocket
             await socketService.connect();
@@ -1058,6 +1065,98 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to load Tokis with filters:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load filtered activities' });
+    } finally {
+      setIsFetchingTokis(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  const loadNearbyTokis = async (
+    params: { 
+      latitude: number; 
+      longitude: number; 
+      radius?: number; 
+      page?: number; 
+      category?: string; 
+      timeSlot?: string 
+    }, 
+    append: boolean = false
+  ): Promise<{ pagination: any }> => {
+    try {
+      if (isFetchingTokis && !append) {
+        console.log('⏳ Skipping loadNearbyTokis: already in-flight');
+        return { pagination: { hasMore: false } };
+      }
+
+      if (!append) {
+        setIsFetchingTokis(true);
+        dispatch({ type: 'SET_LOADING', payload: true });
+      }
+
+      const response = await apiService.getNearbyTokis({
+        latitude: params.latitude,
+        longitude: params.longitude,
+        radius: params.radius || 10,
+        limit: 20,
+        page: params.page || 1,
+        category: params.category,
+        timeSlot: params.timeSlot
+      });
+
+      // Get current user ID from API service
+      const currentUserId = apiService.getAccessToken() ? 
+        (await apiService.getCurrentUser()).user.id : null;
+
+      const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
+        id: apiToki.id,
+        title: apiToki.title,
+        description: apiToki.description,
+        location: apiToki.location,
+        time: apiToki.timeSlot || 'Time TBD',
+        attendees: apiToki.currentAttendees,
+        maxAttendees: apiToki.maxAttendees,
+        tags: apiToki.tags,
+        host: {
+          id: apiToki.host.id,
+          name: apiToki.host.name,
+          avatar: apiToki.host.avatar || '',
+        },
+        image: apiToki.imageUrl || '',
+        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
+        joinStatus: apiToki.joinStatus || 'not_joined',
+        visibility: apiToki.visibility,
+        category: apiToki.category,
+        createdAt: apiToki.createdAt,
+        scheduledTime: apiToki.scheduledTime,
+        latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
+        longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+        isSaved: (apiToki as any).is_saved || false,
+      }));
+
+      if (append) {
+        // Append to existing tokis, avoiding duplicates
+        const existingIds = new Set(state.tokis.map(t => t.id));
+        const newTokis = apiTokis.filter(t => !existingIds.has(t.id));
+        dispatch({ type: 'SET_TOKIS', payload: [...state.tokis, ...newTokis] });
+      } else {
+        dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+      }
+
+      // Update total count (only update if we got a valid total from pagination)
+      // Handle both possible response structures: direct pagination or nested in data
+      const pagination = response.pagination || (response as any).data?.pagination;
+      const total = pagination?.total;
+      
+      if (total !== undefined && total !== null && total > 0) {
+        dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
+      }
+
+      return { pagination: pagination || response.pagination };
+    } catch (error) {
+      console.error('❌ [APP CONTEXT] Failed to load nearby Tokis:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load nearby activities' });
+      return { pagination: { hasMore: false } };
     } finally {
       setIsFetchingTokis(false);
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -2476,6 +2575,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         checkConnection,
         loadTokis,
         loadTokisWithFilters,
+        loadNearbyTokis,
         createToki,
     updateToki,
     deleteToki,

@@ -55,6 +55,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id
       WHERE st.user_id = $1 AND t.status = 'active'
+        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
       GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, st.created_at
       ORDER BY st.created_at DESC`;
 

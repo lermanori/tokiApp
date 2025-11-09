@@ -7,29 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		045306AC63FD67AE537440EC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C47861002826DC6B7AFC68DE /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		1B9AD7460C174F39DEF1DFF2 /* libPods-Toki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E7EAEE2C3FA1C120087D157 /* libPods-Toki.a */; };
+		3AE67E7CECCC8892D54F51E1 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E4A4CE26C7D65FFE77D6B9A /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		AB3FA17DA4E42E5BAF3D1609 /* libPods-Toki.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7CD21B6290496641D73E7612 /* libPods-Toki.a */; };
-		B4C8FBB07B57C4181603BA9F /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A1EEB46023F3A896FB38B3 /* ExpoModulesProvider.swift */; };
+		95F703DD763230F77FAECB67 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F21EEC8FEA1F0159E122342F /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0872B97859C12C451A920D7B /* Pods-Toki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.release.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.release.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Toki.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Toki.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Toki/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Toki/Info.plist; sourceTree = "<group>"; };
-		7CD21B6290496641D73E7612 /* libPods-Toki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Toki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E7EAEE2C3FA1C120087D157 /* libPods-Toki.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Toki.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D2F5439A2E48E7C36B09505 /* Pods-Toki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.debug.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.debug.xcconfig"; sourceTree = "<group>"; };
+		7E4A4CE26C7D65FFE77D6B9A /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Toki/SplashScreen.storyboard; sourceTree = "<group>"; };
-		ACB759184B321DB45DFB673E /* Pods-Toki.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.debug.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.debug.xcconfig"; sourceTree = "<group>"; };
-		B6A1EEB46023F3A896FB38B3 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Toki/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		B040E29DC9D659A71DFABBD4 /* Pods-Toki.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Toki.release.xcconfig"; path = "Target Support Files/Pods-Toki/Pods-Toki.release.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C47861002826DC6B7AFC68DE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Toki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Toki/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Toki-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Toki-Bridging-Header.h"; path = "Toki/Toki-Bridging-Header.h"; sourceTree = "<group>"; };
+		F21EEC8FEA1F0159E122342F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Toki/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AB3FA17DA4E42E5BAF3D1609 /* libPods-Toki.a in Frameworks */,
+				1B9AD7460C174F39DEF1DFF2 /* libPods-Toki.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				C47861002826DC6B7AFC68DE /* PrivacyInfo.xcprivacy */,
+				F21EEC8FEA1F0159E122342F /* PrivacyInfo.xcprivacy */,
 			);
 			name = Toki;
 			sourceTree = "<group>";
@@ -62,19 +62,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				7CD21B6290496641D73E7612 /* libPods-Toki.a */,
+				2E7EAEE2C3FA1C120087D157 /* libPods-Toki.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		6EBE13DFC831B0B6D3E6C31C /* Pods */ = {
+		404AB1EC444C12DDBC87D586 /* Toki */ = {
 			isa = PBXGroup;
 			children = (
-				ACB759184B321DB45DFB673E /* Pods-Toki.debug.xcconfig */,
-				0872B97859C12C451A920D7B /* Pods-Toki.release.xcconfig */,
+				7E4A4CE26C7D65FFE77D6B9A /* ExpoModulesProvider.swift */,
 			);
-			name = Pods;
-			path = Pods;
+			name = Toki;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -91,8 +89,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				6EBE13DFC831B0B6D3E6C31C /* Pods */,
-				C1595BD25ABD91BA2069C434 /* ExpoModulesProviders */,
+				DAAAD9E95EE0D225E0BA3779 /* Pods */,
+				E68D055C6EF47BF4F4E63B9D /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -116,20 +114,22 @@
 			path = Toki/Supporting;
 			sourceTree = "<group>";
 		};
-		C1595BD25ABD91BA2069C434 /* ExpoModulesProviders */ = {
+		DAAAD9E95EE0D225E0BA3779 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				C22E051437AF1A608E7CB284 /* Toki */,
+				3D2F5439A2E48E7C36B09505 /* Pods-Toki.debug.xcconfig */,
+				B040E29DC9D659A71DFABBD4 /* Pods-Toki.release.xcconfig */,
 			);
-			name = ExpoModulesProviders;
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
-		C22E051437AF1A608E7CB284 /* Toki */ = {
+		E68D055C6EF47BF4F4E63B9D /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				B6A1EEB46023F3A896FB38B3 /* ExpoModulesProvider.swift */,
+				404AB1EC444C12DDBC87D586 /* Toki */,
 			);
-			name = Toki;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Toki" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				C10147B1410708D41A981017 /* [Expo] Configure project */,
+				B0C3801BA5DC66BAFFC673E3 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				CDC274C40C03FAB429039832 /* [CP] Embed Pods Frameworks */,
+				8D10C9FF9D3E194546DE3123 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -167,8 +167,6 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
-						DevelopmentTeam = "PA7L4ZHG8D";
-						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -198,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				045306AC63FD67AE537440EC /* PrivacyInfo.xcprivacy in Resources */,
+				95F703DD763230F77FAECB67 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -290,7 +288,29 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C10147B1410708D41A981017 /* [Expo] Configure project */ = {
+		8D10C9FF9D3E194546DE3123 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		B0C3801BA5DC66BAFFC673E3 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -314,28 +334,6 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Toki/expo-configure-project.sh\"\n";
 		};
-		CDC274C40C03FAB429039832 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Toki/Pods-Toki-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -344,7 +342,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				B4C8FBB07B57C4181603BA9F /* ExpoModulesProvider.swift in Sources */,
+				3AE67E7CECCC8892D54F51E1 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,7 +351,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = ACB759184B321DB45DFB673E /* Pods-Toki.debug.xcconfig */;
+			baseConfigurationReference = 3D2F5439A2E48E7C36B09505 /* Pods-Toki.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -384,15 +382,12 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
-				DEVELOPMENT_TEAM = "PA7L4ZHG8D";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 			};
 			name = Debug;
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 0872B97859C12C451A920D7B /* Pods-Toki.release.xcconfig */;
+			baseConfigurationReference = B040E29DC9D659A71DFABBD4 /* Pods-Toki.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -417,9 +412,6 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
-				DEVELOPMENT_TEAM = "PA7L4ZHG8D";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 			};
 			name = Release;
 		};

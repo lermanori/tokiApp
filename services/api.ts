@@ -797,9 +797,10 @@ class ApiService {
     longitude: number;
     radius?: number;
     limit?: number;
+    page?: number;
     category?: string;
     timeSlot?: string;
-  }): Promise<{ tokis: Toki[]; searchParams: any }> {
+  }): Promise<{ tokis: Toki[]; pagination: any; searchParams: any }> {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {
@@ -807,7 +808,20 @@ class ApiService {
       }
     });
 
-    const response = await this.makeRequest<{ success: boolean; data: { tokis: Toki[]; searchParams: any } }>(
+    const response = await this.makeRequest<{ 
+      success: boolean; 
+      data: { 
+        tokis: Toki[]; 
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          totalPages: number;
+          hasMore: boolean;
+        };
+        searchParams: any 
+      } 
+    }>(
       `/tokis/nearby?${queryParams.toString()}`
     );
     return response.data;

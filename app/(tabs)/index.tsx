@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, TextInput, Animated, RefreshControl, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Dimensions, Image, TextInput, Animated, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Filter, MapPin, Clock, Users, Heart, X } from 'lucide-react-native';
@@ -29,6 +29,10 @@ export default function ExploreScreen() {
     dateTo: '',
   });
   const [userConnections, setUserConnections] = useState<string[]>([]); // Store connection user IDs
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -56,19 +60,89 @@ export default function ExploreScreen() {
     }
   }, [state.isConnected, state.currentUser?.id]);
 
+  // Load nearby tokis on mount and when user location is available
+  useEffect(() => {
+    if (state.isConnected && state.currentUser?.latitude && state.currentUser?.longitude) {
+      loadNearbyTokis(1, false);
+    }
+  }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude]);
+
   // Refresh Tokis when screen comes into focus (e.g., after creating a new Toki)
   useFocusEffect(
     React.useCallback(() => {
-      if (state.isConnected) {
-        actions.loadTokis();
+      if (state.isConnected && state.currentUser?.latitude && state.currentUser?.longitude) {
+        loadNearbyTokis(1, false);
       }
-    }, [state.isConnected])
+    }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude])
   );
+
+  const loadNearbyTokis = useCallback(async (page: number, append: boolean) => {
+    if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
+      console.log('⚠️ [EXPLORE] No user location available');
+      return;
+    }
+
+    // Prevent duplicate requests
+    if (isLoadingMore && append) {
+      return;
+    }
+
+    try {
+      if (!append) {
+        // Don't reset total count on initial load - let it be set by the response
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const response = await actions.loadNearbyTokis({
+        latitude: state.currentUser.latitude,
+        longitude: state.currentUser.longitude,
+        radius: 10,
+        page: page
+      }, append);
+
+      setCurrentPage(page);
+      setHasMore(response.pagination.hasMore);
+    } catch (error) {
+      console.error('❌ [EXPLORE] Failed to load nearby tokis:', error);
+      setHasMore(false); // Stop trying if there's an error
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, isLoadingMore, actions]);
+
+  const handleLoadMore = useCallback(() => {
+    // FlatList's onEndReached can fire multiple times, so we need to guard against duplicates
+    if (isLoadingMore || !hasMore || !state.currentUser?.latitude || !state.currentUser?.longitude) {
+      return;
+    }
+    
+    // Use functional update to ensure we get the latest currentPage
+    setCurrentPage(prevPage => {
+      const nextPage = prevPage + 1;
+      // Call loadNearbyTokis with append=true to add to existing items
+      loadNearbyTokis(nextPage, true).catch(err => {
+        console.error('❌ [EXPLORE] Error in handleLoadMore:', err);
+      });
+      return nextPage;
+    });
+  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, loadNearbyTokis]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadMoreTimeoutRef.current) {
+        clearTimeout(loadMoreTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await actions.checkConnection();
-    await actions.loadTokis();
+    if (state.currentUser?.latitude && state.currentUser?.longitude) {
+      await loadNearbyTokis(1, false);
+    }
     setRefreshing(false);
   };
 
@@ -329,165 +403,217 @@ export default function ExploreScreen() {
 
 
 
+  // Render header component for FlatList
+  const renderHeader = () => (
+    <>
+      <LinearGradient
+        colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <Text style={styles.greeting}>Feeling social right now?</Text>
+          <Text style={styles.subtitle}>Find what's happening around you</Text>
+          {!state.isConnected && (
+            <View style={styles.connectionStatus}>
+              <Text style={styles.connectionStatusText}>⚠️ Offline mode - limited functionality</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.searchContainer}>
+          {showSearch ? (
+            <View style={styles.searchInputContainer}>
+              <Search size={20} color="#666666" />
+              <TextInput
+                style={{ outline: 'none', ...styles.searchInput }}
+                placeholder="Search activities, locations, hosts..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor="#999999"
+                autoFocus
+              />
+              <TouchableOpacity onPress={clearSearch}>
+                <X size={20} color="#666666" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.searchButton} onPress={() => setShowSearch(true)}>
+              <Search size={20} color="#666666" />
+              <Text style={styles.searchPlaceholder}>Search activities...</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
+            <Filter size={20} color="#B49AFF" />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.categoriesContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoriesScroll}
+        >
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              style={[
+                styles.categoryButton,
+                selectedCategory === category && styles.categoryButtonActive
+              ]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={[
+                styles.categoryText,
+                selectedCategory === category && styles.categoryTextActive
+              ]}>
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View>
+        <Text style={styles.sectionTitle}>
+          {(state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
+           (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)
+            ? 'Loading...' 
+            : state.totalNearbyCount > 0
+            ? `${state.totalNearbyCount} Toki${state.totalNearbyCount !== 1 ? 's' : ''} nearby`
+            : state.tokis.length > 0
+            ? `${state.tokis.length} Toki${state.tokis.length !== 1 ? 's' : ''} nearby`
+            : 'No Tokis nearby'}
+          {searchQuery && (
+            <Text style={styles.searchResultText}> for "{searchQuery}"</Text>
+          )}
+        </Text>
+
+        {state.loading && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading Tokis...</Text>
+          </View>
+        )}
+
+        {state.error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{state.error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={async () => {
+              await actions.checkConnection();
+              if (state.currentUser?.latitude && state.currentUser?.longitude) {
+                await loadNearbyTokis(1, false);
+              }
+            }}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </>
+  );
+
+  // Render empty state
+  const renderEmpty = () => {
+    if (state.loading) return null;
+    
+    return (
+      <View style={styles.emptyState}>
+        <Search size={48} color="#D1D5DB" />
+        <Text style={styles.emptyTitle}>No Tokis found</Text>
+        <Text style={styles.emptyDescription}>
+          {searchQuery
+            ? `No results found for "${searchQuery}". Try adjusting your search or filters.`
+            : 'No Tokis match your selected filters. Try removing some filters.'
+          }
+        </Text>
+        {(searchQuery || selectedCategory !== 'all') && (
+          <TouchableOpacity
+            style={styles.clearFiltersButton}
+            onPress={() => {
+              setSearchQuery('');
+              setSelectedCategory('all');
+              setShowSearch(false);
+            }}
+          >
+            <Text style={styles.clearFiltersText}>Clear all filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  // Render footer (loading indicator)
+  const renderFooter = () => {
+    if (!isLoadingMore) return null;
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <Text style={styles.loadingMoreText}>Loading more...</Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Animated.ScrollView
-        style={styles.content}
+      <FlatList
+        data={filteredTokis}
+        keyExtractor={(item) => item.id}
+        style={styles.flatList}
+        renderItem={({ item }) => (
+          <View style={styles.cardWrapper}>
+            <TokiCard
+              toki={item}
+              onPress={() => handleTokiPress(item)}
+              onHostPress={() => {
+                if (item.host.id && item.host.id !== state.currentUser?.id) {
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      otherUserId: item.host.id,
+                      otherUserName: item.host.name,
+                      isGroup: 'false'
+                    }
+                  });
+                }
+              }}
+            />
+          </View>
+        )}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderFooter}
+        contentContainerStyle={filteredTokis.length === 0 ? styles.contentEmpty : styles.contentList}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        // iOS-friendly infinite scroll props
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.2} // Trigger when 20% from bottom (very aggressive for iOS)
+        // Performance optimizations
+        removeClippedSubviews={false} // Disable on iOS to prevent rendering issues
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={20}
+        // Scroll animation support + backup trigger for iOS
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
+          { 
+            useNativeDriver: false,
+            listener: (event: any) => {
+              // Backup trigger: manually check scroll position for iOS
+              const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+              if (contentSize.height > 0 && !isLoadingMore && hasMore) {
+                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+                // Trigger when within 1000px of bottom (very aggressive)
+                if (distanceFromBottom <= 1000) {
+                  handleLoadMore();
+                }
+              }
+            }
+          }
         )}
         scrollEventThrottle={16}
-      >
-        <LinearGradient
-          colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
-          style={styles.header}
-        >
-          <View style={styles.headerContent}>
-            <Text style={styles.greeting}>Feeling social right now?</Text>
-            <Text style={styles.subtitle}>Find what's happening around you</Text>
-            {!state.isConnected && (
-              <View style={styles.connectionStatus}>
-                <Text style={styles.connectionStatusText}>⚠️ Offline mode - limited functionality</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.searchContainer}>
-            {showSearch ? (
-              <View style={styles.searchInputContainer}>
-                <Search size={20} color="#666666" />
-                <TextInput
-                  style={{ outline: 'none', ...styles.searchInput }}
-                  placeholder="Search activities, locations, hosts..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholderTextColor="#999999"
-                  autoFocus
-
-                />
-                <TouchableOpacity onPress={clearSearch}>
-                  <X size={20} color="#666666" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.searchButton} onPress={() => setShowSearch(true)}>
-                <Search size={20} color="#666666" />
-                <Text style={styles.searchPlaceholder}>Search activities...</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
-              <Filter size={20} color="#B49AFF" />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
-        <View style={styles.categoriesContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesScroll}
-          >
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryButton,
-                  selectedCategory === category && styles.categoryButtonActive
-                ]}
-                onPress={() => setSelectedCategory(category)}
-              >
-                <Text style={[
-                  styles.categoryText,
-                  selectedCategory === category && styles.categoryTextActive
-                ]}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View>
-          <Text style={styles.sectionTitle}>
-            {filteredTokis.length} Toki{filteredTokis.length !== 1 ? 's' : ''} nearby
-            {searchQuery && (
-              <Text style={styles.searchResultText}> for "{searchQuery}"</Text>
-            )}
-          </Text>
-
-          {state.loading && (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading Tokis...</Text>
-            </View>
-          )}
-
-          {state.error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{state.error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={async () => {
-                await actions.checkConnection();
-                await actions.loadTokis();
-              }}>
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-        <View style={styles.tokisContainer}>
-
-
-          {!state.loading && filteredTokis.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Search size={48} color="#D1D5DB" />
-              <Text style={styles.emptyTitle}>No Tokis found</Text>
-              <Text style={styles.emptyDescription}>
-                {searchQuery
-                  ? `No results found for "${searchQuery}". Try adjusting your search or filters.`
-                  : 'No Tokis match your selected filters. Try removing some filters.'
-                }
-              </Text>
-              {(searchQuery || selectedCategory !== 'all') && (
-                <TouchableOpacity
-                  style={styles.clearFiltersButton}
-                  onPress={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('all');
-                    setShowSearch(false);
-                  }}
-                >
-                  <Text style={styles.clearFiltersText}>Clear all filters</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            filteredTokis.map((toki) => (
-              <View key={toki.id} style={styles.cardWrapper}>
-                <TokiCard
-                  toki={toki}
-                  onPress={() => handleTokiPress(toki)}
-                  onHostPress={() => {
-                    if (toki.host.id && toki.host.id !== state.currentUser?.id) {
-                      router.push({
-                        pathname: '/chat',
-                        params: {
-                          otherUserId: toki.host.id,
-                          otherUserName: toki.host.name,
-                          isGroup: 'false'
-                        }
-                      });
-                    }
-                  }}
-                />
-              </View>
-            ))
-          )}
-        </View>
-      </Animated.ScrollView>
+      />
 
       <TokiFilters
         visible={showFilterModal}
@@ -507,6 +633,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   content: {
+    flexGrow: 1,
+  },
+  contentEmpty: {
+    flexGrow: 1,
+  },
+  contentList: {
+    paddingBottom: 20,
+  },
+  flatList: {
     flex: 1,
   },
   header: {
@@ -620,11 +755,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   cardWrapper: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 360,
-    maxWidth: 520,
     width: '100%',
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 20,
@@ -814,5 +947,15 @@ const styles = StyleSheet.create({
   },
   categoryTextActive: {
     color: '#FFFFFF',
+  },
+  loadingMoreContainer: {
+    width: '100%',
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666666',
   },
 });

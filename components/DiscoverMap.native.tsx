@@ -193,7 +193,7 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
 }
 
 const styles = StyleSheet.create({
-  container: { position: 'relative', backgroundColor: '#FFFFFF', marginBottom: 8 },
+  container: { position: 'relative', backgroundColor: '#FFFFFF' },
   map: { width: '100%', height: 300, borderRadius: 16 },
   overlay: { position: 'absolute', top: 16, right: 16, gap: 8 },
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },

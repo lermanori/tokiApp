@@ -113,7 +113,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
   }, []);
 
   return (
-    <View style={{ position: 'relative', backgroundColor: '#FFFFFF', marginBottom: 8 }}>
+    <View style={{ position: 'relative', backgroundColor: '#FFFFFF' }}>
       <div style={{ position: 'relative', width: '100%', height: 300, borderRadius: 16, overflow: 'hidden' }}>
         <MapContainer
           center={[region.latitude, region.longitude]}

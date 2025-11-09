@@ -34,6 +34,7 @@ export interface TokiCardProps {
         joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined'; // Added for status badge
         scheduledTime?: string; // Added for actual scheduled time display
         visibility?: 'public' | 'private' | 'connections' | 'friends';
+        isSaved?: boolean;
     };
     onPress: () => void;
     onHostPress?: () => void;
@@ -193,22 +194,15 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
 
 export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) {
     const { actions } = useApp();
-    const [isSaved, setIsSaved] = useState(false);
+    const [isSaved, setIsSaved] = useState(toki.isSaved || false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Check if Toki is saved on mount
+    // Update saved status when prop changes
     useEffect(() => {
-        checkSavedStatus();
-    }, [toki.id]);
-
-    const checkSavedStatus = async () => {
-        try {
-            const saved = await actions.checkIfSaved(toki.id);
-            setIsSaved(saved);
-        } catch (error) {
-            console.error('Error checking saved status:', error);
+        if (toki.isSaved !== undefined) {
+            setIsSaved(toki.isSaved);
         }
-    };
+    }, [toki.isSaved]);
 
     const handleSaveToggle = async () => {
         if (isSaving) return;
