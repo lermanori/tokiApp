@@ -1,85 +1,81 @@
-// Canonical Toki categories and shared icon/color config
+// Category utilities and helper functions
+// Category definitions are in utils/categoryConfig.ts
 
-export const CATEGORIES: string[] = [
-  'sports',
-  'coffee',
-  'music',
-  'dinner',
-  'work',
-  'culture',
-  'nature',
-  'drinks',
-  'party',
-  'wellness',
-  'chill',
-  'morning',
-];
+import { CATEGORY_CONFIG, CategoryDefinition, getIconAsset } from './categoryConfig';
 
-// Shared colors used by map markers and badges (can be adjusted later)
-export const CATEGORY_COLORS: Record<string, string> = {
-  sports: '#4DC4AA',
-  coffee: '#EC4899',
-  music: '#7C3AED',
-  dinner: '#F59E0B',
-  work: '#10B981',
-  culture: '#F43F5E',
-  nature: '#34D399',
-  drinks: '#FBBF24',
-  party: '#8B5CF6',
-  wellness: '#6EE7B7',
-  chill: '#60A5FA',
-  morning: '#FCD34D',
+// Re-export CategoryDefinition for convenience
+export type { CategoryDefinition };
+
+// Helper function to get category definition
+export const getCategoryDefinition = (category: string | null | undefined): CategoryDefinition | null => {
+  if (!category) return null;
+  return CATEGORY_CONFIG[category.toLowerCase()] || null;
 };
 
-// Placeholder for asset paths; to be populated when icons are added
+// Helper functions - use these instead of switch statements
+export const getCategoryEmoji = (category: string | null | undefined): string => {
+  const def = getCategoryDefinition(category);
+  return def?.emoji || '🎉';
+};
+
+export const getCategoryLabel = (category: string | null | undefined): string => {
+  const def = getCategoryDefinition(category);
+  return def?.name || 'Activity';
+};
+
+export const getCategoryColor = (category: string | null | undefined): string => {
+  const def = getCategoryDefinition(category);
+  return def?.color || '#666666';
+};
+
+export const getCategoryPhoto = (category: string | null | undefined): string => {
+  const def = getCategoryDefinition(category);
+  if (def) return def.photoUrl;
+  // Safe fallback
+  return 'https://images.pexels.com/photos/7988215/pexels-photo-7988215.jpeg?auto=compress&cs=tinysrgb&w=800&h=600&dpr=2';
+};
+
+export const getCategoryDescription = (category: string | null | undefined): string => {
+  const def = getCategoryDefinition(category);
+  return def?.description || 'Activity';
+};
+
+// For backend API - returns array format
+export const getCategoriesForAPI = () => {
+  return Object.values(CATEGORY_CONFIG).map(def => ({
+    id: def.id,
+    name: def.name,
+    icon: def.emoji,
+    description: def.description,
+  }));
+};
+
+// Derived exports for backward compatibility
+export const CATEGORIES: string[] = Object.keys(CATEGORY_CONFIG);
+
+export const CATEGORY_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_CONFIG).map(([key, def]) => [key, def.color])
+);
+
+// Icon mappings automatically generated from CATEGORY_CONFIG
 export const CATEGORY_ICONS = {
-  emoji: {
-    sports: require('@/assets/emojis/sports.png'),
-    coffee: require('@/assets/emojis/coffee.png'),
-    music: require('@/assets/emojis/music.png'),
-    dinner: require('@/assets/emojis/food.png'),
-    work: require('@/assets/emojis/work.png'),
-    culture: require('@/assets/emojis/art.png'),
-    nature: require('@/assets/emojis/nature.png'),
-    drinks: require('@/assets/emojis/drinks.png'),
-    party: require('@/assets/emojis/celebration.png'),
-    wellness: require('@/assets/emojis/wellness.png'),
-    chill: require('@/assets/emojis/home.png'),
-    morning: require('@/assets/emojis/beach.png'), // temporary until sun icon is added
-  } as Record<string, any>,
-  map: {
-    sports: require('@/assets/emojis/sports.png'),
-    coffee: require('@/assets/emojis/coffee.png'),
-    music: require('@/assets/emojis/music.png'),
-    dinner: require('@/assets/emojis/food.png'),
-    work: require('@/assets/emojis/work.png'),
-    culture: require('@/assets/emojis/art.png'),
-    nature: require('@/assets/emojis/nature.png'),
-    drinks: require('@/assets/emojis/drinks.png'),
-    party: require('@/assets/emojis/celebration.png'),
-    wellness: require('@/assets/emojis/wellness.png'),
-    chill: require('@/assets/emojis/home.png'),
-    morning: require('@/assets/emojis/beach.png'),
-  } as Record<string, any>,
+  emoji: Object.fromEntries(
+    Object.entries(CATEGORY_CONFIG).map(([key, def]) => [
+      key,
+      getIconAsset(def.iconAsset),
+    ])
+  ) as Record<string, any>,
+  map: Object.fromEntries(
+    Object.entries(CATEGORY_CONFIG).map(([key, def]) => [
+      key,
+      getIconAsset(def.iconAsset),
+    ])
+  ) as Record<string, any>,
 };
 
-// Web-friendly icon URLs (served from /assets in Expo Web)
-export const CATEGORY_ICON_WEB: Record<string, string> = {
-  sports: '/assets/emojis/sports.png',
-  coffee: '/assets/emojis/coffee.png',
-  music: '/assets/emojis/music.png',
-  dinner: '/assets/emojis/food.png',
-  work: '/assets/emojis/work.png',
-  culture: '/assets/emojis/art.png',
-  nature: '/assets/emojis/nature.png',
-  drinks: '/assets/emojis/drinks.png',
-  party: '/assets/emojis/celebration.png',
-  wellness: '/assets/emojis/wellness.png',
-  chill: '/assets/emojis/home.png',
-  morning: '/assets/emojis/beach.png',
-};
+export const CATEGORY_ICON_WEB: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_CONFIG).map(([key, def]) => [key, def.iconWeb])
+);
 
 // Default icon for categories without specific icons
 export const DEFAULT_CATEGORY_ICON = require('@/assets/emojis/work.png');
-
-

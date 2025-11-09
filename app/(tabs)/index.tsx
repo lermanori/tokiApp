@@ -8,6 +8,7 @@ import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
 import { useApp } from '@/contexts/AppContext';
+import { CATEGORIES, getCategoryColor } from '@/utils/categories';
 
 const { width } = Dimensions.get('window');
 
@@ -31,7 +32,7 @@ export default function ExploreScreen() {
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const categories = ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
+  const categories = ['all', ...CATEGORIES];
 
   // Load user connections to check if hosts are connections
   useEffect(() => {
@@ -326,26 +327,6 @@ export default function ExploreScreen() {
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'sports': return '#4DC4AA';
-      case 'beach': return '#F9E79B';
-      case 'sunset': return '#B49AFF';
-      case 'coffee': return '#EC4899';
-      case 'work': return '#A7F3D0';
-      case 'music': return '#F3E7FF';
-      case 'jazz': return '#4DC4AA';
-      case 'drinks': return '#F9E79B';
-      case 'networking': return '#B49AFF';
-      case 'wellness': return '#EC4899';
-      case 'yoga': return '#4DC4AA';
-      case 'morning': return '#F3E7FF';
-      case 'art': return '#EC4899';
-      case 'walking': return '#4DC4AA';
-      case 'culture': return '#B49AFF';
-      default: return '#666666';
-    }
-  };
 
 
   return (

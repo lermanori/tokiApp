@@ -11,6 +11,7 @@ import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { geocodingService } from '@/services/geocoding';
 import DiscoverMap from '@/components/DiscoverMap';
+import { CATEGORIES, getCategoryColor } from '@/utils/categories';
 
 // Platform-specific map imports
 const isWeb = Platform.OS === 'web';
@@ -92,7 +93,7 @@ const formatAttendees = (attendees: number, maxAttendees: number) => {
 //   };
 // };
 
-const categories = ['all', 'sports', 'beach', 'sunset', 'coffee', 'work', 'music', 'jazz', 'drinks', 'networking', 'wellness', 'yoga', 'morning', 'art', 'walking', 'culture'];
+const categories = ['all', ...CATEGORIES];
 
 export default function DiscoverScreen() {
   const { state, actions } = useApp();
@@ -478,27 +479,7 @@ export default function DiscoverScreen() {
   };
 
   // Helper function to get category color for map markers
-  const getCategoryColorForMap = (category: string) => {
-    switch (category) {
-      case 'sports': return '#4DC4AA';
-      case 'beach': return '#F9E79B';
-      case 'sunset': return '#B49AFF';
-      case 'coffee': return '#EC4899';
-      case 'work': return '#A7F3D0';
-      case 'music': return '#F3E7FF';
-      case 'jazz': return '#4DC4AA';
-      case 'drinks': return '#F9E79B';
-      case 'networking': return '#B49AFF';
-      case 'wellness': return '#EC4899';
-      case 'yoga': return '#4DC4AA';
-      case 'morning': return '#F3E7FF';
-      case 'art': return '#EC4899';
-      case 'walking': return '#4DC4AA';
-      case 'culture': return '#B49AFF';
-      case 'social': return '#6B7280';
-      default: return '#666666';
-    }
-  };
+  const getCategoryColorForMap = getCategoryColor;
 
   const renderInteractiveMap = () => (
     <View style={styles.mapContainer}>

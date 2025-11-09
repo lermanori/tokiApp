@@ -6,6 +6,7 @@ import TokiIcon from './TokiIcon';
 import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { formatDistanceDisplay } from '@/utils/distance';
+import { getCategoryColor, getCategoryEmoji, getCategoryLabel } from '@/utils/categories';
 
 export interface TokiCardProps {
     toki: {
@@ -38,28 +39,9 @@ export interface TokiCardProps {
     onHostPress?: () => void;
 }
 
-// Helper function to get category color
-const getCategoryColor = (category: string) => {
-    switch (category) {
-        case 'sports': return '#4DC4AA';
-        case 'beach': return '#F9E79B';
-        case 'sunset': return '#B49AFF';
-        case 'coffee': return '#EC4899';
-        case 'work': return '#A7F3D0';
-        case 'music': return '#F3E7FF';
-        case 'jazz': return '#4DC4AA';
-        case 'drinks': return '#F9E79B';
-        case 'networking': return '#B49AFF';
-        case 'wellness': return '#EC4899';
-        case 'yoga': return '#4DC4AA';
-        case 'morning': return '#F3E7FF';
-        case 'art': return '#EC4899';
-        case 'walking': return '#4DC4AA';
-        case 'culture': return '#B49AFF';
-        case 'social': return '#6B7280'; // Darker gray for better contrast
-        default: return '#666666';
-    }
-};
+// Helper functions now imported from centralized categories
+const getActivityEmoji = getCategoryEmoji;
+const getActivityLabel = getCategoryLabel;
 
 // Helper function to determine text color based on background brightness
 const getTextColorForBackground = (backgroundColor: string) => {
@@ -110,57 +92,6 @@ const getInitials = (name: string): string => {
     return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
 };
 
-// Helper function to get activity emoji
-const getActivityEmoji = (category: string): string => {
-    switch (category) {
-        case 'sports': return '⚽';
-        case 'coffee': return '☕';
-        case 'music': return '🎵';
-        case 'dinner': return '🍕';
-        case 'work': return '💼';
-        case 'culture': return '🎨';
-        case 'nature': return '🌿';
-        case 'drinks': return '🍹';
-        case 'beach': return '🏖️';
-        case 'sunset': return '🌅';
-        case 'jazz': return '🎷';
-        case 'networking': return '🤝';
-        case 'wellness': return '🧘';
-        case 'yoga': return '🧘‍♀️';
-        case 'morning': return '🌅';
-        case 'walking': return '🚶';
-        case 'culture': return '🏛️';
-        case 'party': return '🎉';
-        case 'chill': return '🏠';
-        default: return '🎉';
-    }
-};
-
-// Helper function to get activity label
-const getActivityLabel = (category: string): string => {
-    switch (category) {
-        case 'sports': return 'Sports';
-        case 'coffee': return 'Coffee';
-        case 'music': return 'Music';
-        case 'dinner': return 'Dinner';
-        case 'work': return 'Work';
-        case 'culture': return 'Culture';
-        case 'nature': return 'Nature';
-        case 'drinks': return 'Drinks';
-        case 'beach': return 'Beach';
-        case 'sunset': return 'Sunset';
-        case 'jazz': return 'Jazz';
-        case 'networking': return 'Networking';
-        case 'wellness': return 'Wellness';
-        case 'yoga': return 'Yoga';
-        case 'morning': return 'Morning';
-        case 'walking': return 'Walking';
-        case 'culture': return 'Culture';
-        case 'party': return 'Party';
-        case 'chill': return 'Chill';
-        default: return 'Activity';
-    }
-};
 
 // Helper function to format attendees display
 const formatAttendees = (attendees: number, maxAttendees: number) => {

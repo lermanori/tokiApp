@@ -13,6 +13,7 @@ import {
   isUserParticipant, 
   addUserToToki 
 } from '../utils/inviteLinkUtils';
+import { getCategoriesForAPI } from '../config/categories';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -261,20 +262,7 @@ router.delete('/:id/hide/:userId', authenticateToken, async (req: Request, res: 
 // Get all available categories
 router.get('/categories', async (req: Request, res: Response) => {
   try {
-    const categories = [
-      { id: 'sports', name: 'Sports', icon: '🏃‍♂️', description: 'Physical activities and sports' },
-      { id: 'coffee', name: 'Coffee', icon: '☕', description: 'Coffee meetups and cafes' },
-      { id: 'music', name: 'Music', icon: '🎵', description: 'Music events and jam sessions' },
-      { id: 'dinner', name: 'Dinner', icon: '🍝', description: 'Food and dining experiences' },
-      { id: 'work', name: 'Work', icon: '💼', description: 'Work-related activities and networking' },
-      { id: 'culture', name: 'Culture', icon: '🎨', description: 'Art and creative activities' },
-      { id: 'nature', name: 'Nature', icon: '🌳', description: 'Outdoor and nature activities' },
-      { id: 'drinks', name: 'Drinks', icon: '🍸', description: 'Social drinking and nightlife' },
-      { id: 'party', name: 'Party', icon: '🎉', description: 'Social gatherings and hangouts' },
-      { id: 'wellness', name: 'Wellness', icon: '🧘', description: 'Wellness, meditation, and health' },
-      { id: 'chill', name: 'Chill', icon: '🏠', description: 'Relaxed, casual activities' },
-      { id: 'morning', name: 'Morning', icon: '☀️', description: 'Morning-oriented activities' }
-    ];
+    const categories = getCategoriesForAPI();
 
     return res.status(200).json({
       success: true,

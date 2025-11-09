@@ -38,6 +38,7 @@ if (Platform.OS === 'web') {
 }
 import dayjs from 'dayjs';
 import { CATEGORIES, CATEGORY_ICONS } from '@/utils/categories';
+import { getActivityEmoji, getActivityLabel } from '@/utils/tokiUtils';
 // import { Image } from 'react-native';
 
 interface TokiFormProps {
@@ -127,57 +128,6 @@ export default function TokiForm({
     '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'
   ];
 
-  // Helper function to get activity emoji
-  const getActivityEmoji = (category: string): string => {
-    switch (category) {
-      case 'sports': return '⚽';
-      case 'coffee': return '☕';
-      case 'music': return '🎵';
-      case 'dinner': return '🍕';
-      case 'work': return '💼';
-      case 'culture': return '🎨';
-      case 'nature': return '🌿';
-      case 'drinks': return '🍹';
-      case 'beach': return '🏖️';
-      case 'sunset': return '🌅';
-      case 'jazz': return '🎷';
-      case 'networking': return '🤝';
-      case 'wellness': return '🧘';
-      case 'yoga': return '🧘‍♀️';
-      case 'morning': return '🌅';
-      case 'walking': return '🚶';
-      case 'culture': return '🏛️';
-      case 'party': return '🎉';
-      case 'chill': return '🏠';
-      default: return '🎉';
-    }
-  };
-
-  // Helper function to get activity label
-  const getActivityLabel = (category: string): string => {
-    switch (category) {
-      case 'sports': return 'Sports';
-      case 'coffee': return 'Coffee';
-      case 'music': return 'Music';
-      case 'dinner': return 'Dinner';
-      case 'work': return 'Work';
-      case 'culture': return 'Culture';
-      case 'nature': return 'Nature';
-      case 'drinks': return 'Drinks';
-      case 'beach': return 'Beach';
-      case 'sunset': return 'Sunset';
-      case 'jazz': return 'Jazz';
-      case 'networking': return 'Networking';
-      case 'wellness': return 'Wellness';
-      case 'yoga': return 'Yoga';
-      case 'morning': return 'Morning';
-      case 'walking': return 'Walking';
-      case 'culture': return 'Culture';
-      case 'party': return 'Party';
-      case 'chill': return 'Chill';
-      default: return 'Activity';
-    }
-  };
 
   // Cleanup function to cancel any pending geocoding requests (legacy fallback)
   useEffect(() => {

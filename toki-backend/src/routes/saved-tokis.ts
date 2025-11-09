@@ -88,7 +88,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         currentAttendees: row.current_attendees,
         category: row.category,
         visibility: row.visibility,
-        imageUrl: row.image_url,
+        imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
         status: row.status,
         createdAt: row.created_at,
         updatedAt: row.updated_at,

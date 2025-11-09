@@ -3,6 +3,8 @@
  * These are pure functions with no external dependencies
  */
 
+import { getCategoryEmoji, getCategoryLabel } from '@/utils/categories';
+
 /**
  * Get user initials from name
  */
@@ -15,65 +17,9 @@ export const getInitials = (name: string): string => {
 
 /**
  * Get activity emoji based on category
+ * Now uses centralized category configuration
  */
-export const getActivityEmoji = (category: string): string => {
-  switch (category) {
-    case 'sports': return '⚽';
-    case 'coffee': return '☕';
-    case 'music': return '🎵';
-    case 'dinner': return '🍕';
-    case 'work': return '💼';
-    case 'culture': return '🎨';
-    case 'nature': return '🌿';
-    case 'drinks': return '🍹';
-    case 'beach': return '🏖️';
-    case 'sunset': return '🌅';
-    case 'jazz': return '🎷';
-    case 'networking': return '🤝';
-    case 'wellness': return '🧘';
-    case 'yoga': return '🧘‍♀️';
-    case 'morning': return '🌅';
-    case 'walking': return '🚶';
-    case 'culture': return '🏛️';
-    case 'party': return '🎉';
-    case 'chill': return '🏠';
-    case 'volleyball': return '🏐';
-    case 'mindfulness': return '🧘‍♂️';
-    case 'coworking': return '💻';
-    default: return '🎉';
-  }
-};
-
-/**
- * Get activity label based on category
- */
-export const getActivityLabel = (category: string): string => {
-  switch (category) {
-    case 'sports': return 'Sports';
-    case 'coffee': return 'Coffee';
-    case 'music': return 'Music';
-    case 'dinner': return 'Dinner';
-    case 'work': return 'Work';
-    case 'culture': return 'Culture';
-    case 'nature': return 'Nature';
-    case 'drinks': return 'Drinks';
-    case 'beach': return 'Beach';
-    case 'sunset': return 'Sunset';
-    case 'jazz': return 'Jazz';
-    case 'networking': return 'Networking';
-    case 'wellness': return 'Wellness';
-    case 'yoga': return 'Yoga';
-    case 'morning': return 'Morning';
-    case 'walking': return 'Walking';
-    case 'culture': return 'Culture';
-    case 'party': return 'Party';
-    case 'chill': return 'Chill';
-    case 'volleyball': return 'Volleyball';
-    case 'mindfulness': return 'Mindfulness';
-    case 'coworking': return 'Coworking';
-    default: return 'Activity';
-  }
-};
+export { getCategoryEmoji as getActivityEmoji, getCategoryLabel as getActivityLabel };
 
 /**
  * Format location for compact display
