@@ -10,6 +10,8 @@ This file contains the global app context and state management. Added support fo
 - solution: Removed all debug console.log statements and debug UI elements from loadNearbyTokis function and reducer.
 - problem: On app initialization, `loadTokis()` was being called which made a request to `/tokis` API instead of `/tokis/nearby`, causing unnecessary API calls on the Explore page.
 - solution: Removed `loadTokis()` call from `loadInitialData` function. Individual screens (Explore/Discover) now load nearby tokis when they mount using `loadNearbyTokis()`.
+- problem: Map was only showing 20 tokis, limiting visibility of nearby events.
+- solution: Increased the limit parameter in `loadNearbyTokis` from 20 to 50 to show more tokis on the map.
 
 ### How Fixes Were Implemented
 - Added `totalNearbyCount: number` to AppState interface and initialState

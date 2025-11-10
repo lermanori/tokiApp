@@ -1097,7 +1097,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: params.latitude,
         longitude: params.longitude,
         radius: params.radius || 10,
-        limit: 20,
+        limit: 50,
         page: params.page || 1,
         category: params.category,
         timeSlot: params.timeSlot
