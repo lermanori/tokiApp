@@ -94,6 +94,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 6: Add external_link column to tokis table
+    try {
+      console.log('📝 Migration 6: Adding external_link column to tokis table...');
+      const externalLinkSql = readFileSync(
+        join(sqlDir, 'add-external-link-column.sql'),
+        'utf-8'
+      );
+      await pool.query(externalLinkSql);
+      console.log('✅ External link column migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  External link column already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

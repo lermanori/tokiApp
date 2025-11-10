@@ -34,6 +34,7 @@ export interface Toki {
     miles: number;
   };
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined';
+  externalLink?: string;
 }
 
 export interface User {
@@ -510,6 +511,7 @@ class ApiService {
     maxAttendees: number;
     visibility: string;
     tags: string[];
+    externalLink?: string | null;
   }): Promise<Toki> {
     const response = await this.makeRequest<{ success: boolean; data: Toki }>('/tokis', {
       method: 'POST',

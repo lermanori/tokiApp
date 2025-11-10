@@ -207,3 +207,4 @@ export const getIconAsset = (iconAssetName: string): any => {
   return iconAssetRegistry[iconAssetName] || iconAssetRegistry.work;
 };
 
+

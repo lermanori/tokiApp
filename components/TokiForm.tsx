@@ -11,7 +11,7 @@ import {
   Image,
   Modal,
 } from 'react-native';
-import { MapPin, Clock, Users, Tag, Camera, X, Navigation, Calendar, Lock } from 'lucide-react-native';
+import { MapPin, Clock, Users, Tag, Camera, X, Navigation, Calendar, Lock, Link } from 'lucide-react-native';
 import { useApp } from '@/contexts/AppContext';
 import { GeocodingResult, geocodingService } from '@/services/geocoding';
 import TokiImageUpload from './TokiImageUpload';
@@ -58,6 +58,7 @@ interface TokiFormProps {
     customDateTime?: string; // Added missing field
     images?: Array<{ url: string; publicId: string }>; // Add images to initial data
     visibility?: 'public' | 'private' | 'connections' | 'friends';
+    externalLink?: string;
   };
   onSubmit: (data: any) => Promise<string | boolean | null>;
   onCancel: () => void;
@@ -102,6 +103,7 @@ export default function TokiForm({
   const [isTimePickerVisible, setIsTimePickerVisible] = useState(false);
   const [webTimeTemp, setWebTimeTemp] = useState<string>('');
   const [isPrivate, setIsPrivate] = useState(!!initialData && initialData.visibility === 'private');
+  const [externalLink, setExternalLink] = useState(initialData.externalLink || '');
 
   // Keep privacy toggle in sync when editing existing Toki
   useEffect(() => {
@@ -178,6 +180,7 @@ export default function TokiForm({
       if (initialData.maxAttendees) setMaxAttendees(initialData.maxAttendees.toString());
       if (initialData.tags) setCustomTags(initialData.tags);
       if (initialData.customDateTime) setCustomDateTime(initialData.customDateTime);
+      if (initialData.externalLink) setExternalLink(initialData.externalLink);
 
       // If we have a custom date/time, mark the time as custom
       if (initialData.customDateTime && initialData.time) {
@@ -490,6 +493,20 @@ export default function TokiForm({
       return;
     }
 
+    // Validate URL if external link is provided
+    if (externalLink && externalLink.trim()) {
+      try {
+        new URL(externalLink.trim());
+      } catch {
+        if (onValidationError) {
+          onValidationError(['Invalid URL. Please enter a valid URL starting with http:// or https://']);
+        } else {
+          Alert.alert('Invalid URL', 'Please enter a valid URL starting with http:// or https://');
+        }
+        return;
+      }
+    }
+
     // Check if there are temporary images that need to be uploaded
     const tempImages = tokiImages.filter(img => img.publicId.startsWith('temp_'));
     const hasTempImages = tempImages.length > 0;
@@ -514,6 +531,7 @@ export default function TokiForm({
         category: selectedActivities[0], // Primary category
         visibility: isPrivate ? 'private' : 'public',
         images: [], // No images initially
+        externalLink: externalLink.trim() || null,
       };
 
       try {
@@ -558,6 +576,7 @@ export default function TokiForm({
         category: selectedActivities[0], // Primary category
         visibility: isPrivate ? 'private' : 'public',
         images: [], // No images
+        externalLink: externalLink.trim() || null,
       };
 
       try {
@@ -956,6 +975,20 @@ export default function TokiForm({
               value={maxAttendees}
               onChangeText={setMaxAttendees}
               keyboardType="numeric"
+              placeholderTextColor="#999999"
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>External Link (Optional)</Text>
+          <View style={styles.locationInputContainer}>
+            <Link size={20} color="#B49AFF" style={styles.locationIcon} />
+            <TextInput
+              style={{ outline: 'none', ...styles.locationInput }}
+              placeholder="https://..."
+              value={externalLink}
+              onChangeText={setExternalLink}
               placeholderTextColor="#999999"
             />
           </View>

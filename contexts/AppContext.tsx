@@ -1228,6 +1228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         maxAttendees: tokiData.maxAttendees || 10,
         visibility: tokiData.visibility || 'public',
         tags: tokiData.tags || [],
+        externalLink: tokiData.externalLink || null,
       };
 
       const apiToki = await apiService.createToki(apiTokiData);

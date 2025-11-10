@@ -13,7 +13,7 @@ import {
   isUserParticipant, 
   addUserToToki 
 } from '../utils/inviteLinkUtils';
-import { getCategoriesForAPI } from '../config/categories';
+import { getCategoriesForAPI, CATEGORY_CONFIG } from '../config/categories';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -33,7 +33,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       category,
       visibility,
       tags,
-      images
+      images,
+      externalLink
     } = req.body;
 
     // Validate required fields
@@ -45,8 +46,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate category (canonical 12)
-    const validCategories = ['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning'];
+    // Validate category - use centralized config
+    const validCategories = Object.keys(CATEGORY_CONFIG);
     if (!validCategories.includes(category)) {
       return res.status(400).json({
         success: false,
@@ -84,8 +85,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       const tokiResult = await client.query(
         `INSERT INTO tokis (
           host_id, title, description, location, latitude, longitude,
-          time_slot, scheduled_time, max_attendees, category, visibility
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          time_slot, scheduled_time, max_attendees, category, visibility, external_link
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *`,
         [
           req.user!.id,
@@ -98,7 +99,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
           scheduledTime || null,
           maxAttendees || 10,
           category,
-          visibility || 'public'
+          visibility || 'public',
+          externalLink || null
         ]
       );
 
@@ -1054,6 +1056,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       createdAt: toki.created_at,
       updatedAt: toki.updated_at,
       distance: distance,
+      externalLink: toki.external_link || null,
       host: {
         id: toki.host_id,
         name: toki.host_name,
@@ -1102,7 +1105,8 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       maxAttendees,
       category,
       visibility,
-      tags
+      tags,
+      externalLink
     } = req.body;
 
     // Check if Toki exists and user is the host
@@ -1127,9 +1131,9 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate category if provided (canonical 12)
+    // Validate category if provided - use centralized config
     if (category) {
-      const validCategories = ['sports', 'coffee', 'music', 'dinner', 'work', 'culture', 'nature', 'drinks', 'party', 'wellness', 'chill', 'morning'];
+      const validCategories = Object.keys(CATEGORY_CONFIG);
       if (!validCategories.includes(category)) {
         return res.status(400).json({
           success: false,
@@ -1229,6 +1233,12 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
         paramCount++;
         updateFields.push(`visibility = $${paramCount}`);
         updateValues.push(visibility);
+      }
+
+      if (externalLink !== undefined) {
+        paramCount++;
+        updateFields.push(`external_link = $${paramCount}`);
+        updateValues.push(externalLink || null);
       }
 
       // Always update the updated_at timestamp

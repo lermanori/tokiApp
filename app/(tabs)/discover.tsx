@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Dimensions, Platform, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -99,7 +99,8 @@ export default function DiscoverScreen() {
   const { state, actions } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [events, setEvents] = useState<TokiEvent[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<TokiEvent | null>(null);
+  const selectedEventRef = useRef<TokiEvent | null>(null);
+  const renderCountRef = useRef(0);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState({
@@ -131,6 +132,9 @@ export default function DiscoverScreen() {
   const hasInitiallyLoadedRef = useRef(false);
   const mapRegionInitializedRef = useRef(false);
   const previousEventIdsRef = useRef<string>('');
+  const prevStateRef = useRef<any>({});
+  const calloutOpeningRef = useRef(false);
+  const calloutOpeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load Tokis from backend and transform them to events
   useEffect(() => {
@@ -499,11 +503,11 @@ export default function DiscoverScreen() {
     });
   };
 
-  const toggleMapView = () => {
-    setShowMap(!showMap);
-  };
+  // toggleMapView is now memoized as toggleMapViewMemo above
 
-  const filteredEvents = events.filter(event => {
+  // Memoize filteredEvents to prevent recalculation on every render
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
     const matchesSearch = searchQuery === '' ||
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -578,6 +582,62 @@ export default function DiscoverScreen() {
     })();
 
     return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime;
+    });
+  }, [events, searchQuery, selectedCategory, selectedFilters, userConnections]);
+  
+  // Track re-renders in parent (after filteredEvents is defined)
+  useEffect(() => {
+    renderCountRef.current += 1;
+    
+    // Track what changed
+    const currentState = {
+      selectedEvent: selectedEventRef.current?.id || null,
+      eventsCount: events?.length || 0,
+      filteredEventsCount: filteredEvents?.length || 0,
+      mapRegion: JSON.stringify(mapRegion),
+      showMap,
+      selectedCategory,
+      searchQuery,
+      selectedFilters: JSON.stringify(selectedFilters),
+    };
+    
+    const changes: string[] = [];
+    if (prevStateRef.current.selectedEvent !== currentState.selectedEvent) {
+      changes.push(`selectedEvent: ${prevStateRef.current.selectedEvent} → ${currentState.selectedEvent}`);
+    }
+    if (prevStateRef.current.eventsCount !== currentState.eventsCount) {
+      changes.push(`eventsCount: ${prevStateRef.current.eventsCount} → ${currentState.eventsCount}`);
+    }
+    if (prevStateRef.current.filteredEventsCount !== currentState.filteredEventsCount) {
+      changes.push(`filteredEventsCount: ${prevStateRef.current.filteredEventsCount} → ${currentState.filteredEventsCount}`);
+    }
+    if (prevStateRef.current.mapRegion !== currentState.mapRegion) {
+      changes.push(`mapRegion changed`);
+    }
+    if (prevStateRef.current.showMap !== currentState.showMap) {
+      changes.push(`showMap: ${prevStateRef.current.showMap} → ${currentState.showMap}`);
+    }
+    if (prevStateRef.current.selectedCategory !== currentState.selectedCategory) {
+      changes.push(`selectedCategory: ${prevStateRef.current.selectedCategory} → ${currentState.selectedCategory}`);
+    }
+    if (prevStateRef.current.searchQuery !== currentState.searchQuery) {
+      changes.push(`searchQuery changed`);
+    }
+    if (prevStateRef.current.selectedFilters !== currentState.selectedFilters) {
+      changes.push(`selectedFilters changed`);
+    }
+    
+    console.log(`🔄 [PARENT] DiscoverScreen re-rendered (render #${renderCountRef.current})`, {
+      timestamp: Date.now(),
+      changes: changes.length > 0 ? changes : ['NO CHANGES DETECTED (React.memo or other)'],
+      currentState: {
+        selectedEventId: currentState.selectedEvent,
+        eventsCount: currentState.eventsCount,
+        filteredEventsCount: currentState.filteredEventsCount,
+      }
+    });
+    
+    prevStateRef.current = currentState;
   });
 
   const getJoinStatusText = (event: TokiEvent) => {
@@ -607,25 +667,12 @@ export default function DiscoverScreen() {
   // Helper function to get category color for map markers
   const getCategoryColorForMap = getCategoryColor;
 
-  const renderInteractiveMap = () => (
-    <View style={styles.mapContainer}>
-      <DiscoverMap
-        region={mapRegion}
-        onRegionChange={(r: any) => {
-          setMapRegion(r);
-          // Mark map region as user-initialized (user has interacted with map)
-          mapRegionInitializedRef.current = true;
-        }}
-        events={filteredEvents as any}
-        onEventPress={handleEventPress}
-        onMarkerPress={handleMapMarkerPress}
-        onToggleList={toggleMapView}
-      />
-    </View>
-  );
-
-
-  const handleEventPress = (event: TokiEvent) => {
+  // Memoize event press handler
+  const handleEventPress = useCallback((event: TokiEvent) => {
+    console.log('🧭 [PARENT] onEventPress → navigate to details', {
+      eventId: event?.id,
+      title: event?.title,
+    });
     router.push({
       pathname: '/toki-details',
       params: {
@@ -633,11 +680,92 @@ export default function DiscoverScreen() {
         tokiData: JSON.stringify(event)
       }
     });
-  };
+  }, [router]);
 
-  const handleMapMarkerPress = (event: TokiEvent) => {
-    setSelectedEvent(event);
-  };
+  // Memoize map marker press handler
+  const handleMapMarkerPress = useCallback((event: TokiEvent) => {
+    const pressTime = Date.now();
+    // Clear any pending unlock
+    if (calloutOpeningTimeoutRef.current) {
+      clearTimeout(calloutOpeningTimeoutRef.current);
+    }
+    // Lock mapRegion updates while callout opens
+    calloutOpeningRef.current = true;
+    console.log('🧭 [PARENT] onMarkerPress → setSelectedEvent (deferred)', {
+      eventId: event?.id,
+      title: event?.title,
+      timestamp: pressTime
+    });
+    // Defer ref update to track timing; ref update does not cause re-render
+    requestAnimationFrame(() => {
+      const executeTime = Date.now();
+      console.log('⏰ [PARENT] setSelectedEvent EXECUTING (after requestAnimationFrame)', {
+        eventId: event?.id,
+        title: event?.title,
+        timestamp: executeTime,
+        delayFromPress: executeTime - pressTime
+      });
+      selectedEventRef.current = event;
+      console.log('✅ [PARENT] selectedEventRef UPDATED - no re-render expected', {
+        timestamp: Date.now()
+      });
+    });
+    // Unlock region updates after a short window to allow the callout to fully open
+    calloutOpeningTimeoutRef.current = setTimeout(() => {
+      calloutOpeningRef.current = false;
+      console.log('✅ [PARENT] Callout opening window ended → region changes allowed', {
+        timestamp: Date.now()
+      });
+    }, 500);
+  }, []);
+
+  // Memoize toggle map view handler
+  const toggleMapViewMemo = useCallback(() => {
+    setShowMap(prev => !prev);
+  }, []);
+
+  // Memoize region change handler with epsilon check to prevent tiny movements from triggering re-renders
+  const handleRegionChange = useCallback((r: any) => {
+    // Ignore map-driven region changes during callout opening to avoid interrupting animation
+    if (calloutOpeningRef.current) {
+      console.log('🗺️ [PARENT] handleRegionChange ignored (callout opening)', {
+        timestamp: Date.now(),
+        region: {
+          lat: r.latitude,
+          lng: r.longitude,
+          latDelta: r.latitudeDelta,
+          lngDelta: r.longitudeDelta
+        }
+      });
+      return;
+    }
+    // Epsilon guard to prevent tiny movements from triggering full re-renders
+    const eps = 0.00005;
+    const same =
+      Math.abs(r.latitude - mapRegion.latitude) < eps &&
+      Math.abs(r.longitude - mapRegion.longitude) < eps &&
+      Math.abs(r.latitudeDelta - mapRegion.latitudeDelta) < eps &&
+      Math.abs(r.longitudeDelta - mapRegion.longitudeDelta) < eps;
+    if (same) return;
+
+    setMapRegion(r);
+    // Mark map region as user-initialized (user has interacted with map)
+    mapRegionInitializedRef.current = true;
+  }, [mapRegion]);
+
+  // Memoize renderInteractiveMap to prevent unnecessary re-renders
+  const renderInteractiveMap = useCallback(() => (
+    <View style={styles.mapContainer}>
+      <DiscoverMap
+        region={mapRegion}
+        onRegionChange={handleRegionChange}
+        events={filteredEvents as any}
+        onEventPress={handleEventPress}
+        onMarkerPress={handleMapMarkerPress}
+        onToggleList={toggleMapViewMemo}
+      />
+    </View>
+  ), [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapViewMemo]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -655,7 +783,7 @@ export default function DiscoverScreen() {
             >
               <RefreshCw size={20} color={state.loading ? "#CCCCCC" : "#666666"} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} onPress={toggleMapView}>
+            <TouchableOpacity style={styles.headerButton} onPress={toggleMapViewMemo}>
               {showMap ? <MapPin size={20} color="#666666" /> : <View style={styles.listIcon} />}
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerButton} onPress={() => setShowFilterModal(true)}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X } from 'lucide-react-native';
@@ -51,6 +51,7 @@ interface TokiDetails {
   visibility?: 'public' | 'private' | 'connections' | 'friends';
   isHostedByUser?: boolean;
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined' | 'completed';
+  link?: string;
   participants?: Array<{
     id: string;
     name: string;
@@ -338,6 +339,7 @@ export default function TokiDetailsScreen() {
           visibility: tokiData.visibility,
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
+          link: tokiData.externalLink || undefined,
           participants: (tokiData.participants || []).map((p: any) => ({
             id: p?.user?.id || p?.id || '',
             name: p?.user?.name || p?.name || 'Unknown',
@@ -1355,6 +1357,23 @@ export default function TokiDetailsScreen() {
                 {toki.attendees}/{toki.maxAttendees} people
               </Text>
             </View>
+            {toki.link && (
+              <View style={styles.eventInfoItem}>
+                <Link size={18} color="#B49AFF" />
+                <TouchableOpacity 
+                  onPress={() => Linking.openURL(toki.link!)}
+                  style={styles.linkContainer}
+                >
+                  <Text 
+                    style={[styles.eventInfoText, styles.linkText]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {toki.link}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Participants Section */}
@@ -2322,6 +2341,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     fontFamily: 'Inter-Medium',
+  },
+  linkText: {
+    color: '#8B5CF6',
+    textDecorationLine: 'underline',
+    flex: 1,
+  },
+  linkContainer: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 16,
   },
   participantsList: {
     flexDirection: 'row',

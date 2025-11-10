@@ -1,7 +1,7 @@
-import React, { useMemo, useRef, useCallback } from 'react';
+import React, { useMemo, useRef, memo, useEffect } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Platform } from 'react-native';
-import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE,PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/utils/categories';
 
 type EventItem = {
@@ -31,13 +31,20 @@ const formatAttendees = (attendees?: number, maxAttendees?: number) => {
   return `${a}/${m} people`;
 };
 
-export default function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList }: Props) {
+function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList }: Props) {
   const pendingSelectionRef = useRef<EventItem | null>(null);
+  // Freeze the initial region so re-renders don't push new initialRegion into MapView
+  const initialRegionRef = useRef(region);
+  const renderCountRef = useRef(0);
   
-  // Debug: Log available categories and icons
-  console.log('🗺️ [NATIVE MAP] Available categories:', Object.keys(CATEGORY_ICONS.map));
-  console.log('🗺️ [NATIVE MAP] Events received:', events?.length || 0);
-  console.log('🗺️ [NATIVE MAP] Event categories:', events?.map(e => e.category) || []);
+  // Track re-renders
+  useEffect(() => {
+    renderCountRef.current += 1;
+    console.log(`🔄 [MAP] Component re-rendered (render #${renderCountRef.current})`, {
+      eventsCount: events?.length || 0,
+      timestamp: Date.now()
+    });
+  });
   
   // Proximity clustering (~50m)
   const clustered = useMemo(() => {
@@ -65,8 +72,7 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
       <MapView
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         style={styles.map}
-        initialRegion={region}
-        region={region}
+        initialRegion={initialRegionRef.current}
         onRegionChangeComplete={onRegionChange}
         toolbarEnabled={false}
         pitchEnabled={false}
@@ -81,7 +87,27 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
               key={group.key}
               coordinate={{ latitude: group.lat, longitude: group.lng }}
               pinColor={'#FFFFFF'}
-              onPress={() => onMarkerPress(group.items[0])}
+              onPress={() => {
+                const selected = group.items[0];
+                const pressTime = Date.now();
+                console.log('🧭 [MAP] Marker pressed → onMarkerPress()', {
+                  eventId: selected?.id,
+                  title: selected?.title,
+                  coordinate: selected?.coordinate,
+                  clusterSize: group.items.length,
+                  timestamp: pressTime
+                });
+                // Track when callout should be visible (after marker press, callout typically shows immediately)
+                setTimeout(() => {
+                  console.log('📌 [MAP] Callout should be VISIBLE now (estimated)', {
+                    eventId: selected?.id,
+                    title: selected?.title,
+                    timestamp: Date.now(),
+                    delay: Date.now() - pressTime
+                  });
+                }, 50); // Small delay to allow callout to render
+                onMarkerPress(selected);
+              }}
             >
               {/* Custom icon inside a small circular container */}
               <View style={{ backgroundColor: '#FFFFFF', width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: getCategoryColorForMap(group.items[0].category), justifyContent: 'center', alignItems: 'center' }}>
@@ -89,13 +115,9 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
                   const category = group.items[0].category;
                   const iconSource = CATEGORY_ICONS.map[category];
                   
-                  console.log(`🗺️ [NATIVE MAP] Rendering marker for category: ${category}`);
-                  console.log(`🗺️ [NATIVE MAP] Icon source:`, iconSource);
-                  
                   if (iconSource) {
                     return <Image source={iconSource} style={{ width: 22, height: 22 }} />;
                   } else {
-                    console.log(`🗺️ [NATIVE MAP] No icon found for ${category}, using default`);
                     return <Image source={DEFAULT_CATEGORY_ICON} style={{ width: 22, height: 22 }} />;
                   }
                 })()}
@@ -105,7 +127,15 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
                   </View>
                 )}
               </View>
-              <RNCallout onPress={() => onEventPress(pendingSelectionRef.current || group.items[0])}>
+              <RNCallout 
+                onPress={() => {
+                  const selected = pendingSelectionRef.current || group.items[0];
+                  console.log('🧭 [MAP] Callout pressed → onEventPress()', {
+                    eventId: selected?.id,
+                    title: selected?.title,
+                  });
+                  onEventPress(selected);
+                }}>
                 <View style={styles.calloutContainer}>
                   {group.items.length === 1 ? (
                     <>
@@ -119,7 +149,13 @@ export default function DiscoverMap({ region, onRegionChange, events, onEventPre
                       <Text style={styles.calloutTitle}>{group.items.length} events here</Text>
                       <ScrollView style={styles.calloutList}>
                         {group.items.map((ev) => (
-                          <CalloutSubview key={ev.id} onPress={() => onEventPress(ev)}>
+                          <CalloutSubview key={ev.id} onPress={() => {
+                            console.log('🧭 [MAP] Callout list item pressed → onEventPress()', {
+                              eventId: ev.id,
+                              title: ev.title,
+                            });
+                            onEventPress(ev);
+                          }}>
                             <View style={styles.calloutListItem}>
                               <View style={styles.bullet} />
                               <View style={{ flex: 1 }}>
@@ -215,4 +251,15 @@ const styles = StyleSheet.create({
   calloutButtonText: { fontSize: 12, fontFamily: 'Inter-Medium', color: '#FFFFFF' },
 });
 
+// Skip re-render when only the region prop changes (prevents janky re-renders on iOS when dragging)
+export default memo(DiscoverMap, (prev, next) => {
+  // Re-render if events changed
+  if (prev.events !== next.events) return false;
+  // Re-render if callbacks changed
+  if (prev.onEventPress !== next.onEventPress) return false;
+  if (prev.onMarkerPress !== next.onMarkerPress) return false;
+  if (prev.onToggleList !== next.onToggleList) return false;
+  // Intentionally ignore changes to region and onRegionChange to prevent re-renders during map drag
+  return true;
+});
 
