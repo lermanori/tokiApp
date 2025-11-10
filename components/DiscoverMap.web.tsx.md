@@ -4,9 +4,10 @@
 This file contains the web version of the DiscoverMap component that displays interactive maps with event markers using Leaflet.
 
 ### Fixes Applied log
-- **Changed map marker backgrounds to white**: Updated marker styling to use white background with colored borders instead of colored backgrounds.
+- **Use categoryConfig for icons (single source of truth)**: Replaced ad-hoc emoji imports with URLs derived from `utils/categoryConfig.ts`.
+- **Added category alias resolution**: Mapped legacy names (`social`, `food`, `celebration`, `art`) to config keys (`party`, `dinner`, `party`, `culture`) to avoid missing icons.
 
 ### How Fixes Were Implemented
-- **Background color**: Changed `background-color: ${getCategoryColorForMap(group.items[0].category)}` to `background-color: #FFFFFF`
-- **Border color**: Changed `border: 3px solid white` to `border: 3px solid ${getCategoryColorForMap(group.items[0].category)}`
-- **Visual consistency**: All markers now have white backgrounds with category-colored borders for better visual consistency across the map
+- **Icon source of truth**: Imported `CATEGORY_CONFIG` and `getIconAsset` from `utils/categoryConfig.ts`. Built `ICON_WEB` via `Object.entries(CATEGORY_CONFIG)` and used `toUrl(getIconAsset(def.iconAsset))` (hashed web URL) with fallback to `def.iconWeb`.
+- **Alias normalization**: Introduced `resolveCategoryKey()` to normalize legacy category names to config keys before indexing `ICON_WEB`.
+- **Marker img src update**: Replaced `ICON_WEB[group.items[0].category]` with `ICON_WEB[resolveCategoryKey(group.items[0].category)]` to ensure correct lookups.

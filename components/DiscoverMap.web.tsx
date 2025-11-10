@@ -1,19 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
-// Web icon URLs resolved by bundler
-// Importing ensures correct hashed paths in Expo Web
-import sportsIcon from '@/assets/emojis/sports.png';
-import coffeeIcon from '@/assets/emojis/coffee.png';
-import musicIcon from '@/assets/emojis/music.png';
-import foodIcon from '@/assets/emojis/food.png';
-import workIcon from '@/assets/emojis/work.png';
-import artIcon from '@/assets/emojis/art.png';
-import natureIcon from '@/assets/emojis/nature.png';
-import drinksIcon from '@/assets/emojis/drinks.png';
-import socialIcon from '@/assets/emojis/celebration.png';
-import wellnessIcon from '@/assets/emojis/wellness.png';
-import cultureIcon from '@/assets/emojis/home.png';
-import morningIcon from '@/assets/emojis/beach.png';
+import { CATEGORY_CONFIG, getIconAsset } from '@/utils/categoryConfig';
 import { View } from 'react-native';
 
 type EventItem = {
@@ -60,22 +47,28 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
     return '';
   };
 
-  const ICON_WEB: Record<string, string> = useMemo(() => {
-    const map: Record<string, string> = {
-      sports: toUrl(sportsIcon),
-      coffee: toUrl(coffeeIcon),
-      music: toUrl(musicIcon),
-      food: toUrl(foodIcon),
-      work: toUrl(workIcon),
-      art: toUrl(artIcon),
-      nature: toUrl(natureIcon),
-      drinks: toUrl(drinksIcon),
-      social: toUrl(socialIcon),
-      wellness: toUrl(wellnessIcon),
-      culture: toUrl(cultureIcon),
-      morning: toUrl(morningIcon),
+  // Normalize legacy/alias category names to keys in CATEGORY_CONFIG
+  const resolveCategoryKey = (category: string): string => {
+    const raw = (category || '').toLowerCase();
+    const aliases: Record<string, string> = {
+      social: 'party',
+      food: 'dinner',
+      celebration: 'party',
+      art: 'culture',
     };
-    try { console.log('[DiscoverMap.web] ICON_WEB', map); } catch {}
+    const candidate = aliases[raw] || raw;
+    return CATEGORY_CONFIG[candidate] ? candidate : raw;
+  };
+
+  // Build icon URL map from single source of truth (CATEGORY_CONFIG)
+  // Prefer bundler-resolved require() paths for hashed URLs; fall back to iconWeb if needed.
+  const ICON_WEB: Record<string, string> = useMemo(() => {
+    const entries = Object.entries(CATEGORY_CONFIG).map(([key, def]) => {
+      const url = toUrl(getIconAsset(def.iconAsset)) || def.iconWeb || '';
+      return [key, url] as [string, string];
+    });
+    const map = Object.fromEntries(entries) as Record<string, string>;
+    try { console.log('[DiscoverMap.web] ICON_WEB (from CATEGORY_CONFIG)', map); } catch {}
     return map;
   }, []);
   // Proximity clustering (~50 meters)
@@ -137,7 +130,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
                       background-color: #FFFFFF;
                       width: 32px; height: 32px; border-radius: 50%; border: 3px solid ${getCategoryColorForMap(group.items[0].category)};
                       box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: visible; position: relative;">
-                      <img src="${ICON_WEB[group.items[0].category] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
+                      <img src="${ICON_WEB[resolveCategoryKey(group.items[0].category)] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
                       ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}
                     </div>`,
                   iconSize: [32, 32], iconAnchor: [16, 16]
