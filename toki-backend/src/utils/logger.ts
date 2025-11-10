@@ -25,7 +25,7 @@ function parseLevel(input: unknown, fallback: LogLevelName): LogLevelName {
 }
 
 const envLevel = process.env.LOG_LEVEL;
-let currentLevel: LogLevelName = parseLevel(envLevel, 'debug');
+let currentLevel: LogLevelName = parseLevel(envLevel, 'warn');
 
 const should = (required: LogLevelName) => LEVELS[currentLevel] >= LEVELS[required];
 
