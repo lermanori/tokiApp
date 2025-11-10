@@ -1,8 +1,10 @@
 import React, { useMemo, useRef, memo, useEffect } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Platform } from 'react-native';
-import MapView, { Marker as RNMarker, Callout as RNCallout, CalloutSubview, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
+import MapView, { Marker as RNMarker, Callout as RNCallout, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/utils/categories';
+import Callout from './Callout';
+import ClusterCallout from './ClusterCallout';
 
 type EventItem = {
   id: string;
@@ -24,12 +26,6 @@ interface Props {
 }
 
 const getCategoryColorForMap = (category: string) => CATEGORY_COLORS[category] || '#666666';
-
-const formatAttendees = (attendees?: number, maxAttendees?: number) => {
-  const a = attendees ?? 0;
-  const m = maxAttendees ?? 0;
-  return `${a}/${m} people`;
-};
 
 function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList }: Props) {
   const pendingSelectionRef = useRef<EventItem | null>(null);
@@ -178,64 +174,19 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                 )}
               </View>
               <RNCallout 
-                onPress={() => {
+                onPress={group.items.length === 1 ? () => {
                   const selected = pendingSelectionRef.current || group.items[0];
                   console.log('🧭 [MAP] Callout pressed → onEventPress()', {
                     eventId: selected?.id,
                     title: selected?.title,
                   });
                   onEventPress(selected);
-                }}>
-                <View style={styles.calloutContainer}>
+                } : undefined}>
                   {group.items.length === 1 ? (
-                    <>
-                      <Text style={styles.calloutTitle}>{group.items[0].title}</Text>
-                      <Text style={styles.calloutCategory}>{group.items[0].category}</Text>
-                      <Text style={styles.calloutLocation}>{group.items[0].location}</Text>
-                      <Text style={styles.calloutAttendees}>{formatAttendees(group.items[0].attendees, group.items[0].maxAttendees)}</Text>
-                    </>
+                  <Callout event={group.items[0]} />
                   ) : (
-                    <>
-                      <Text style={styles.calloutTitle}>{group.items.length} events here</Text>
-                      <ScrollView style={styles.calloutList}>
-                        {group.items.map((ev) => (
-                          <CalloutSubview key={ev.id} onPress={() => {
-                            console.log('🧭 [MAP] Callout list item pressed → onEventPress()', {
-                              eventId: ev.id,
-                              title: ev.title,
-                            });
-                            onEventPress(ev);
-                          }}>
-                            <View style={styles.calloutListItem}>
-                              <View style={styles.bullet} />
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={styles.calloutLink}
-                                  numberOfLines={1}
-                                  onPressIn={() => { pendingSelectionRef.current = ev; }}
-                                >
-                                  {ev.title}
-                                </Text>
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 2 }}>
-                                  <View style={styles.badge}><Text style={styles.badgeText}>{ev.category}</Text></View>
-                                  {typeof ev.attendees === 'number' && typeof ev.maxAttendees === 'number' && (
-                                    <Text style={styles.metaText}>{`${ev.attendees}/${ev.maxAttendees} people`}</Text>
-                                  )}
-                                  {!!ev.location && (<Text style={styles.metaText}>{ev.location}</Text>)}
-                                </View>
-                              </View>
-                            </View>
-                          </CalloutSubview>
-                        ))}
-                      </ScrollView>
-                    </>
-                  )}
-                  {group.items.length === 1 && (
-                    <View style={styles.calloutButton}>
-                      <Text style={styles.calloutButtonText}>View Details</Text>
-                    </View>
-                  )}
-                </View>
+                  <ClusterCallout events={group.items} onEventPress={onEventPress} />
+                )}
               </RNCallout>
             </RNMarker>
           )
@@ -299,20 +250,6 @@ const styles = StyleSheet.create({
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   zoomButton: { marginBottom: 6 },
   zoomText: { fontSize: 18, fontFamily: 'Inter-SemiBold', color: '#1C1C1C' },
-  calloutContainer: { width: 200, padding: 12 },
-  calloutTitle: { fontSize: 14, fontFamily: 'Inter-SemiBold', color: '#1C1C1C', marginBottom: 4 },
-  calloutCategory: { fontSize: 12, fontFamily: 'Inter-Medium', color: '#B49AFF', marginBottom: 4 },
-  calloutLocation: { fontSize: 12, fontFamily: 'Inter-Regular', color: '#666666', marginBottom: 4 },
-  calloutAttendees: { fontSize: 12, fontFamily: 'Inter-Regular', color: '#666666', marginBottom: 8 },
-  calloutList: { maxHeight: 120, marginTop: 6 },
-  calloutListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
-  bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8B5CF6', marginRight: 8 },
-  calloutLink: { fontSize: 13, color: '#4F46E5', textDecorationLine: 'underline', flexShrink: 1, fontWeight: '600' },
-  badge: { backgroundColor: '#F5F3FF', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, marginRight: 6 },
-  badgeText: { color: '#6D28D9', fontSize: 10, fontWeight: '600' },
-  metaText: { color: '#6B7280', fontSize: 11, marginRight: 8 },
-  calloutButton: { backgroundColor: '#B49AFF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
-  calloutButtonText: { fontSize: 12, fontFamily: 'Inter-Medium', color: '#FFFFFF' },
 });
 
 // Skip re-render when only the region prop changes (prevents janky re-renders on iOS when dragging)

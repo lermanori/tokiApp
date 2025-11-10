@@ -4,3 +4,4 @@
 ALTER TABLE tokis ADD COLUMN IF NOT EXISTS external_link VARCHAR(500);
 
 
+
