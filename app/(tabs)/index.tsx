@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Dimensions, Image, TextInput, Animated, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Animated, RefreshControl, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Filter, MapPin, Clock, Users, Heart, X } from 'lucide-react-native';
@@ -10,10 +10,9 @@ import TokiFilters from '@/components/TokiFilters';
 import { useApp } from '@/contexts/AppContext';
 import { CATEGORIES, getCategoryColor } from '@/utils/categories';
 
-const { width } = Dimensions.get('window');
-
 export default function ExploreScreen() {
   const { state, actions } = useApp();
+  const { width } = useWindowDimensions();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,6 +36,17 @@ export default function ExploreScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const categories = ['all', ...CATEGORIES];
+
+  // Calculate number of columns based on screen width (dynamic up to 7 columns)
+  const numColumns = React.useMemo(() => {
+    if (width >= 3200) return 7; // Ultra wide: 7 columns
+    if (width >= 2800) return 6; // XXL Desktop: 6 columns
+    if (width >= 2400) return 5; // XL Desktop: 5 columns
+    if (width >= 2000) return 4; // Large Desktop: 4 columns
+    if (width >= 1600) return 3; // Desktop: 3 columns
+    if (width >= 1200) return 2; // Tablet/Desktop: 2 columns
+    return 1; // Mobile: 1 column
+  }, [width]);
 
   // Load user connections to check if hosts are connections
   useEffect(() => {
@@ -555,11 +565,16 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <FlatList
+        key={`flatlist-${numColumns}`}
         data={filteredTokis}
         keyExtractor={(item) => item.id}
         style={styles.flatList}
+        numColumns={numColumns}
         renderItem={({ item }) => (
-          <View style={styles.cardWrapper}>
+          <View style={[
+            styles.cardWrapper,
+            numColumns > 1 && styles.cardWrapperGrid
+          ]}>
             <TokiCard
               toki={item}
               onPress={() => handleTokiPress(item)}
@@ -581,7 +596,10 @@ export default function ExploreScreen() {
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
-        contentContainerStyle={filteredTokis.length === 0 ? styles.contentEmpty : styles.contentList}
+        contentContainerStyle={filteredTokis.length === 0 ? styles.contentEmpty : [
+          styles.contentList,
+          numColumns > 1 && { paddingHorizontal: 12 }
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -758,6 +776,12 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 16,
     paddingHorizontal: 20,
+  },
+  cardWrapperGrid: {
+    width: undefined,
+    flex: 1,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
   },
   sectionTitle: {
     fontSize: 20,

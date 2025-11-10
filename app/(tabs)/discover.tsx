@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
@@ -50,6 +50,7 @@ const categories = ['all', ...CATEGORIES];
 
 export default function DiscoverScreen() {
   const { state, actions } = useApp();
+  const { width } = useWindowDimensions();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showMap, setShowMap] = useState(true);
   
@@ -190,6 +191,17 @@ export default function DiscoverScreen() {
     handleLoadMore(selectedFilters.radius);
   }, [isLoadingMore, hasMore, handleLoadMore, selectedFilters.radius]);
 
+  // Calculate number of columns based on screen width (dynamic up to 7 columns)
+  const numColumns = useMemo(() => {
+    if (width >= 3200) return 7; // Ultra wide: 7 columns
+    if (width >= 2800) return 6; // XXL Desktop: 6 columns
+    if (width >= 2400) return 5; // XL Desktop: 5 columns
+    if (width >= 2000) return 4; // Large Desktop: 4 columns
+    if (width >= 1600) return 3; // Desktop: 3 columns
+    if (width >= 1200) return 2; // Tablet/Desktop: 2 columns
+    return 1; // Mobile: 1 column
+  }, [width]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <DiscoverHeader
@@ -201,9 +213,11 @@ export default function DiscoverScreen() {
       />
 
       <FlatList
+        key={`flatlist-${numColumns}`}
         data={filteredEvents}
         keyExtractor={(item) => item.id}
         style={styles.content}
+        numColumns={numColumns}
         ListHeaderComponent={() => (
           <>
             {showMap && renderInteractiveMap()}
@@ -219,7 +233,10 @@ export default function DiscoverScreen() {
           </>
         )}
         renderItem={({ item }) => (
-          <View style={styles.cardWrapper}>
+          <View style={[
+            styles.cardWrapper,
+            numColumns > 1 && styles.cardWrapperGrid
+          ]}>
             <TokiCard
               toki={item}
               onPress={() => handleEventPress(item)}
@@ -248,7 +265,10 @@ export default function DiscoverScreen() {
             <View style={styles.bottomSpacing} />
           </>
         )}
-        contentContainerStyle={filteredEvents.length === 0 ? styles.contentEmpty : styles.contentList}
+        contentContainerStyle={filteredEvents.length === 0 ? styles.contentEmpty : [
+          styles.contentList,
+          numColumns > 1 && { paddingHorizontal: 12 }
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefreshWithRadius} />
@@ -307,6 +327,12 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 16,
     paddingHorizontal: 20,
+  },
+  cardWrapperGrid: {
+    width: undefined,
+    flex: 1,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
   },
   sectionTitle: {
     fontSize: 20,

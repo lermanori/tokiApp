@@ -59,3 +59,19 @@ The Discover screen is the main screen for browsing and discovering Toki events.
 - `components/DiscoverHeader.tsx` - Header component
 - `components/DiscoverCategories.tsx` - Categories component
 
+### Fixes Applied log
+- problem: FlatList change broke the grid layout on desktop - cards displayed in a single column instead of a responsive grid.
+- solution: Added responsive grid support using `numColumns` prop on FlatList. Uses `useWindowDimensions()` hook for responsive width detection. Calculates columns dynamically up to 7 columns: 1 for mobile (<1200px), 2 for tablet/desktop (1200-1599px), 3 for desktop (1600-1999px), 4 for large desktop (2000-2399px), 5 for XL desktop (2400-2799px), 6 for XXL desktop (2800-3199px), 7 for ultra wide (≥3200px). Added `cardWrapperGrid` style that removes full width and uses flex layout when in grid mode. Made `contentContainerStyle` padding conditional - only adds horizontal padding when `numColumns > 1` to avoid double padding on mobile.
+- problem: Web throws error "Changing numColumns on the fly is not supported" when screen width changes and columns update.
+- solution: Added `key={`flatlist-${numColumns}`}` prop to FlatList component. This forces React to completely re-render the FlatList when `numColumns` changes, which is required for web compatibility. The key change triggers a fresh render, preventing the error.
+
+### How Fixes Were Implemented
+- Added `useWindowDimensions` import from react-native
+- Added `width` from `useWindowDimensions()` hook in component
+- Added `numColumns` calculation using `useMemo` based on screen width
+- Added `numColumns` prop to FlatList for grid layout
+- Added `key={`flatlist-${numColumns}`}` prop to FlatList to force re-render when columns change (required for web)
+- Updated `renderItem` to conditionally apply `cardWrapperGrid` style when `numColumns > 1`
+- Created `cardWrapperGrid` style with `width: undefined`, `flex: 1`, and adjusted padding/margins
+- Made `contentContainerStyle` conditionally apply padding based on `numColumns`
+

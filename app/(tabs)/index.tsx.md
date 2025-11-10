@@ -16,6 +16,10 @@ This file contains the Explore screen (list view) showing nearby tokis. Implemen
 - solution: Added iOS-specific fixes: changed `scrollEventThrottle` from 16 to 1 for more frequent events, and added `onScrollEndDrag` handler which fires when user lifts finger (more reliable on iOS). Now uses three triggers: `onScroll`, `onScrollEndDrag`, and `onMomentumScrollEnd` for comprehensive coverage.
 - problem: ScrollView-based infinite scroll was unreliable on iOS despite multiple event handlers.
 - solution: Migrated from `Animated.ScrollView` to `FlatList` which has built-in `onEndReached` prop that's more reliable on iOS. Uses `onEndReachedThreshold={0.5}` to trigger loading when user is 50% from bottom (equivalent to ~10 items). Added performance optimizations: `removeClippedSubviews`, `maxToRenderPerBatch`, `windowSize`, and `initialNumToRender`. Restructured UI into `ListHeaderComponent`, `ListEmptyComponent`, and `ListFooterComponent` for better organization.
+- problem: FlatList change broke the grid layout on desktop - cards displayed in a single column instead of a responsive grid.
+- solution: Added responsive grid support using `numColumns` prop on FlatList. Uses `useWindowDimensions()` hook for responsive width detection. Calculates columns dynamically up to 7 columns: 1 for mobile (<1200px), 2 for tablet/desktop (1200-1599px), 3 for desktop (1600-1999px), 4 for large desktop (2000-2399px), 5 for XL desktop (2400-2799px), 6 for XXL desktop (2800-3199px), 7 for ultra wide (≥3200px). Added `cardWrapperGrid` style that removes full width and uses flex layout when in grid mode. Made `contentContainerStyle` padding conditional - only adds horizontal padding when `numColumns > 1` to avoid double padding on mobile.
+- problem: Web throws error "Changing numColumns on the fly is not supported" when screen width changes and columns update.
+- solution: Added `key={`flatlist-${numColumns}`}` prop to FlatList component. This forces React to completely re-render the FlatList when `numColumns` changes, which is required for web compatibility. The key change triggers a fresh render, preventing the error.
 
 ### How Fixes Were Implemented
 - Added state: `currentPage`, `isLoadingMore`, `hasMore`
@@ -26,3 +30,9 @@ This file contains the Explore screen (list view) showing nearby tokis. Implemen
 - Updated display: changed `{filteredTokis.length}` to `{state.totalNearbyCount}` to show total count
 - Added "Loading more..." indicator when `isLoadingMore` is true
 - Updated refresh handler to reset to page 1
+- Replaced static `Dimensions.get('window')` with `useWindowDimensions()` hook for responsive width
+- Added `numColumns` calculation based on screen width using `React.useMemo`
+- Added `numColumns` prop to FlatList for grid layout
+- Added `key={`flatlist-${numColumns}`}` prop to FlatList to force re-render when columns change (required for web)
+- Created `cardWrapperGrid` style with flex layout for multi-column display
+- Made `contentContainerStyle` conditionally apply padding based on `numColumns`
