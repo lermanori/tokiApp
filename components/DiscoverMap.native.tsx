@@ -33,18 +33,49 @@ const formatAttendees = (attendees?: number, maxAttendees?: number) => {
 
 function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList }: Props) {
   const pendingSelectionRef = useRef<EventItem | null>(null);
-  // Freeze the initial region so re-renders don't push new initialRegion into MapView
+  // Freeze the initial region on first mount only - never update after mount
   const initialRegionRef = useRef(region);
+  const isFirstMountRef = useRef(true);
+  // Store current region in ref to avoid re-renders during dragging
+  const currentRegionRef = useRef(region);
   const renderCountRef = useRef(0);
+  // Ref to MapView for programmatic control
+  const mapViewRef = useRef<MapView>(null);
   
-  // Track re-renders
-  useEffect(() => {
-    renderCountRef.current += 1;
-    console.log(`🔄 [MAP] Component re-rendered (render #${renderCountRef.current})`, {
-      eventsCount: events?.length || 0,
-      timestamp: Date.now()
-    });
+  // Track component renders
+  renderCountRef.current += 1;
+  console.log(`🗺️ [MAP] Component render #${renderCountRef.current}`, {
+    timestamp: Date.now(),
+    eventsCount: events?.length || 0,
+    regionLat: region.latitude.toFixed(6),
+    regionLng: region.longitude.toFixed(6),
   });
+  
+  // Only set initialRegionRef on the very first render (check render count to avoid false positives)
+  if (isFirstMountRef.current && renderCountRef.current === 1) {
+    initialRegionRef.current = region;
+    currentRegionRef.current = region;
+    isFirstMountRef.current = false;
+    console.log('🗺️ [MAP] First mount - initial region set', region);
+  } else if (isFirstMountRef.current && renderCountRef.current > 1) {
+    // Component was remounted - reset the flag but keep initial region
+    console.log('🗺️ [MAP] Component remounted - keeping initial region', {
+      renderCount: renderCountRef.current,
+      initialRegion: initialRegionRef.current,
+    });
+    isFirstMountRef.current = false;
+  }
+  
+  // Update current region ref when region prop changes (but don't cause re-render)
+  useEffect(() => {
+    console.log('🗺️ [MAP] Region prop changed, updating ref', {
+      oldLat: currentRegionRef.current.latitude.toFixed(6),
+      newLat: region.latitude.toFixed(6),
+      oldLng: currentRegionRef.current.longitude.toFixed(6),
+      newLng: region.longitude.toFixed(6),
+    });
+    currentRegionRef.current = region;
+  }, [region]);
   
   // Proximity clustering (~50m)
   const clustered = useMemo(() => {
@@ -70,10 +101,29 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapViewRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         style={styles.map}
         initialRegion={initialRegionRef.current}
-        onRegionChangeComplete={onRegionChange}
+        onRegionChange={(newRegion) => {
+          // Update ref during dragging (no re-render)
+          console.log('🗺️ [MAP] onRegionChange (during drag)', {
+            lat: newRegion.latitude.toFixed(6),
+            lng: newRegion.longitude.toFixed(6),
+            timestamp: Date.now(),
+          });
+          currentRegionRef.current = newRegion;
+        }}
+        onRegionChangeComplete={(newRegion) => {
+          // Only update parent state when dragging stops (causes minimal re-renders)
+          console.log('🗺️ [MAP] onRegionChangeComplete (drag stopped)', {
+            lat: newRegion.latitude.toFixed(6),
+            lng: newRegion.longitude.toFixed(6),
+            timestamp: Date.now(),
+          });
+          currentRegionRef.current = newRegion;
+          onRegionChange(newRegion);
+        }}
         toolbarEnabled={false}
         pitchEnabled={false}
         rotateEnabled={false}
@@ -197,11 +247,18 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
         <TouchableOpacity
           style={[styles.control, styles.zoomButton]}
           onPress={() => {
+            const current = currentRegionRef.current;
             const next = {
-              ...region,
-              latitudeDelta: region.latitudeDelta * 0.6,
-              longitudeDelta: region.longitudeDelta * 0.6,
+              ...current,
+              latitudeDelta: current.latitudeDelta * 0.6,
+              longitudeDelta: current.longitudeDelta * 0.6,
             };
+            // Animate map to new region (required for iOS)
+            if (mapViewRef.current) {
+              mapViewRef.current.animateToRegion(next, 300);
+            }
+            // Update ref and parent state
+            currentRegionRef.current = next;
             onRegionChange(next);
           }}
         >
@@ -210,11 +267,18 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
         <TouchableOpacity
           style={[styles.control, styles.zoomButton]}
           onPress={() => {
+            const current = currentRegionRef.current;
             const next = {
-              ...region,
-              latitudeDelta: region.latitudeDelta * 1.4,
-              longitudeDelta: region.longitudeDelta * 1.4,
+              ...current,
+              latitudeDelta: current.latitudeDelta * 1.4,
+              longitudeDelta: current.longitudeDelta * 1.4,
             };
+            // Animate map to new region (required for iOS)
+            if (mapViewRef.current) {
+              mapViewRef.current.animateToRegion(next, 300);
+            }
+            // Update ref and parent state
+            currentRegionRef.current = next;
             onRegionChange(next);
           }}
         >
@@ -253,13 +317,71 @@ const styles = StyleSheet.create({
 
 // Skip re-render when only the region prop changes (prevents janky re-renders on iOS when dragging)
 export default memo(DiscoverMap, (prev, next) => {
-  // Re-render if events changed
-  if (prev.events !== next.events) return false;
+  const shouldSkip = {
+    eventsChanged: false,
+    callbacksChanged: false,
+    regionChanged: false,
+  };
+  
+  // Re-render if events array reference changed
+  if (prev.events !== next.events) {
+    // Deep check: compare event IDs to avoid re-renders when array is recreated with same content
+    if (prev.events.length !== next.events.length) {
+      shouldSkip.eventsChanged = true;
+      console.log('🗺️ [MAP MEMO] Events length changed - RE-RENDER', {
+        prevLength: prev.events.length,
+        nextLength: next.events.length,
+      });
+      return false;
+    }
+    const prevIds = prev.events.map(e => e.id).sort().join(',');
+    const nextIds = next.events.map(e => e.id).sort().join(',');
+    if (prevIds !== nextIds) {
+      shouldSkip.eventsChanged = true;
+      console.log('🗺️ [MAP MEMO] Event IDs changed - RE-RENDER');
+      return false;
+    }
+  }
+  
   // Re-render if callbacks changed
-  if (prev.onEventPress !== next.onEventPress) return false;
-  if (prev.onMarkerPress !== next.onMarkerPress) return false;
-  if (prev.onToggleList !== next.onToggleList) return false;
+  if (prev.onEventPress !== next.onEventPress) {
+    shouldSkip.callbacksChanged = true;
+    console.log('🗺️ [MAP MEMO] onEventPress changed - RE-RENDER');
+    return false;
+  }
+  if (prev.onMarkerPress !== next.onMarkerPress) {
+    shouldSkip.callbacksChanged = true;
+    console.log('🗺️ [MAP MEMO] onMarkerPress changed - RE-RENDER');
+    return false;
+  }
+  if (prev.onToggleList !== next.onToggleList) {
+    shouldSkip.callbacksChanged = true;
+    console.log('🗺️ [MAP MEMO] onToggleList changed - RE-RENDER');
+    return false;
+  }
+  
+  // Check if region changed
+  const regionChanged = 
+    prev.region.latitude !== next.region.latitude ||
+    prev.region.longitude !== next.region.longitude ||
+    prev.region.latitudeDelta !== next.region.latitudeDelta ||
+    prev.region.longitudeDelta !== next.region.longitudeDelta;
+  
+  if (regionChanged) {
+    shouldSkip.regionChanged = true;
+    console.log('🗺️ [MAP MEMO] Region changed - SKIP RE-RENDER', {
+      prevLat: prev.region.latitude.toFixed(6),
+      nextLat: next.region.latitude.toFixed(6),
+      prevLng: prev.region.longitude.toFixed(6),
+      nextLng: next.region.longitude.toFixed(6),
+    });
+  }
+  
   // Intentionally ignore changes to region and onRegionChange to prevent re-renders during map drag
-  return true;
+  const skipRender = !shouldSkip.eventsChanged && !shouldSkip.callbacksChanged;
+  if (skipRender) {
+    console.log('🗺️ [MAP MEMO] Skipping re-render', shouldSkip);
+  }
+  return skipRender;
 });
 

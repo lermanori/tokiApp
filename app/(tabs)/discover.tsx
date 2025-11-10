@@ -57,6 +57,15 @@ export default function DiscoverScreen() {
   const selectedEventRef = useRef<TokiEvent | null>(null);
   const calloutOpeningRef = useRef(false);
   const calloutOpeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasRefreshedOnFocusRef = useRef(false);
+  const renderCountRef = useRef(0);
+  
+  // Track component renders
+  renderCountRef.current += 1;
+  console.log(`📍 [DISCOVER] Component render #${renderCountRef.current}`, {
+    timestamp: Date.now(),
+    tokisCount: state.tokis.length,
+  });
 
   // Custom hooks for data and filtering
   const {
@@ -80,13 +89,24 @@ export default function DiscoverScreen() {
     clearAllFilters,
   } = useDiscoverFilters(events, userConnections);
 
-  // Refresh on focus if no data
+  // Reset refresh flag when screen loses focus
   useFocusEffect(
     React.useCallback(() => {
+      return () => {
+        hasRefreshedOnFocusRef.current = false;
+      };
+    }, [])
+  );
+
+  // Refresh on focus if no data - but only once per focus session
+  useFocusEffect(
+    React.useCallback(() => {
+      if (hasRefreshedOnFocusRef.current) return;
       if (state.isConnected && state.tokis.length === 0 && (state.currentUser?.latitude && state.currentUser?.longitude || mapRegion.latitude && mapRegion.longitude)) {
         const lat = state.currentUser?.latitude || mapRegion.latitude;
         const lng = state.currentUser?.longitude || mapRegion.longitude;
         handleRefresh(selectedFilters.radius);
+        hasRefreshedOnFocusRef.current = true;
       }
     }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion, handleRefresh, selectedFilters.radius])
   );
@@ -139,34 +159,97 @@ export default function DiscoverScreen() {
     setShowMap(prev => !prev);
   }, []);
 
+  // Use ref to store current mapRegion so handleRegionChange doesn't need to depend on it
+  const mapRegionRef = useRef(mapRegion);
+  useEffect(() => {
+    mapRegionRef.current = mapRegion;
+  }, [mapRegion]);
+
   const handleRegionChange = useCallback((r: any) => {
+    console.log('📍 [DISCOVER] handleRegionChange called', {
+      lat: r.latitude.toFixed(6),
+      lng: r.longitude.toFixed(6),
+      timestamp: Date.now(),
+    });
+    
     if (calloutOpeningRef.current) {
+      console.log('📍 [DISCOVER] Callout opening - skipping region update');
       return;
     }
     
+    // Use ref to get current mapRegion (no dependency needed)
+    const currentMapRegion = mapRegionRef.current;
+    
+    // Only update if region changed significantly to avoid unnecessary re-renders
     const eps = 0.00005;
     const same =
-      Math.abs(r.latitude - mapRegion.latitude) < eps &&
-      Math.abs(r.longitude - mapRegion.longitude) < eps &&
-      Math.abs(r.latitudeDelta - mapRegion.latitudeDelta) < eps &&
-      Math.abs(r.longitudeDelta - mapRegion.longitudeDelta) < eps;
-    if (same) return;
+      Math.abs(r.latitude - currentMapRegion.latitude) < eps &&
+      Math.abs(r.longitude - currentMapRegion.longitude) < eps &&
+      Math.abs(r.latitudeDelta - currentMapRegion.latitudeDelta) < eps &&
+      Math.abs(r.longitudeDelta - currentMapRegion.longitudeDelta) < eps;
+    if (same) {
+      console.log('📍 [DISCOVER] Region unchanged - skipping update');
+      return;
+    }
 
+    console.log('📍 [DISCOVER] Updating map region state', {
+      oldLat: currentMapRegion.latitude.toFixed(6),
+      newLat: r.latitude.toFixed(6),
+      oldLng: currentMapRegion.longitude.toFixed(6),
+      newLng: r.longitude.toFixed(6),
+    });
+    // Update region state (this will not cause map re-render due to memo)
     updateMapRegion(r, true);
-  }, [mapRegion, updateMapRegion]);
+  }, [updateMapRegion]); // Only depend on updateMapRegion, not mapRegion
 
-  const renderInteractiveMap = useCallback(() => (
-    <View style={styles.mapContainer}>
-      <DiscoverMap
-        region={mapRegion}
-        onRegionChange={handleRegionChange}
-        events={filteredEvents as any}
-        onEventPress={handleEventPress}
-        onMarkerPress={handleMapMarkerPress}
-        onToggleList={toggleMapView}
-      />
-    </View>
-  ), [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView]);
+  const renderInteractiveMap = useCallback(() => {
+    console.log('📍 [DISCOVER] renderInteractiveMap callback executed', {
+      mapRegionLat: mapRegion.latitude.toFixed(6),
+      filteredEventsCount: filteredEvents.length,
+      timestamp: Date.now(),
+    });
+    return (
+      <View style={styles.mapContainer} key="map-container">
+        <DiscoverMap
+          key="discover-map" // Stable key to prevent remounting
+          region={mapRegion}
+          onRegionChange={handleRegionChange}
+          events={filteredEvents as any}
+          onEventPress={handleEventPress}
+          onMarkerPress={handleMapMarkerPress}
+          onToggleList={toggleMapView}
+        />
+      </View>
+    );
+  }, [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView]);
+  
+  // Track when renderInteractiveMap callback is recreated
+  const prevDepsRef = useRef<{
+    mapRegion: typeof mapRegion;
+    filteredEvents: typeof filteredEvents;
+    handleRegionChange: typeof handleRegionChange;
+    handleEventPress: typeof handleEventPress;
+    handleMapMarkerPress: typeof handleMapMarkerPress;
+    toggleMapView: typeof toggleMapView;
+  } | null>(null);
+  
+  useEffect(() => {
+    if (prevDepsRef.current) {
+      const depsChanged = {
+        mapRegion: prevDepsRef.current.mapRegion !== mapRegion,
+        filteredEvents: prevDepsRef.current.filteredEvents !== filteredEvents,
+        handleRegionChange: prevDepsRef.current.handleRegionChange !== handleRegionChange,
+        handleEventPress: prevDepsRef.current.handleEventPress !== handleEventPress,
+        handleMapMarkerPress: prevDepsRef.current.handleMapMarkerPress !== handleMapMarkerPress,
+        toggleMapView: prevDepsRef.current.toggleMapView !== toggleMapView,
+      };
+      const anyChanged = Object.values(depsChanged).some(v => v);
+      if (anyChanged) {
+        console.log('📍 [DISCOVER] renderInteractiveMap dependencies changed', depsChanged);
+      }
+    }
+    prevDepsRef.current = { mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView };
+  });
 
   const getSectionTitle = () => {
     if ((state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
@@ -218,7 +301,7 @@ export default function DiscoverScreen() {
         keyExtractor={(item) => item.id}
         style={styles.content}
         numColumns={numColumns}
-        ListHeaderComponent={() => (
+        ListHeaderComponent={useMemo(() => (
           <>
             {showMap && renderInteractiveMap()}
             <DiscoverCategories
@@ -231,7 +314,7 @@ export default function DiscoverScreen() {
               <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
             </View>
           </>
-        )}
+        ), [showMap, renderInteractiveMap, categories, selectedCategory, setSelectedCategory])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,

@@ -60,7 +60,7 @@ export const useDiscoverData = () => {
     }
   }, [state.isConnected, state.currentUser?.id, actions]);
 
-  // Initialize map region from user profile location
+  // Initialize map region from user profile location - only once on mount
   useEffect(() => {
     if (mapRegionInitializedRef.current) return;
     
@@ -71,12 +71,21 @@ export const useDiscoverData = () => {
           const results = await geocodingService.geocodeAddress(profileLoc, 0);
           if (results && results[0]) {
             const { latitude, longitude } = results[0];
-            setMapRegion({
-              latitude,
-              longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            });
+            // Only update if significantly different from default to avoid unnecessary updates
+            const currentLat = mapRegion.latitude;
+            const currentLng = mapRegion.longitude;
+            const latDiff = Math.abs(latitude - currentLat);
+            const lngDiff = Math.abs(longitude - currentLng);
+            
+            // Only update if difference is significant (> 0.01 degrees ~ 1km)
+            if (latDiff > 0.01 || lngDiff > 0.01) {
+              setMapRegion({
+                latitude,
+                longitude,
+                latitudeDelta: 0.0922,
+                longitudeDelta: 0.0421,
+              });
+            }
             mapRegionInitializedRef.current = true;
             return;
           }
@@ -89,7 +98,8 @@ export const useDiscoverData = () => {
       }
     };
     setFromProfile();
-  }, [state.currentUser?.location]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.currentUser?.location]); // Only depend on location, not mapRegion to avoid loops
 
   // Load nearby tokis
   const loadNearbyTokis = useCallback(async (
@@ -197,6 +207,12 @@ export const useDiscoverData = () => {
   }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
 
   const updateMapRegion = useCallback((region: MapRegion, userInitiated: boolean = false) => {
+    console.log('🔄 [useDiscoverData] updateMapRegion called', {
+      lat: region.latitude.toFixed(6),
+      lng: region.longitude.toFixed(6),
+      userInitiated,
+      timestamp: Date.now(),
+    });
     setMapRegion(region);
     if (userInitiated) {
       mapRegionInitializedRef.current = true;
