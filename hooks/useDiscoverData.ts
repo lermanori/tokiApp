@@ -207,15 +207,14 @@ export const useDiscoverData = () => {
   }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
 
   const updateMapRegion = useCallback((region: MapRegion, userInitiated: boolean = false) => {
-    console.log('🔄 [useDiscoverData] updateMapRegion called', {
-      lat: region.latitude.toFixed(6),
-      lng: region.longitude.toFixed(6),
-      userInitiated,
-      timestamp: Date.now(),
-    });
-    setMapRegion(region);
-    if (userInitiated) {
-      mapRegionInitializedRef.current = true;
+    // Validate region has valid coordinates before setting
+    if (region && typeof region.latitude === 'number' && typeof region.longitude === 'number' && Number.isFinite(region.latitude) && Number.isFinite(region.longitude)) {
+      setMapRegion(region);
+      if (userInitiated) {
+        mapRegionInitializedRef.current = true;
+      }
+    } else {
+      console.error('❌ [useDiscoverData] Invalid region passed to updateMapRegion:', region);
     }
   }, []);
 

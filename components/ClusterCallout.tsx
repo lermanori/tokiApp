@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { CalloutSubview } from 'react-native-maps';
 
@@ -15,15 +15,28 @@ type EventItem = {
 interface ClusterCalloutProps {
   events: EventItem[];
   onEventPress: (event: EventItem) => void;
+  initialIndex?: number;
 }
 
 const CALLOUT_WIDTH = 200;
 
-export default function ClusterCallout({ events, onEventPress }: ClusterCalloutProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+export default function ClusterCallout({ events, onEventPress, initialIndex }: ClusterCalloutProps) {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex ?? 0);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const itemWidth = CALLOUT_WIDTH - 24; // Account for container padding
+
+  // Handle initialIndex prop - scroll to that index when provided
+  useEffect(() => {
+    if (initialIndex !== undefined && initialIndex >= 0 && initialIndex < events.length) {
+      const targetX = initialIndex * itemWidth;
+      // Use requestAnimationFrame to ensure scroll view is ready
+      requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({ x: targetX, animated: true });
+        setCurrentIndex(initialIndex);
+      });
+    }
+  }, [initialIndex, events.length, itemWidth]);
 
   const goToNext = () => {
     if (currentIndex < events.length - 1) {

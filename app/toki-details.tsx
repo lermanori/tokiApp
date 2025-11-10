@@ -52,6 +52,8 @@ interface TokiDetails {
   isHostedByUser?: boolean;
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined' | 'completed';
   link?: string;
+  latitude?: number;
+  longitude?: number;
   participants?: Array<{
     id: string;
     name: string;
@@ -340,6 +342,8 @@ export default function TokiDetailsScreen() {
           isHostedByUser: tokiData.host?.id === state.currentUser?.id,
           joinStatus: tokiData.joinStatus || 'not_joined', // Use backend join status
           link: tokiData.externalLink || undefined,
+          latitude: tokiData.latitude,
+          longitude: tokiData.longitude,
           participants: (tokiData.participants || []).map((p: any) => ({
             id: p?.user?.id || p?.id || '',
             name: p?.user?.name || p?.name || 'Unknown',
@@ -1343,10 +1347,30 @@ export default function TokiDetailsScreen() {
 
           {/* Event Info Section */}
           <View style={styles.eventInfoSection}>
-            <View style={styles.eventInfoItem}>
+            <TouchableOpacity 
+              style={styles.eventInfoItem}
+              onPress={() => {
+                if (toki.latitude && toki.longitude) {
+                  router.push({
+                    pathname: '/(tabs)/discover',
+                    params: { highlightTokiId: toki.id }
+                  });
+                } else {
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Location not available',
+                    text2: 'Location coordinates are not available for this event',
+                    position: 'top',
+                    visibilityTime: 3000,
+                    topOffset: 60,
+                  });
+                }
+              }}
+              activeOpacity={0.7}
+            >
               <MapPin size={18} color="#B49AFF" />
               <Text style={styles.eventInfoText}>{formatLocationDisplay(toki.location)}</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.eventInfoItem}>
               <Clock size={18} color="#B49AFF" />
               <Text style={styles.eventInfoText}>{formatTimeDisplay(toki.time, toki.scheduledTime)}</Text>
@@ -1540,13 +1564,6 @@ export default function TokiDetailsScreen() {
               const isPublicAttendee = toki.visibility === 'public' && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved');
               const canInvite = isHost || isPublicAttendee;
               
-              console.log('🔍 Invite button debug:', {
-                isHost,
-                isPublicAttendee,
-                visibility: toki.visibility,
-                joinStatus: toki.joinStatus,
-                canInvite
-              });
               
               return canInvite;
             })() && (

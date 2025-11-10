@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
 import { CATEGORY_CONFIG, getIconAsset } from '@/utils/categoryConfig';
 import { View } from 'react-native';
@@ -20,10 +20,12 @@ interface Props {
   onEventPress: (e: EventItem) => void;
   onMarkerPress: (e: EventItem) => void;
   onToggleList: () => void;
+  highlightedTokiId?: string | null;
+  highlightedCoordinates?: { latitude: number; longitude: number } | null;
 }
 
 // This file intentionally keeps Leaflet usage local to web-only component
-let MapContainer: any, TileLayer: any, Marker: any, Popup: any, L: any;
+let MapContainer: any, TileLayer: any, Marker: any, Popup: any, useMap: any, L: any;
 const isWeb = true;
 if (isWeb) {
   const Leaflet = require('react-leaflet');
@@ -32,12 +34,13 @@ if (isWeb) {
   TileLayer = Leaflet.TileLayer;
   Marker = Leaflet.Marker;
   Popup = Leaflet.Popup;
+  useMap = Leaflet.useMap;
   L = LeafletCore;
 }
 
 const getCategoryColorForMap = (category: string) => CATEGORY_COLORS[category] || '#666666';
 
-export default function DiscoverMap({ region, events, onEventPress, onMarkerPress, onToggleList }: Props) {
+export default function DiscoverMap({ region, events, onEventPress, onMarkerPress, onToggleList, highlightedTokiId, highlightedCoordinates }: Props) {
   const toUrl = (icon: any): string => {
     if (!icon) return '';
     if (typeof icon === 'string') return icon;
@@ -95,6 +98,135 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
 
     return groups;
   }, [events]);
+
+  // Store marker refs for programmatic popup opening
+  const markerRefs = useRef<Map<string, any>>(new Map());
+  // Store map instance ref
+  const mapInstanceRef = useRef<any>(null);
+
+  // MapController component - must be inside MapContainer to use useMap hook
+  const MapController = () => {
+    const map = useMap();
+    
+    useEffect(() => {
+      mapInstanceRef.current = map;
+    }, [map]);
+    
+    return null;
+  };
+
+  // Handle highlighted toki - open popup after map centers
+  useEffect(() => {
+    console.log(`🔵 [CALLOUT WEB] Highlight effect triggered:`, {
+      highlightedTokiId,
+      hasCoordinates: !!highlightedCoordinates,
+      clusteredCount: clustered.length
+    });
+    
+    if (!highlightedTokiId || !highlightedCoordinates) {
+      console.log(`🔵 [CALLOUT WEB] No highlight - exiting`);
+      return;
+    }
+
+    // Find the cluster/marker containing this toki
+    const cluster = clustered.find(group => {
+      return group.items.some(item => item.id === highlightedTokiId);
+    });
+    
+    console.log(`🔵 [CALLOUT WEB] Cluster search result:`, {
+      found: !!cluster,
+      clusterKey: cluster?.key,
+      clusterItemsCount: cluster?.items.length
+    });
+
+    if (cluster) {
+      console.log(`🔵 [CALLOUT WEB] Found cluster, scheduling popup open attempts: 200ms, 500ms, 1000ms, 2000ms`);
+      // Wait for map to center (MapContainer will handle centering via props)
+      // Then open popup
+      let popupOpened = false;
+      const openPopup = (attempt: number) => {
+        if (popupOpened) {
+          console.log(`🔵 [CALLOUT WEB] Attempt ${attempt} skipped - already opened`);
+          return;
+        }
+        
+        console.log(`🔵 [CALLOUT WEB] Attempt ${attempt} - Opening popup for cluster: ${cluster.key}`);
+        const marker = markerRefs.current.get(cluster.key);
+        console.log(`🔵 [CALLOUT WEB] Marker ref status:`, {
+          hasMarker: !!marker,
+          clusterKey: cluster.key,
+          totalMarkers: markerRefs.current.size,
+          allKeys: Array.from(markerRefs.current.keys())
+        });
+        
+        if (marker) {
+          // React Leaflet: Marker ref has leafletElement property that contains the Leaflet marker instance
+          // Try direct access first
+          let leafletMarker = null;
+          
+          if ((marker as any).leafletElement) {
+            leafletMarker = (marker as any).leafletElement;
+            console.log(`🔵 [CALLOUT WEB] Found leafletElement directly`);
+          } else if ((marker as any).getLeafletElement) {
+            // Some versions use getLeafletElement() method
+            leafletMarker = (marker as any).getLeafletElement();
+            console.log(`🔵 [CALLOUT WEB] Found leafletElement via getLeafletElement()`);
+          } else {
+            // Try accessing via internal structure
+            const markerInstance = (marker as any);
+            if (markerInstance._leaflet_id && mapInstanceRef.current) {
+              const mapLayers = (mapInstanceRef.current as any)._layers;
+              if (mapLayers && mapLayers[markerInstance._leaflet_id]) {
+                leafletMarker = mapLayers[markerInstance._leaflet_id];
+                console.log(`🔵 [CALLOUT WEB] Found leafletElement via map layers`);
+              }
+            }
+          }
+          
+          if (leafletMarker && typeof leafletMarker.openPopup === 'function') {
+            try {
+              console.log(`🔵 [CALLOUT WEB] Using openPopup() method`);
+              leafletMarker.openPopup();
+              popupOpened = true;
+              console.log(`✅ [CALLOUT WEB] Popup opened successfully via openPopup()`);
+              return; // Success, don't retry
+            } catch (e) {
+              console.log(`⚠️ [CALLOUT WEB] openPopup() threw error:`, e);
+              // Retry after short delay
+              setTimeout(() => openPopup(attempt), 200);
+            }
+          } else {
+            console.log(`⚠️ [CALLOUT WEB] Could not find leafletElement or openPopup method`);
+            // Retry after short delay
+            setTimeout(() => openPopup(attempt), 200);
+          }
+        } else {
+          // Marker ref not ready, retry
+          console.log(`⚠️ [CALLOUT WEB] Marker ref not found, retrying in 200ms...`);
+          setTimeout(() => openPopup(attempt), 200);
+        }
+      };
+
+      // Wait for map to render and center (MapContainer key change will remount)
+      // Use shorter delays for faster popup opening
+      // First attempt after map centers (200ms - map should be ready quickly after remount)
+      const timeoutId1 = setTimeout(() => openPopup(1), 200);
+      // Second attempt in case first fails (500ms)
+      const timeoutId2 = setTimeout(() => openPopup(2), 500);
+      // Third attempt (1000ms) - fallback for slower renders
+      const timeoutId3 = setTimeout(() => openPopup(3), 1000);
+      // Fourth attempt (2000ms) - final fallback
+      const timeoutId4 = setTimeout(() => openPopup(4), 2000);
+
+      return () => {
+        clearTimeout(timeoutId1);
+        clearTimeout(timeoutId2);
+        clearTimeout(timeoutId3);
+        clearTimeout(timeoutId4);
+      };
+    }
+  }, [highlightedTokiId, highlightedCoordinates, clustered]);
+
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -109,10 +241,14 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
     <View style={{ position: 'relative', backgroundColor: '#FFFFFF' }}>
       <div style={{ position: 'relative', width: '100%', height: 300, borderRadius: 16, overflow: 'hidden' }}>
         <MapContainer
-          center={[region.latitude, region.longitude]}
-          zoom={13}
+          center={highlightedTokiId && highlightedCoordinates 
+            ? [highlightedCoordinates.latitude, highlightedCoordinates.longitude]
+            : [region.latitude, region.longitude]}
+          zoom={highlightedTokiId ? 16 : 13}
           style={{ width: '100%', height: '100%' }}
+          key={highlightedTokiId ? `map-${highlightedTokiId}` : 'map-default'}
         >
+          <MapController />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -122,6 +258,13 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
             Number.isFinite(group.lat) && Number.isFinite(group.lng) ? (
               <Marker
                 key={group.key}
+                ref={(ref) => {
+                  if (ref) {
+                    markerRefs.current.set(group.key, ref);
+                  } else {
+                    markerRefs.current.delete(group.key);
+                  }
+                }}
                 position={[group.lat, group.lng]}
                 icon={L.divIcon({
                   className: 'custom-marker',

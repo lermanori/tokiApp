@@ -71,16 +71,6 @@ function RootLayoutNav() {
   }, [effectiveReturnTo, effectiveOtherParams, segments, router, hasCheckedFastRedirect]);
 
   useEffect(() => {
-    // Debug: Log all parameters
-    // Debug: Log all parameters
-    console.log('🔍 Layout useEffect triggered');
-    console.log('🔍 Layout params (useLocalSearchParams):', { returnTo, code, otherParams });
-    console.log('🔍 URL params (direct parsing):', urlParams);
-    console.log('🔍 Effective params:', { effectiveReturnTo, effectiveCode, effectiveOtherParams });
-    console.log('🔍 Redirection state:', state.redirection);
-    console.log('🔍 Current segments:', segments);
-    console.log('🔍 Current user ID:', state.currentUser?.id);
-    
     // Check if user is authenticated with debouncing
     const checkAuth = async () => {
       // Ensure routing has recognized the initial path (especially for deep links like /join/:code)
@@ -92,14 +82,12 @@ function RootLayoutNav() {
 
       // Prevent multiple simultaneous auth checks
       if (isCheckingAuth) {
-        console.log('🔐 Auth check already in progress, skipping...');
         return;
       }
       
       // Debounce auth checks - only run once every 5 seconds
       const now = Date.now();
       if (now - lastAuthCheck < 5000) {
-        console.log('🔐 Auth check debounced (last check was', Math.round((now - lastAuthCheck) / 1000), 'seconds ago)');
         return;
       }
       
@@ -132,21 +120,16 @@ function RootLayoutNav() {
         const inHealthScreen = segments[0] === 'health';
         const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
         
-        console.log('🔐 Auth check - isAuthenticated:', isAuthenticated, 'hasUserData:', hasUserData, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'inHealthScreen:', inHealthScreen, 'currentUser.id:', state.currentUser.id);
-        
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
           // Redirect unauthenticated users to login; allow waitlist, join and health
-          console.log('🔄 Redirecting to login - not authenticated');
           router.replace('/login');
         } else if (isAuthenticated && inLoginScreen) {
           // Redirect to main app if authenticated
           // Respect returnTo params (e.g., invite flow)
           if (effectiveReturnTo === 'join' && typeof effectiveCode === 'string' && effectiveCode.length > 0) {
-            console.log('🔄 Redirecting to join page after login with code:', effectiveCode);
             router.replace(`/join/${effectiveCode}`);
           } else if (effectiveReturnTo && effectiveReturnTo !== 'join') {
             // Handle other returnTo paths by setting redirection and going to main app
-            console.log('🔄 Setting redirection for returnTo:', effectiveReturnTo);
             const cleanParams = Object.fromEntries(
               Object.entries(effectiveOtherParams)
                 .filter(([_, value]) => value !== undefined)
@@ -154,19 +137,15 @@ function RootLayoutNav() {
             );
             const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
             actions.setRedirection(returnToPath, cleanParams);
-            console.log('🔄 Redirecting to main app with redirection set');
             router.replace('/(tabs)');
           } else {
-            console.log('🔄 Redirecting to main app - authenticated');
             router.replace('/(tabs)');
           }
         } else if (isAuthenticated && inJoinScreen) {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
-          console.log('✅ User is authenticated and on join page - staying put');
         } else if (isAuthenticated && state.redirection.isRedirecting && state.redirection.returnTo) {
           // Handle pending redirection after login
-          console.log('🔄 Processing pending redirection:', state.redirection);
           const { returnTo, returnParams } = state.redirection;
           
           // Build the redirect URL with parameters
@@ -176,11 +155,9 @@ function RootLayoutNav() {
             redirectUrl += `?${searchParams.toString()}`;
           }
           
-          console.log('🔄 Redirecting to:', redirectUrl);
           router.replace(redirectUrl as any);
         } else if (isAuthenticated && effectiveReturnTo && !inJoinScreen) {
           // Handle direct redirection for authenticated users (even if on login screen)
-          console.log('🔄 Direct redirection for authenticated user to:', effectiveReturnTo);
           const cleanParams = Object.fromEntries(
             Object.entries(effectiveOtherParams)
               .filter(([_, value]) => value !== undefined)
@@ -194,10 +171,7 @@ function RootLayoutNav() {
             redirectUrl += `?${searchParams.toString()}`;
           }
           
-          console.log('🔄 Redirecting authenticated user to:', redirectUrl);
           router.replace(redirectUrl as any);
-        } else {
-          console.log('🔍 No redirection needed - authenticated:', isAuthenticated, 'inLoginScreen:', inLoginScreen, 'inJoinScreen:', inJoinScreen, 'redirection:', state.redirection);
         }
       } catch (error) {
         console.error('❌ Error checking authentication:', error);

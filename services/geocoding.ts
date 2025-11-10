@@ -73,7 +73,6 @@ class GeocodingService {
               return;
             }
             
-            console.log('🔍 [GEOCODING] Making API request for:', cleanAddress);
             const results = await this.makeGeocodingRequest(cleanAddress, abortController.signal, maxResults);
             
             // Check if request was cancelled during the API call
@@ -82,7 +81,6 @@ class GeocodingService {
               return;
             }
             
-            console.log('✅ [GEOCODING] Geocoding successful for:', cleanAddress, 'Found:', results.length, 'results');
             resolve(results);
             
           } catch (error) {
@@ -176,9 +174,6 @@ class GeocodingService {
       results.push(geocodingResult);
     }
 
-    console.log('🔍 [GEOCODING] Raw results:', data);
-    console.log('🔍 [GEOCODING] Processed results:', results);
-    console.log('🔍 [GEOCODING] Found', results.length, 'valid results');
 
     return results;
   }

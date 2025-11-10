@@ -1,13 +1,23 @@
-# File: components/DiscoverMap.web.tsx
+# File: DiscoverMap.web.tsx
 
 ### Summary
-This file contains the web version of the DiscoverMap component that displays interactive maps with event markers using Leaflet.
+This file contains the web map component using React Leaflet. It displays clustered event markers on a map and supports programmatically opening popups when navigating from the Toki details page.
 
 ### Fixes Applied log
-- **Use categoryConfig for icons (single source of truth)**: Replaced ad-hoc emoji imports with URLs derived from `utils/categoryConfig.ts`.
-- **Added category alias resolution**: Mapped legacy names (`social`, `food`, `celebration`, `art`) to config keys (`party`, `dinner`, `party`, `culture`) to avoid missing icons.
+- problem: Popup was not opening programmatically on web when navigating from Toki details page.
+- solution: Added MapController component using useMap hook to access Leaflet map instance. Updated popup opening logic to properly access marker's leafletElement and call openPopup(). Added multiple access methods (direct leafletElement, getLeafletElement(), map layers) with comprehensive logging and retry logic.
+
+- problem: Map instance was not accessible for programmatic popup control.
+- solution: Created MapController component that uses useMap() hook (must be inside MapContainer) to get the map instance and store it in mapInstanceRef. This allows the popup opening logic to access the map's internal layers structure if needed.
 
 ### How Fixes Were Implemented
-- **Icon source of truth**: Imported `CATEGORY_CONFIG` and `getIconAsset` from `utils/categoryConfig.ts`. Built `ICON_WEB` via `Object.entries(CATEGORY_CONFIG)` and used `toUrl(getIconAsset(def.iconAsset))` (hashed web URL) with fallback to `def.iconWeb`.
-- **Alias normalization**: Introduced `resolveCategoryKey()` to normalize legacy category names to config keys before indexing `ICON_WEB`.
-- **Marker img src update**: Replaced `ICON_WEB[group.items[0].category]` with `ICON_WEB[resolveCategoryKey(group.items[0].category)]` to ensure correct lookups.
+- Added MapController component that uses useMap() hook to access the Leaflet map instance
+- MapController sets mapInstanceRef.current = map so it's available to the popup opening logic
+- Updated openPopup function to try multiple methods to access leafletElement:
+  1. Direct access via marker.leafletElement
+  2. Via getLeafletElement() method if available
+  3. Via map._layers using marker's _leaflet_id
+- Added comprehensive logging to debug marker ref and leafletElement availability
+- Implemented multiple retry attempts with optimized timing (200ms, 500ms, 1000ms, 2000ms) for faster popup opening while accounting for map remounting and marker initialization
+- Each retry attempt logs detailed information about marker ref state for debugging
+- Optimized timing: Reduced initial delay from 1000ms to 200ms for faster popup opening after map centers

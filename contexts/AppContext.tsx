@@ -2012,7 +2012,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getConnections = async (): Promise<{ connections: any[]; pagination: any }> => {
     try {
       const response = await apiService.getConnections();
-      console.log('✅ Connections loaded successfully');
       return response;
     } catch (error) {
       console.error('❌ Failed to load connections:', error);

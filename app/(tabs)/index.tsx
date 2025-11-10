@@ -195,45 +195,6 @@ export default function ExploreScreen() {
     });
   };
 
-  // Debug: Log filter changes and results with detailed toki information
-  React.useEffect(() => {
-    console.log('🔍 [EXPLORE] Visibility filter changed:', selectedFilters.visibility);
-    console.log('🔍 [EXPLORE] Total tokis:', state.tokis.length);
-    
-    // Count tokis by visibility for debugging
-    const visibilityCounts = {
-      all: state.tokis.length,
-      public: state.tokis.filter(t => t.visibility === 'public').length,
-      connections: state.tokis.filter(t => userConnections.includes(t.host.id)).length, // Count by host connection status
-      connections_visibility: state.tokis.filter(t => t.visibility === 'connections').length, // Count by visibility setting
-      hosted_by_me: state.tokis.filter(t => t.isHostedByUser === true).length,
-    };
-    console.log('🔍 [EXPLORE] Visibility counts:', visibilityCounts);
-    
-    // Detailed log for each toki
-    console.log('📋 [EXPLORE] Detailed toki visibility information:');
-    state.tokis.forEach((toki, index) => {
-      const hostIsConnection = userConnections.includes(toki.host.id);
-      const tokiInfo = {
-        index: index + 1,
-        name: toki.title,
-        host: toki.host.name,
-        hostId: toki.host.id,
-        visibility: toki.visibility,
-        isPublic: toki.visibility === 'public',
-        isConnection: hostIsConnection, // Check if host is actually a connection
-        visibilityIsConnections: toki.visibility === 'connections', // The visibility setting
-        isHostedByMe: toki.isHostedByUser === true,
-        matchesCurrentFilter: (() => {
-          if (selectedFilters.visibility === 'all') return true;
-          if (selectedFilters.visibility === 'hosted_by_me') return toki.isHostedByUser === true;
-          if (selectedFilters.visibility === 'connections') return hostIsConnection;
-          return toki.visibility === selectedFilters.visibility;
-        })(),
-      };
-      console.log(`  ${index + 1}.`, tokiInfo);
-    });
-  }, [selectedFilters.visibility, state.tokis, userConnections]);
 
   const filteredTokis = state.tokis.filter(toki => {
     const matchesSearch = searchQuery === '' ||
@@ -351,31 +312,6 @@ export default function ExploreScreen() {
       && matchesTime;
   });
 
-  // Debug: Log filtered results with details
-  React.useEffect(() => {
-    console.log('✅ [EXPLORE] Filtered tokis count:', filteredTokis.length);
-    if (selectedFilters.visibility !== 'all') {
-      console.log(`✅ [EXPLORE] Visibility filter "${selectedFilters.visibility}" showing ${filteredTokis.length} tokis`);
-    }
-    
-    // Show which tokis are displayed after filtering
-    console.log('📋 [EXPLORE] Tokis displayed after filtering:');
-    filteredTokis.forEach((toki, index) => {
-      const hostIsConnection = userConnections.includes(toki.host.id);
-      const displayInfo = {
-        index: index + 1,
-        name: toki.title,
-        host: toki.host.name,
-        hostId: toki.host.id,
-        visibility: toki.visibility,
-        isPublic: toki.visibility === 'public',
-        isConnection: hostIsConnection, // Check if host is actually a connection
-        visibilityIsConnections: toki.visibility === 'connections', // The visibility setting
-        isHostedByMe: toki.isHostedByUser === true,
-      };
-      console.log(`  ✅ ${index + 1}.`, displayInfo);
-    });
-  }, [filteredTokis, selectedFilters.visibility, userConnections]);
 
   const handleTokiPress = (toki: any) => {
     router.push({

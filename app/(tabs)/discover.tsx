@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
 import DiscoverMap from '@/components/DiscoverMap';
@@ -12,6 +12,8 @@ import { useDiscoverData } from '@/hooks/useDiscoverData';
 import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
 import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
+import { apiService } from '@/services/api';
+import { getBackendUrl } from '@/services/config';
 
 // Platform-specific map imports
 const isWeb = Platform.OS === 'web';
@@ -51,21 +53,21 @@ const categories = ['all', ...CATEGORIES];
 export default function DiscoverScreen() {
   const { state, actions } = useApp();
   const { width } = useWindowDimensions();
+  const params = useLocalSearchParams();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showMap, setShowMap] = useState(true);
+  const [highlightedTokiId, setHighlightedTokiId] = useState<string | null>(null);
+  const [highlightedTokiCoordinates, setHighlightedTokiCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   
   const selectedEventRef = useRef<TokiEvent | null>(null);
   const calloutOpeningRef = useRef(false);
   const calloutOpeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasRefreshedOnFocusRef = useRef(false);
   const renderCountRef = useRef(0);
+  const justSetHighlightRef = useRef(false); // Track if we just set highlight to prevent immediate clearing
   
   // Track component renders
   renderCountRef.current += 1;
-  console.log(`📍 [DISCOVER] Component render #${renderCountRef.current}`, {
-    timestamp: Date.now(),
-    tokisCount: state.tokis.length,
-  });
 
   // Custom hooks for data and filtering
   const {
@@ -110,6 +112,122 @@ export default function DiscoverScreen() {
       }
     }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion, handleRefresh, selectedFilters.radius])
   );
+
+  // Handle highlightTokiId from navigation params
+  useEffect(() => {
+    const highlightTokiId = params.highlightTokiId as string | undefined;
+    
+    if (!highlightTokiId) {
+      // Don't clear highlight immediately if we just set it - give popup time to open
+      // Only clear after a delay to allow popup opening logic to run
+      if (highlightedTokiId && !justSetHighlightRef.current) {
+        setHighlightedTokiId(null);
+        setHighlightedTokiCoordinates(null);
+      } else if (justSetHighlightRef.current) {
+        // Reset the flag after a delay
+        setTimeout(() => {
+          justSetHighlightRef.current = false;
+        }, 6000); // Reset after 6 seconds
+      }
+      return;
+    }
+
+    // Find toki in filteredEvents
+    const foundToki = filteredEvents.find(e => e.id === highlightTokiId);
+    
+    if (foundToki && foundToki.coordinate) {
+      // Toki found in current events with coordinates
+      const coords = foundToki.coordinate;
+      const lat = coords.latitude;
+      const lng = coords.longitude;
+      
+      // Validate coordinates are numbers
+      if (lat && lng && Number.isFinite(lat) && Number.isFinite(lng)) {
+        justSetHighlightRef.current = true; // Mark that we just set the highlight
+        setHighlightedTokiId(highlightTokiId);
+        setHighlightedTokiCoordinates(coords);
+        setShowMap(true); // Ensure map is visible
+        
+        // Center map on toki coordinates with tighter zoom
+        updateMapRegion({
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: 0.002, // Very tight zoom (~200m view) for better focus
+          longitudeDelta: 0.002,
+        }, true);
+        
+        // Clear param AFTER a delay to allow popup to open
+        // Don't clear immediately as it triggers the effect again and clears state
+        setTimeout(() => {
+          router.setParams({ highlightTokiId: undefined });
+        }, 5000); // Give 5 seconds for popup to open
+      } else {
+        console.warn('📍 [DISCOVER] Toki coordinate is invalid:', highlightTokiId, coords);
+        router.setParams({ highlightTokiId: undefined });
+      }
+    } else if (foundToki && !foundToki.coordinate) {
+      // Toki found but no coordinates - try to fetch from API
+      fetchTokiForHighlight(highlightTokiId);
+    } else {
+      // Toki not in current events - fetch from API
+      fetchTokiForHighlight(highlightTokiId);
+    }
+  }, [params.highlightTokiId, filteredEvents, updateMapRegion]);
+
+
+  // Fetch toki from API when not found in current events
+  const fetchTokiForHighlight = async (tokiId: string) => {
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
+        headers: {
+          'Authorization': `Bearer ${apiService.getAccessToken()}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const tokiData = data.data;
+        
+        // Ensure coordinates are numbers
+        const lat = typeof tokiData.latitude === 'number' ? tokiData.latitude : parseFloat(tokiData.latitude);
+        const lng = typeof tokiData.longitude === 'number' ? tokiData.longitude : parseFloat(tokiData.longitude);
+        
+        if (lat && lng && !isNaN(lat) && !isNaN(lng) && Number.isFinite(lat) && Number.isFinite(lng)) {
+          const coords = {
+            latitude: lat,
+            longitude: lng,
+          };
+          justSetHighlightRef.current = true; // Mark that we just set the highlight
+          setHighlightedTokiId(tokiId);
+          setHighlightedTokiCoordinates(coords);
+          setShowMap(true); // Ensure map is visible
+          
+        // Center map on toki coordinates with tighter zoom
+        updateMapRegion({
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: 0.002, // Very tight zoom (~200m view) for better focus
+          longitudeDelta: 0.002,
+        }, true);
+        
+        // Clear param AFTER a delay to allow popup to open
+        setTimeout(() => {
+          router.setParams({ highlightTokiId: undefined });
+        }, 5000); // Give 5 seconds for popup to open
+        } else {
+          console.warn('📍 [DISCOVER] Toki has no valid coordinates:', tokiId, { lat, lng });
+          router.setParams({ highlightTokiId: undefined });
+        }
+      } else {
+        console.warn('⚠️ [DISCOVER] Failed to fetch toki, response not ok:', response.status);
+        router.setParams({ highlightTokiId: undefined });
+      }
+    } catch (error) {
+      console.error('❌ [DISCOVER] Failed to fetch toki for highlight:', error);
+      router.setParams({ highlightTokiId: undefined });
+    }
+  };
 
   // Apply filters
   const applyFilters = useCallback(() => {
@@ -166,14 +284,7 @@ export default function DiscoverScreen() {
   }, [mapRegion]);
 
   const handleRegionChange = useCallback((r: any) => {
-    console.log('📍 [DISCOVER] handleRegionChange called', {
-      lat: r.latitude.toFixed(6),
-      lng: r.longitude.toFixed(6),
-      timestamp: Date.now(),
-    });
-    
     if (calloutOpeningRef.current) {
-      console.log('📍 [DISCOVER] Callout opening - skipping region update');
       return;
     }
     
@@ -188,26 +299,13 @@ export default function DiscoverScreen() {
       Math.abs(r.latitudeDelta - currentMapRegion.latitudeDelta) < eps &&
       Math.abs(r.longitudeDelta - currentMapRegion.longitudeDelta) < eps;
     if (same) {
-      console.log('📍 [DISCOVER] Region unchanged - skipping update');
       return;
     }
-
-    console.log('📍 [DISCOVER] Updating map region state', {
-      oldLat: currentMapRegion.latitude.toFixed(6),
-      newLat: r.latitude.toFixed(6),
-      oldLng: currentMapRegion.longitude.toFixed(6),
-      newLng: r.longitude.toFixed(6),
-    });
     // Update region state (this will not cause map re-render due to memo)
     updateMapRegion(r, true);
   }, [updateMapRegion]); // Only depend on updateMapRegion, not mapRegion
 
   const renderInteractiveMap = useCallback(() => {
-    console.log('📍 [DISCOVER] renderInteractiveMap callback executed', {
-      mapRegionLat: mapRegion.latitude.toFixed(6),
-      filteredEventsCount: filteredEvents.length,
-      timestamp: Date.now(),
-    });
     return (
       <View style={styles.mapContainer} key="map-container">
         <DiscoverMap
@@ -215,41 +313,16 @@ export default function DiscoverScreen() {
           region={mapRegion}
           onRegionChange={handleRegionChange}
           events={filteredEvents as any}
-          onEventPress={handleEventPress}
-          onMarkerPress={handleMapMarkerPress}
+          onEventPress={handleEventPress as any}
+          onMarkerPress={handleMapMarkerPress as any}
           onToggleList={toggleMapView}
+          highlightedTokiId={highlightedTokiId}
+          highlightedCoordinates={highlightedTokiCoordinates}
         />
       </View>
     );
-  }, [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView]);
+  }, [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
   
-  // Track when renderInteractiveMap callback is recreated
-  const prevDepsRef = useRef<{
-    mapRegion: typeof mapRegion;
-    filteredEvents: typeof filteredEvents;
-    handleRegionChange: typeof handleRegionChange;
-    handleEventPress: typeof handleEventPress;
-    handleMapMarkerPress: typeof handleMapMarkerPress;
-    toggleMapView: typeof toggleMapView;
-  } | null>(null);
-  
-  useEffect(() => {
-    if (prevDepsRef.current) {
-      const depsChanged = {
-        mapRegion: prevDepsRef.current.mapRegion !== mapRegion,
-        filteredEvents: prevDepsRef.current.filteredEvents !== filteredEvents,
-        handleRegionChange: prevDepsRef.current.handleRegionChange !== handleRegionChange,
-        handleEventPress: prevDepsRef.current.handleEventPress !== handleEventPress,
-        handleMapMarkerPress: prevDepsRef.current.handleMapMarkerPress !== handleMapMarkerPress,
-        toggleMapView: prevDepsRef.current.toggleMapView !== toggleMapView,
-      };
-      const anyChanged = Object.values(depsChanged).some(v => v);
-      if (anyChanged) {
-        console.log('📍 [DISCOVER] renderInteractiveMap dependencies changed', depsChanged);
-      }
-    }
-    prevDepsRef.current = { mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView };
-  });
 
   const getSectionTitle = () => {
     if ((state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
