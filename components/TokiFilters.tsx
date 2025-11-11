@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { CATEGORIES } from '@/utils/categories';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import DateTimePicker from 'react-native-ui-datepicker';
 import dayjs from 'dayjs';
+import Slider from '@react-native-community/slider';
 
 export interface TokiFiltersProps {
   visible: boolean;
@@ -208,15 +209,45 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     </View>
   );
 
-  // Slider/stepper handlers for radius (2–500 km)
-  const radiusValue = Math.min(
+  // Slider/stepper handlers for radius (2–500 km) with debounce
+  const initialRadius = Math.min(
     500,
     Math.max(2, parseInt(selectedFilters?.radius || '500', 10) || 500)
   );
+  const [localRadius, setLocalRadius] = useState(initialRadius);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local state when prop changes externally
+  useEffect(() => {
+    setLocalRadius(initialRadius);
+  }, [initialRadius]);
+
+  // Debounced update to filter
   const setRadius = (next: number) => {
     const clamped = Math.min(500, Math.max(2, Math.round(next)));
-    onFilterChange('radius', String(clamped));
+    setLocalRadius(clamped); // Update immediately for visual feedback
+    
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Debounce the actual filter change
+    debounceTimerRef.current = setTimeout(() => {
+      onFilterChange('radius', String(clamped));
+    }, 300); // 300ms debounce
   };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const radiusValue = localRadius;
 
   return (
     <Modal
@@ -261,27 +292,22 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
                 </View>
               </View>
             ) : (
-              <View style={styles.nativeStepperRow}>
-                <TouchableOpacity
-                  style={styles.stepperButton}
-                  onPress={() => setRadius(radiusValue - 1)}
-                >
-                  <Text style={styles.stepperButtonText}>-</Text>
-                </TouchableOpacity>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${((radiusValue - 2) / (500 - 2)) * 100}%` }
-                    ]}
-                  />
+              <View style={styles.nativeSliderWrapper}>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={2}
+                  maximumValue={500}
+                  step={1}
+                  value={radiusValue}
+                  onValueChange={setRadius}
+                  minimumTrackTintColor="#B49AFF"
+                  maximumTrackTintColor="#EEEEEE"
+                  thumbTintColor="#B49AFF"
+                />
+                <View style={styles.sliderScale}>
+                  <Text style={styles.sliderScaleText}>2</Text>
+                  <Text style={styles.sliderScaleText}>500</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.stepperButton}
-                  onPress={() => setRadius(radiusValue + 1)}
-                >
-                  <Text style={styles.stepperButtonText}>+</Text>
-                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -383,36 +409,13 @@ const styles = StyleSheet.create({
     color: '#8B8B8B',
     fontFamily: 'Inter-Regular',
   },
-  nativeStepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  nativeSliderWrapper: {
+    width: '100%',
+    marginBottom: 8,
   },
-  stepperButton: {
-    width: 40,
+  slider: {
+    width: '100%',
     height: 40,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EAEAEA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperButtonText: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1C1C1C',
-  },
-  progressTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#EEEEEE',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#B49AFF',
   },
   filterSectionTitle: {
     fontSize: 16,
