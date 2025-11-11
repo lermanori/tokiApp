@@ -57,11 +57,7 @@ module.exports = {
     android: {
       permissions: [
         "android.permission.RECORD_AUDIO"
-      ],
-      notification: {
-        icon: "./assets/images/icon.png",
-        color: "#B49AFF"
-      }
+      ]
     }
   }
 };
