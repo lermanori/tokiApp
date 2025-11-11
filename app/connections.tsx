@@ -78,6 +78,7 @@ interface UnifiedUser {
   connectionStatus?: ConnectionStatus;
   mutualConnections?: number;
   lastSeen?: string;
+  requestedAt?: string; // For pending requests
 }
 
 export default function ConnectionsScreen() {
@@ -133,7 +134,7 @@ export default function ConnectionsScreen() {
       const transformedConnections: Connection[] = backendConnections.map((conn: BackendConnection) => ({
         id: conn.user.id,
         name: conn.user.name,
-        avatar: conn.user.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
+        avatar: conn.user.avatar || '',
         bio: conn.user.bio || 'No bio available',
         location: conn.user.location || 'Location not set',
         rating: conn.user.rating || 'N/A',
@@ -239,7 +240,7 @@ export default function ConnectionsScreen() {
         results.push({
           id: user.id,
           name: user.name,
-          avatar: user.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
+          avatar: user.avatar || '',
           bio: user.bio || 'No bio available',
           location: user.location || 'Location not set',
           rating: user.rating || 'N/A',
@@ -251,15 +252,18 @@ export default function ConnectionsScreen() {
     
     // Add pending connections
     pendingConnections.forEach(pending => {
+      // Access requester data the same way as the Pending tab does
+      const requester = pending.requester;
       results.push({
-        id: pending.requester?.id || pending.id,
-        name: pending.requester?.name || 'Unknown User',
-        avatar: pending.requester?.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
-        bio: pending.requester?.bio || 'No bio available',
-        location: pending.requester?.location || 'Location not set',
-        rating: pending.requester?.rating || 'N/A',
-        tokisCreated: pending.requester?.tokisCreated || 0,
+        id: requester?.id || pending.id,
+        name: requester?.name || 'Unknown User',
+        avatar: requester?.avatar || '',
+        bio: requester?.bio || 'No bio available',
+        location: requester?.location || 'Location not set',
+        rating: requester?.rating || 'N/A',
+        tokisCreated: requester?.tokisCreated || 0,
         userType: 'pending',
+        requestedAt: pending.createdAt,
       });
     });
     
@@ -551,34 +555,15 @@ export default function ConnectionsScreen() {
               style={styles.connectButton}
               onPress={() => handleConnect(user.id, user.name)}
             >
+              <UserPlus size={16} color="#FFFFFF" />
               <Text style={styles.connectButtonText}>Connect</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.viewProfileButton}
-              onPress={() => handleConnectionPress(user)}
-            >
-              <Text style={styles.viewProfileButtonText}>View</Text>
             </TouchableOpacity>
           </View>
         );
       
       case 'pending':
-        return (
-          <View style={styles.pendingActions}>
-            <TouchableOpacity 
-              style={styles.acceptButton}
-              onPress={() => handleAcceptRequest(user.id, user.name)}
-            >
-              <Text style={styles.acceptButtonText}>Accept</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.declineButton}
-              onPress={() => handleDeclineRequest(user.id, user.name)}
-            >
-              <Text style={styles.declineButtonText}>Decline</Text>
-            </TouchableOpacity>
-          </View>
-        );
+        // Pending requests are handled separately in the All tab with buttons below content
+        return null;
       
       default:
         return null;
@@ -736,7 +721,7 @@ export default function ConnectionsScreen() {
                       style={styles.avatarContainer}
                       onPress={() => handleAvatarPress(user)}
                     >
-                      {user.avatar && user.avatar !== 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2' ? (
+                      {user.avatar ? (
                         <Image source={{ uri: user.avatar }} style={styles.avatar} resizeMode="cover" />
                       ) : (
                         <View style={styles.avatarFallback}>
@@ -746,35 +731,76 @@ export default function ConnectionsScreen() {
                     </TouchableOpacity>
                     
                     <View style={styles.connectionInfo}>
-                      <View style={styles.nameRow}>
-                        <TouchableOpacity onPress={() => handleNamePress(user)}>
-                          <Text style={styles.connectionName}>{user.name}</Text>
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <Text style={styles.connectionBio}>{user.bio}</Text>
-                      
-                      <View style={styles.connectionMeta}>
-                        <View style={styles.metaItem}>
-                          <MapPin size={12} color="#9CA3AF" />
-                          <Text style={styles.metaText}>{user.location}</Text>
-                        </View>
-                        <View style={styles.metaItem}>
-                          <Calendar size={12} color="#9CA3AF" />
-                          <Text style={styles.metaText}>{user.tokisCreated || 0} Tokis</Text>
-                        </View>
-                        <View style={styles.metaItem}>
-                          <Text style={styles.ratingText}>⭐ {user.rating}</Text>
-                        </View>
-                      </View>
-                      
-                      {user.userType === 'friend' && (
-                        <Text style={styles.lastSeen}>Last active {user.lastSeen}</Text>
+                      {user.userType === 'pending' ? (
+                        // Pending request layout - buttons below content
+                        <>
+                          <TouchableOpacity onPress={() => handleNamePress(user)}>
+                            <Text style={styles.connectionName}>{user.name}</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.connectionBio}>{user.bio}</Text>
+                          <View style={styles.connectionMeta}>
+                            <View style={styles.metaItemTokis}>
+                              <Calendar size={12} color="#9CA3AF" />
+                              <Text style={styles.metaText}>{user.tokisCreated || 0} Tokis</Text>
+                            </View>
+                          </View>
+                          {user.requestedAt && (
+                            <Text style={styles.lastSeen}>
+                              Requested {new Date(user.requestedAt).toLocaleDateString()}
+                            </Text>
+                          )}
+                        </>
+                      ) : (
+                        // Friend/New user layout - buttons inline
+                        <>
+                          <View style={styles.topRow}>
+                            <View style={styles.nameAndBio}>
+                              <TouchableOpacity onPress={() => handleNamePress(user)}>
+                                <Text style={styles.connectionName}>{user.name}</Text>
+                              </TouchableOpacity>
+                              <Text style={styles.connectionBio}>{user.bio}</Text>
+                            </View>
+                            {getActionButtons(user)}
+                          </View>
+                          
+                          <View style={styles.connectionMeta}>
+                            <View style={styles.metaItemLocation}>
+                              <MapPin size={12} color="#9CA3AF" />
+                              <Text style={styles.metaTextLocation} numberOfLines={1} ellipsizeMode="tail">
+                                {user.location}
+                              </Text>
+                            </View>
+                            <View style={styles.metaItemTokis}>
+                              <Calendar size={12} color="#9CA3AF" />
+                              <Text style={styles.metaText}>{user.tokisCreated || 0} Tokis</Text>
+                            </View>
+                          </View>
+                          
+                          {user.userType === 'friend' && (
+                            <Text style={styles.lastSeen}>Last active {user.lastSeen}</Text>
+                          )}
+                        </>
                       )}
                     </View>
-                    
-                    {getActionButtons(user)}
                   </View>
+                  
+                  {/* Action buttons for pending requests - below content */}
+                  {user.userType === 'pending' && (
+                    <View style={styles.pendingActions}>
+                      <TouchableOpacity 
+                        style={styles.acceptButton}
+                        onPress={() => handleAcceptRequest(user.id, user.name)}
+                      >
+                        <Text style={styles.acceptButtonText}>Accept</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.declineButton}
+                        onPress={() => handleDeclineRequest(user.id, user.name)}
+                      >
+                        <Text style={styles.declineButtonText}>Decline</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   
                   {user.userType === 'friend' && (
                     <View style={styles.connectionStats}>
@@ -806,7 +832,7 @@ export default function ConnectionsScreen() {
                 <View key={request.id} style={styles.connectionCard}>
                   <View style={styles.connectionHeader}>
                     <TouchableOpacity style={styles.avatarContainer}>
-                      {request.requester?.avatar && request.requester.avatar !== 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2' ? (
+                      {request.requester?.avatar ? (
                         <Image source={{ uri: request.requester.avatar }} style={styles.avatar} resizeMode="cover" />
                       ) : (
                         <View style={styles.avatarFallback}>
@@ -823,8 +849,7 @@ export default function ConnectionsScreen() {
                         {request.requester?.bio || 'No bio available'}
                       </Text>
                       <View style={styles.connectionMeta}>
-                        <Text style={styles.ratingText}>⭐ {request.requester?.rating || 'N/A'}</Text>
-                        <View style={styles.metaItem}>
+                        <View style={styles.metaItemTokis}>
                           <Calendar size={12} color="#9CA3AF" />
                           <Text style={styles.metaText}>{request.requester?.tokisCreated || 0} Tokis</Text>
                         </View>
@@ -1168,7 +1193,7 @@ const styles = StyleSheet.create({
   },
   connectionHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 8,
   },
   avatarContainer: {
@@ -1184,17 +1209,31 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitials: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#6B7280',
   },
   connectionInfo: {
     flex: 1,
+    minWidth: 0,
+    flexDirection: 'column',
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 12,
+  },
+  nameAndBio: {
+    flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
@@ -1206,29 +1245,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#1C1C1C',
-    flex: 1,
   },
   connectionBio: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#666666',
-    marginBottom: 8,
     lineHeight: 18,
   },
   connectionMeta: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 4,
-  },
-  metaItem: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    justifyContent: 'flex-start',
+    marginBottom: 4,
+  },
+  metaItemLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    minWidth: 0,
+  },
+  metaItemTokis: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
   },
   metaText: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#9CA3AF',
+  },
+  metaTextLocation: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#9CA3AF',
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'left',
   },
   ratingText: {
     fontSize: 12,
@@ -1332,7 +1387,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
-    flex: 1,
+    flexShrink: 0,
+    marginTop: 0,
   },
   removeButton: {
     backgroundColor: '#FEF2F2',
@@ -1457,34 +1513,45 @@ const styles = StyleSheet.create({
     // For now, we'll just use a static style
   },
   connectButton: {
-    flex: 1,
     backgroundColor: '#B49AFF',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#B49AFF',
+    borderRadius: 12,
+    height: 40,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
+    shadowColor: '#B49AFF',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   connectButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
+    includeFontPadding: false,
   },
   viewProfileButton: {
-    flex: 1,
     backgroundColor: '#F3E8FF',
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    height: 36,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F3E8FF',
-    alignItems: 'center',
+    minWidth: 84,
   },
   viewProfileButtonText: {
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#B49AFF',
+    includeFontPadding: false,
   },
   friendBadge: {
     position: 'absolute',
