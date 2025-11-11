@@ -24,6 +24,7 @@ export default function WaitlistEntryModal({ entry, onClose, onSuccess }: Props)
   const [name, setName] = useState(entry.email.split('@')[0]);
   const [password, setPassword] = useState('');
   const [sendWelcome, setSendWelcome] = useState(true);
+  const [sendWelcomeLink, setSendWelcomeLink] = useState(false);
   const [subject, setSubject] = useState("You're in. 🖤");
   const [body, setBody] = useState(`Hey,\n\nYou're officially on the waitlist for Toki.\nWe'll let you know the moment you can drop in.\n\n—\nToki`);
   const [error, setError] = useState('');
@@ -39,7 +40,8 @@ export default function WaitlistEntryModal({ entry, onClose, onSuccess }: Props)
       await adminApi.createUserFromWaitlist(entry.id, {
         name,
         password: password || undefined,
-        sendWelcomeEmail: sendWelcome,
+        sendWelcomeEmail: sendWelcome && !sendWelcomeLink,
+        sendWelcomeLink: sendWelcomeLink === true
       });
       setSuccess('User created successfully');
       onSuccess();
@@ -107,6 +109,14 @@ export default function WaitlistEntryModal({ entry, onClose, onSuccess }: Props)
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#333' }}>
               <input type="checkbox" checked={sendWelcome} onChange={(e) => setSendWelcome(e.target.checked)} />
               Send welcome email
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#333' }}>
+              <input
+                type="checkbox"
+                checked={sendWelcomeLink}
+                onChange={(e) => setSendWelcomeLink(e.target.checked)}
+              />
+              Send welcome password link (user will set password)
             </label>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn-primary" onClick={handleCreateUser} disabled={creating}>

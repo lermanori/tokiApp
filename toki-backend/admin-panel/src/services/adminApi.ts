@@ -21,6 +21,22 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
 };
 
 export const adminApi = {
+  // Settings
+  getPasswordExpiry: async () => {
+    const response = await fetch(`${API_BASE}/settings/password-reset-expiry`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+  updatePasswordExpiry: async (hours: number) => {
+    const response = await fetch(`${API_BASE}/settings/password-reset-expiry`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ hours })
+    });
+    return handleResponse(response);
+  },
+
   // Waitlist
   getWaitlist: async (params?: { page?: number; limit?: number; location?: string; platform?: string }) => {
     const query = new URLSearchParams();
@@ -137,6 +153,14 @@ export const adminApi = {
     const response = await fetch(`${API_BASE}/users/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+  issuePasswordLink: async (id: string, purpose: 'welcome'|'reset', send: boolean, templateId?: string, includeLink: boolean = true) => {
+    const response = await fetch(`${API_BASE}/users/${id}/password-link`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ purpose, send, templateId, includeLink })
     });
     return handleResponse(response);
   },

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { generateTokenPair } from '../utils/jwt';
+import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordReset';
 
 const router = Router();
 
@@ -652,7 +653,12 @@ router.delete('/waitlist/:id', authenticateToken, requireAdmin, async (req: Requ
 router.post('/waitlist/:id/user', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, password, sendWelcomeEmail = true } = req.body;
+    const { name, password, sendWelcomeEmail = true, sendWelcomeLink = false } = req.body as {
+      name?: string;
+      password?: string;
+      sendWelcomeEmail?: boolean;
+      sendWelcomeLink?: boolean;
+    };
 
     // Get waitlist entry
     const waitlistResult = await pool.query(
@@ -708,8 +714,28 @@ router.post('/waitlist/:id/user', authenticateToken, requireAdmin, async (req: R
     // Create user stats entry
     await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
 
-    // Send welcome email if requested
-    if (sendWelcomeEmail) {
+    // Send welcome email or welcome password link if requested
+    if (sendWelcomeLink) {
+      const { link, expiryHours } = await issuePasswordResetToken(user.id, 'welcome');
+      const RESEND_API_KEY = process.env.RESEND_API_KEY;
+      if (RESEND_API_KEY) {
+        const subject = "Welcome to Toki – Set your password";
+        const text = `Hey ${userName},\n\nWelcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`;
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "onboarding@toki-app.com",
+            to: email,
+            subject,
+            text,
+          }),
+        }).catch(err => console.error('Email send error:', err));
+      }
+    } else if (sendWelcomeEmail) {
       const RESEND_API_KEY = process.env.RESEND_API_KEY;
       if (RESEND_API_KEY) {
         const subject = "Welcome to Toki! 🖤";
@@ -926,7 +952,7 @@ router.get('/users', authenticateToken, requireAdmin, async (req: Request, res: 
 // Create user
 router.post('/users', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { email, name, password, role = 'user', bio, location, verified } = req.body;
+    const { email, name, password, role = 'user', bio, location, verified, sendWelcomeLink = false } = req.body as any;
     if (!email || !name) {
       res.status(400).json({ success: false, message: 'Email and name are required' });
       return;
@@ -943,13 +969,182 @@ router.post('/users', authenticateToken, requireAdmin, async (req: Request, res:
        RETURNING id, email, name, role, verified, location, created_at`,
       [email, passwordHash, name, bio || null, location || null, role, verified === true]
     );
-    await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [ins.rows[0].id]);
-    res.json({ success: true, data: ins.rows[0] });
+    const createdUser = ins.rows[0];
+    await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [createdUser.id]);
+
+    // Optionally send welcome link to set password
+    if (sendWelcomeLink === true) {
+      const { link, expiryHours } = await issuePasswordResetToken(createdUser.id, 'welcome');
+      const RESEND_API_KEY = process.env.RESEND_API_KEY;
+      if (RESEND_API_KEY) {
+        const subject = "Welcome to Toki – Set your password";
+        const text = `Hey ${name},\n\nWelcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`;
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "onboarding@toki-app.com",
+            to: email,
+            subject,
+            text,
+          }),
+        }).catch(err => console.error('Email send error:', err));
+      }
+    }
+
+    res.json({ success: true, data: createdUser });
     return;
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ success: false, message: 'Failed to create user' });
     return;
+  }
+});
+
+// Issue password link for a user (welcome or reset)
+router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { purpose = 'reset', send = false, templateId, includeLink = true } = req.body as { 
+      purpose?: PasswordLinkPurpose; 
+      send?: boolean; 
+      templateId?: string;
+      includeLink?: boolean;
+    };
+
+    // Ensure user exists and get email/name
+    const userResult = await pool.query('SELECT id, email, name FROM users WHERE id = $1', [id]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+    const u = userResult.rows[0];
+
+    const { link, expiryHours } = await issuePasswordResetToken(u.id, purpose === 'welcome' ? 'welcome' : 'reset');
+
+    if (send) {
+      const RESEND_API_KEY = process.env.RESEND_API_KEY;
+      if (!RESEND_API_KEY) {
+        res.status(500).json({ success: false, message: 'Email service not configured' });
+        return;
+      }
+      let subject =
+        purpose === 'welcome'
+          ? 'Welcome to Toki – Set your password'
+          : 'Reset your Toki password';
+      let text =
+        purpose === 'welcome'
+          ? `Hey ${u.name || ''},\n\nWelcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`
+          : `Hey ${u.name || ''},\n\nReset your Toki password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`;
+
+      // Try to find template by name if templateId not provided
+      let templateIdToUse = templateId;
+      if (!templateIdToUse) {
+        const templateName = purpose === 'welcome' ? 'welcome_password' : 'reset_password';
+        const templateResult = await pool.query(
+          'SELECT id FROM email_templates WHERE template_name = $1 ORDER BY created_at DESC LIMIT 1',
+          [templateName]
+        );
+        if (templateResult.rows.length > 0) {
+          templateIdToUse = templateResult.rows[0].id;
+        }
+      }
+
+      // If a template is found/provided, use it
+      if (templateIdToUse) {
+        const t = await pool.query('SELECT subject, body_text FROM email_templates WHERE id = $1', [templateIdToUse]);
+        if (t.rows.length > 0) {
+          const tmpl = t.rows[0];
+          subject = tmpl.subject || subject;
+          let bodyText = tmpl.body_text || text;
+          
+          // Replace variables
+          bodyText = bodyText
+            .replace(/\{\{name\}\}/g, u.name || '')
+            .replace(/\{\{email\}\}/g, u.email || '')
+            .replace(/\{\{expiry_hours\}\}/g, String(expiryHours));
+          
+          // Only include link if checkbox is checked
+          if (includeLink) {
+            bodyText = bodyText.replace(/\{\{reset_link\}\}/g, link);
+          } else {
+            // Remove the link placeholder if not including it
+            bodyText = bodyText.replace(/\{\{reset_link\}\}/g, '');
+          }
+          
+          text = bodyText;
+        }
+      } else if (!includeLink) {
+        // No template but link should not be included - remove it from default text
+        text = text.replace(new RegExp(link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+      }
+
+      const resp = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "onboarding@toki-app.com",
+          to: u.email,
+          subject,
+          text,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(()=> '');
+        console.error('Resend email failed (password-link):', txt);
+        res.status(500).json({ success: false, message: 'Failed to send email' });
+        return;
+      }
+    }
+
+    res.json({ success: true, data: { link } });
+    return;
+  } catch (error) {
+    console.error('Error issuing password link:', error);
+    res.status(500).json({ success: false, message: 'Failed to issue password link' });
+    return;
+  }
+});
+
+// Settings: password reset expiry
+router.get('/settings/password-reset-expiry', authenticateToken, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`SELECT value FROM app_settings WHERE key = 'password_reset_expiry_hours'`);
+    const hours =
+      result.rows.length > 0
+        ? Number(typeof result.rows[0].value === 'string' ? result.rows[0].value : Number(result.rows[0].value))
+        : 2;
+    res.json({ success: true, data: { hours: Number.isFinite(hours) && hours > 0 ? hours : 2 } });
+  } catch (error) {
+    console.error('Error reading settings (password expiry):', error);
+    res.status(500).json({ success: false, message: 'Failed to load settings' });
+  }
+});
+
+router.put('/settings/password-reset-expiry', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { hours } = req.body as { hours: number };
+    const n = Number(hours);
+    if (!Number.isFinite(n) || n <= 0 || n > 168) {
+      res.status(400).json({ success: false, message: 'Invalid hours (1-168)' });
+      return;
+    }
+    await pool.query(
+      `INSERT INTO app_settings(key, value, updated_at)
+       VALUES ('password_reset_expiry_hours', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(n)]
+    );
+    res.json({ success: true, data: { hours: n } });
+  } catch (error) {
+    console.error('Error saving settings (password expiry):', error);
+    res.status(500).json({ success: false, message: 'Failed to save settings' });
   }
 });
 

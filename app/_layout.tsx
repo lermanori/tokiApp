@@ -119,9 +119,11 @@ function RootLayoutNav() {
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
         const inHealthScreen = segments[0] === 'health';
         const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
+        const inSetPasswordScreen = segments[0] === 'set-password' || path.startsWith('/set-password');
+        const inResetPasswordScreen = segments[0] === 'reset-password' || path.startsWith('/reset-password');
         
-        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
-          // Redirect unauthenticated users to login; allow waitlist, join and health
+        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen) {
+          // Redirect unauthenticated users to login; allow waitlist, join, health, set-password, and reset-password
           router.replace('/login');
         } else if (isAuthenticated && inLoginScreen) {
           // Redirect to main app if authenticated
@@ -176,8 +178,8 @@ function RootLayoutNav() {
       } catch (error) {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
-        // Only redirect if we're not on the login, join, or health screen and have no current user
-        if (segments[0] !== 'login' && segments[0] !== 'join' && segments[0] !== 'health' && segments[0] !== 'waitlist' && (!state.currentUser || !state.currentUser.id)) {
+        // Only redirect if we're not on the login, join, health, waitlist, set-password, or reset-password screen and have no current user
+        if (segments[0] !== 'login' && segments[0] !== 'join' && segments[0] !== 'health' && segments[0] !== 'waitlist' && segments[0] !== 'set-password' && segments[0] !== 'reset-password' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -260,6 +262,8 @@ function RootLayoutNav() {
         <Stack.Screen name="join-test" options={{ headerShown: false }} />
         <Stack.Screen name="test-route" options={{ headerShown: false }} />
         <Stack.Screen name="health" options={{ headerShown: false }} />
+        <Stack.Screen name="set-password" options={{ headerShown: false }} />
+        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
     </RedirectionGuard>

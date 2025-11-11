@@ -1,3 +1,15 @@
+# File: adminApi.ts
+
+### Summary
+Admin API client with JWT auth. Added settings methods for password link expiry and an endpoint to issue welcome/reset password links for users.
+
+### Fixes Applied log
+- Added `getPasswordExpiry()` and `updatePasswordExpiry(hours)` to manage expiry settings.
+- Added `issuePasswordLink(userId, purpose, send)` for generating and optionally emailing password links.
+
+### How Fixes Were Implemented
+- New functions that call `/api/admin/settings/password-reset-expiry` and `/api/admin/users/:id/password-link` with appropriate HTTP methods and payloads. 
+
 ### Summary
 Extends admin API client with waitlist CRUD methods: create, update, delete entries.
 

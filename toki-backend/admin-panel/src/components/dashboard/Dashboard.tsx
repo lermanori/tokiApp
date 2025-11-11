@@ -4,10 +4,11 @@ import { LogOut, Users, Mail, Sliders } from 'lucide-react';
 import WaitlistTab from './WaitlistTab';
 import DatabaseTab from './DatabaseTab';
 import AlgorithmTab from './AlgorithmTab';
+import SettingsTab from './SettingsTab';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<'waitlist' | 'database' | 'algorithm'>('waitlist');
+  const [activeTab, setActiveTab] = useState<'waitlist' | 'database' | 'algorithm' | 'settings'>('waitlist');
 
   const handleLogout = () => {
     logout();
@@ -108,6 +109,12 @@ export default function Dashboard() {
             icon={<Sliders size={18} />}
             label="Algorithm"
           />
+          <TabButton
+            active={activeTab === 'settings'}
+            onClick={() => setActiveTab('settings')}
+            icon={<Sliders size={18} />}
+            label="Settings"
+          />
         </div>
       </div>
 
@@ -120,6 +127,7 @@ export default function Dashboard() {
         {activeTab === 'waitlist' && <WaitlistTab />}
         {activeTab === 'database' && <DatabaseTab />}
         {activeTab === 'algorithm' && <AlgorithmTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </div>
     </div>
   );

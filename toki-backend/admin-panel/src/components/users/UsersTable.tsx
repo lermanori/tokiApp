@@ -3,6 +3,7 @@ import { adminApi } from '../../services/adminApi';
 import UserCreateModal from './UserCreateModal';
 import UserEditModal from './UserEditModal';
 import DeleteConfirmDialog from '../shared/DeleteConfirmDialog';
+import PasswordLinkModal from './PasswordLinkModal';
 
 interface UserRow {
   id: string;
@@ -40,6 +41,7 @@ export default function UsersTable() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<UserRow | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  const [passwordLinkModal, setPasswordLinkModal] = useState<{ user: UserRow; purpose: 'welcome' | 'reset' } | null>(null);
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -142,6 +144,21 @@ export default function UsersTable() {
                 <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                   <button className="btn-primary" onClick={()=>setEditing(u)} style={{ marginRight: 8 }}>Edit</button>
                   <button className="btn-primary" onClick={()=>setDeleting(u)} style={{ background: 'linear-gradient(135deg,#EF4444,#EC4899)' }}>Delete</button>
+                  <div style={{ height: 8 }} />
+                  <button
+                    className="btn-primary"
+                    onClick={() => setPasswordLinkModal({ user: u, purpose: 'welcome' })}
+                    style={{ marginTop: 8, background: 'linear-gradient(135deg,#8B5CF6,#EC4899)' }}
+                  >
+                    Send Welcome Password Link
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => setPasswordLinkModal({ user: u, purpose: 'reset' })}
+                    style={{ marginTop: 8 }}
+                  >
+                    Send Reset Password Link
+                  </button>
                 </td>
               </tr>
             ))}
@@ -178,6 +195,16 @@ export default function UsersTable() {
           onCancel={()=>setDeleting(null)}
           onConfirm={async ()=>{ setDeletingBusy(true); try { await adminApi.deleteUser(deleting.id); setDeleting(null); loadUsers(); } finally { setDeletingBusy(false); } }}
           loading={deletingBusy}
+        />
+      )}
+      {passwordLinkModal && (
+        <PasswordLinkModal
+          userId={passwordLinkModal.user.id}
+          userName={passwordLinkModal.user.name}
+          userEmail={passwordLinkModal.user.email}
+          purpose={passwordLinkModal.purpose}
+          onClose={() => setPasswordLinkModal(null)}
+          onSuccess={() => { setPasswordLinkModal(null); loadUsers(); }}
         />
       )}
     </div>

@@ -111,6 +111,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 7: App settings
+    try {
+      console.log('📝 Migration 7: Creating app_settings table and default values...');
+      const appSettingsSql = readFileSync(
+        join(sqlDir, 'create-app-settings.sql'),
+        'utf-8'
+      );
+      await pool.query(appSettingsSql);
+      console.log('✅ App settings migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  app_settings table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

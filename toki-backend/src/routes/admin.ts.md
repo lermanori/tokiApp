@@ -26,6 +26,12 @@ This file handles admin authentication endpoints (login, me) and admin-only rout
  - Added: POST/PUT/DELETE /api/admin/tokis endpoints for CRUD
  - Added: GET/PUT /api/admin/algorithm endpoints with validation and history row insert
  - Added: Email templates CRUD: GET list/get, POST create, PUT update, DELETE delete
+ - Added: POST /api/admin/users/:id/password-link to generate welcome/reset password links using existing user reset fields
+ - Added: GET/PUT /api/admin/settings/password-reset-expiry to manage expiry hours (default 2h)
+ - Enhanced: POST /api/admin/users/:id/password-link now automatically looks up templates by name (`welcome_password` or `reset_password`) if templateId not provided
+ - Enhanced: POST /api/admin/users/:id/password-link supports `includeLink` parameter to control whether password link is included in email body
+ - Enhanced: Waitlist and Users create flows can optionally send a welcome password link instead of random password
+ - Enhanced: Password link email supports templates with variables: `{{reset_link}}`, `{{expiry_hours}}`, `{{name}}`, `{{email}}`
 
 ### How Fixes Were Implemented
 - Updated requireAdmin middleware to query users table for role column and verify role === 'admin'
@@ -47,4 +53,5 @@ This file handles admin authentication endpoints (login, me) and admin-only rout
 \- Implemented algorithm weights validation (range [0,1], sum=1.0) and update with updated_by
 \- Implemented email templates CRUD with structured fields and timestamps
 \- Implemented safe CRUD handlers for users and tokis with validation and clear error responses
+ - Implemented password link issuance helper and admin endpoints; persisted configurable expiry in `app_settings`; integrated optional welcome link on user creation
 
