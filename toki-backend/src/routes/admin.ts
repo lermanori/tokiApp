@@ -571,6 +571,83 @@ router.get('/waitlist/stats', authenticateToken, requireAdmin, async (req: Reque
   }
 });
 
+// Create waitlist entry
+router.post('/waitlist', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { email, phone = null, location = null, platform = null } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    const exists = await pool.query('SELECT 1 FROM waitlist_signups WHERE email = $1', [email]);
+    if (exists.rows.length > 0) {
+      return res.status(409).json({ success: false, message: 'Email already on waitlist' });
+    }
+    const ins = await pool.query(
+      `INSERT INTO waitlist_signups (email, phone, location, platform)
+       VALUES ($1,$2,$3,$4)
+       RETURNING id, email, phone, location, reason, platform, created_at`,
+      [email, phone, location, platform]
+    );
+    return res.json({ success: true, data: ins.rows[0] });
+  } catch (error) {
+    console.error('Error creating waitlist entry:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create waitlist entry' });
+  }
+});
+
+// Update waitlist entry
+router.put('/waitlist/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { email, phone, location, platform } = req.body || {};
+
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (email !== undefined) { fields.push(`email = $${idx++}`); values.push(email); }
+    if (phone !== undefined) { fields.push(`phone = $${idx++}`); values.push(phone); }
+    if (location !== undefined) { fields.push(`location = $${idx++}`); values.push(location); }
+    if (platform !== undefined) { fields.push(`platform = $${idx++}`); values.push(platform); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+
+    values.push(id);
+
+    const upd = await pool.query(
+      `UPDATE waitlist_signups SET ${fields.join(', ')} WHERE id = $${idx}
+       RETURNING id, email, phone, location, reason, platform, created_at`,
+      values
+    );
+
+    if (upd.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Waitlist entry not found' });
+    }
+
+    return res.json({ success: true, data: upd.rows[0] });
+  } catch (error) {
+    console.error('Error updating waitlist entry:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update waitlist entry' });
+  }
+});
+
+// Delete waitlist entry (hard delete)
+router.delete('/waitlist/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const del = await pool.query('DELETE FROM waitlist_signups WHERE id = $1 RETURNING id', [id]);
+    if (del.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Waitlist entry not found' });
+    }
+    return res.json({ success: true, message: 'Deleted' });
+  } catch (error) {
+    console.error('Error deleting waitlist entry:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete waitlist entry' });
+  }
+});
+
 // Create user from waitlist entry
 router.post('/waitlist/:id/user', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {

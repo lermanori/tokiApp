@@ -3,6 +3,7 @@ import { adminApi } from '../../services/adminApi';
 import WaitlistEntryModal from './WaitlistEntryModal';
 import WaitlistStats from './WaitlistStats';
 import EmailTemplatesPanel from '../waitlist/EmailTemplatesPanel';
+import WaitlistEditModal from '../waitlist/WaitlistEditModal';
 
 interface WaitlistEntry {
   id: string;
@@ -49,6 +50,7 @@ export default function WaitlistTab() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selected, setSelected] = useState<WaitlistEntry | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState<{ mode: 'create' | 'edit'; entry?: WaitlistEntry } | null>(null);
 
   const queryParams = useMemo(() => ({
     page,
@@ -106,8 +108,9 @@ export default function WaitlistTab() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <WaitlistStats />
-        <div>
+        <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn-primary" onClick={()=>setTemplatesOpen(true)}>Email Templates</button>
+          <button className="btn-primary" onClick={()=>setEditOpen({ mode: 'create' })}>New Entry</button>
         </div>
       </div>
 
@@ -180,8 +183,18 @@ export default function WaitlistTab() {
                     <td style={{ padding: '12px 16px' }}>{e.platform || '-'}</td>
                     <td style={{ padding: '12px 16px' }}>{e.phone || '-'}</td>
                     <td style={{ padding: '12px 16px' }}>{formatDate(e.created_at)}</td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td style={{ padding: '12px 16px', display: 'flex', gap: 8 }}>
                       <button className="btn-primary" onClick={() => setSelected(e)}>View</button>
+                      <button className="btn-primary" onClick={() => setEditOpen({ mode: 'edit', entry: e })}>Edit</button>
+                      <button className="btn-primary" onClick={async () => {
+                        if (!confirm('Delete this waitlist entry?')) return;
+                        try {
+                          await adminApi.deleteWaitlistEntry(e.id);
+                          await loadWaitlist();
+                        } catch (err) {
+                          alert('Failed to delete entry');
+                        }
+                      }} style={{ background: 'linear-gradient(135deg,#EF4444,#EC4899)' }}>Delete</button>
                     </td>
                   </tr>
                 ))
@@ -207,6 +220,16 @@ export default function WaitlistTab() {
           onClose={() => setSelected(null)}
           onSuccess={() => {
             setSelected(null);
+            loadWaitlist();
+          }}
+        />
+      )}
+      {editOpen && (
+        <WaitlistEditModal
+          initial={editOpen.mode === 'edit' ? editOpen.entry : undefined}
+          onClose={() => setEditOpen(null)}
+          onSaved={() => {
+            setEditOpen(null);
             loadWaitlist();
           }}
         />

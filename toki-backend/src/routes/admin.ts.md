@@ -13,6 +13,9 @@ This file handles admin authentication endpoints (login, me) and admin-only rout
 - Enhanced: GET /api/admin/waitlist now includes `user_exists` boolean (email exists in users)
 - Added: GET /api/admin/waitlist/:id endpoint for single entry details
 - Added: GET /api/admin/waitlist/stats endpoint for comprehensive statistics
+- Added: POST /api/admin/waitlist endpoint to create a waitlist entry
+- Added: PUT /api/admin/waitlist/:id endpoint to update a waitlist entry (Email, Location, Platform, Phone)
+- Added: DELETE /api/admin/waitlist/:id endpoint to hard delete a waitlist entry
 - Added: POST /api/admin/waitlist/:id/user endpoint to create users from waitlist entries
 - Added: POST /api/admin/waitlist/:id/email endpoint to send custom emails with template support
 - Fixed: Ensure `requireAdmin` always returns `Promise<void>` and returns after `next()` to satisfy TS7030
@@ -34,6 +37,7 @@ This file handles admin authentication endpoints (login, me) and admin-only rout
 \- Added `EXISTS (SELECT 1 FROM users ... ) AS user_exists` to list entries so UI can render a ✓/✗ indicator
 - Added sorting capabilities with validation for sort columns and order
 - Implemented pagination with proper limit/offset handling
+- Implemented waitlist CRUD handlers with validation, conflict detection on email, and safe dynamic field updates
 - Added statistics endpoint with total count, location breakdown, platform breakdown, and time series data
 - Created user creation endpoint that extracts waitlist data, checks for duplicates, generates passwords, and optionally sends welcome emails
 - Implemented email sending endpoint with template support, variable replacement (position, city, name, email), and Resend API integration

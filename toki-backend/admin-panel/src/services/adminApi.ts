@@ -67,6 +67,33 @@ export const adminApi = {
     return handleResponse(response);
   },
 
+  // Waitlist CRUD
+  createWaitlistEntry: async (data: { email: string; phone?: string | null; location?: string | null; platform?: string | null }) => {
+    const response = await fetch(`${API_BASE}/waitlist`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  updateWaitlistEntry: async (id: string, data: Partial<{ email: string; phone: string | null; location: string | null; platform: string | null }>) => {
+    const response = await fetch(`${API_BASE}/waitlist/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  deleteWaitlistEntry: async (id: string) => {
+    const response = await fetch(`${API_BASE}/waitlist/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
   // Users
   getUsers: async (params?: { page?: number; limit?: number; search?: string; role?: string; verified?: boolean }) => {
     const query = new URLSearchParams();
