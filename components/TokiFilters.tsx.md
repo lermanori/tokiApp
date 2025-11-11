@@ -1,6 +1,18 @@
 # File: components/TokiFilters.tsx
 
 ### Summary
+Filters modal used on Explore/Discover. It controls visibility, distance, availability, participants, date, and now mirrors category chip selections.
+
+### Fixes Applied log
+- problem: Category shown in the modal did not reflect the chips on the page.
+- solution: Added `selectedCategories` and `onCategoryToggle` props. When provided, the Category section becomes multi-select and mirrors chip state. Tapping “All” resets to `['all']`.
+
+### How Fixes Were Implemented
+- Extended `TokiFiltersProps` with `selectedCategories?: string[]` and `onCategoryToggle?: (next: string[]) => void`.
+- In `renderFilterSection`, when `section.key === 'category'` and the new props are present, draw togglable pills using the same interaction rules as the chips instead of the old single-select `selectedFilters.category`.
+# File: components/TokiFilters.tsx
+
+### Summary
 Filter modal for the Explore/Discover screen. Provides filtering options for visibility, category, distance, availability, participants, and time.
 
 ### Fixes Applied log

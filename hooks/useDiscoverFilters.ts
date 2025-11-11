@@ -17,13 +17,13 @@ export const useDiscoverFilters = (
   events: TokiEvent[],
   userConnections: string[]
 ) => {
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(['all']);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<DiscoverFilters>(DEFAULT_FILTERS);
 
   const filteredEvents = useMemo(() => {
-    return filterEvents(events, searchQuery, selectedCategory, selectedFilters, userConnections);
-  }, [events, searchQuery, selectedCategory, selectedFilters, userConnections]);
+    return filterEvents(events, searchQuery, selectedCategories, selectedFilters, userConnections);
+  }, [events, searchQuery, selectedCategories, selectedFilters, userConnections]);
 
   const handleFilterChange = useCallback((filterType: string, value: string) => {
     setSelectedFilters(prev => ({ ...prev, [filterType]: value }));
@@ -31,13 +31,13 @@ export const useDiscoverFilters = (
 
   const clearAllFilters = useCallback(() => {
     setSelectedFilters(DEFAULT_FILTERS);
-    setSelectedCategory('all');
+    setSelectedCategories(['all']);
     setSearchQuery('');
   }, []);
 
   return {
-    selectedCategory,
-    setSelectedCategory,
+    selectedCategories,
+    setSelectedCategories,
     searchQuery,
     setSearchQuery,
     selectedFilters,

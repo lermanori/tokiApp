@@ -83,8 +83,8 @@ export default function DiscoverScreen() {
   } = useDiscoverData();
 
   const {
-    selectedCategory,
-    setSelectedCategory,
+    selectedCategories,
+    setSelectedCategories,
     selectedFilters,
     filteredEvents,
     handleFilterChange,
@@ -329,11 +329,9 @@ export default function DiscoverScreen() {
         (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)) {
       return 'Loading...';
     }
-    if (state.totalNearbyCount > 0) {
-      return `${state.totalNearbyCount} Toki${state.totalNearbyCount !== 1 ? 's' : ''} nearby`;
-    }
-    if (state.tokis.length > 0) {
-      return `${state.tokis.length} Toki${state.tokis.length !== 1 ? 's' : ''} nearby`;
+    const count = filteredEvents.length;
+    if (count > 0) {
+      return `${count} Toki${count !== 1 ? 's' : ''} nearby`;
     }
     return 'No Tokis nearby';
   };
@@ -379,15 +377,15 @@ export default function DiscoverScreen() {
             {showMap && renderInteractiveMap()}
             <DiscoverCategories
               categories={categories}
-              selectedCategory={selectedCategory}
-              onCategorySelect={setSelectedCategory}
+              selectedCategories={selectedCategories}
+              onCategoryToggle={setSelectedCategories}
               showMap={showMap}
             />
             <View>
               <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
             </View>
           </>
-        ), [showMap, renderInteractiveMap, categories, selectedCategory, setSelectedCategory])}
+        ), [showMap, renderInteractiveMap, categories, selectedCategories, setSelectedCategories, filteredEvents.length])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,
@@ -454,6 +452,8 @@ export default function DiscoverScreen() {
         onFilterChange={handleFilterChange}
         onClearAll={clearAllFilters}
         onApply={applyFilters}
+        selectedCategories={selectedCategories}
+        onCategoryToggle={setSelectedCategories}
         showAdvancedFilters={false}
       />
     </SafeAreaView>

@@ -4,17 +4,38 @@ import { CATEGORIES } from '@/utils/categories';
 
 interface DiscoverCategoriesProps {
   categories: string[];
-  selectedCategory: string;
-  onCategorySelect: (category: string) => void;
+  selectedCategories: string[]; // includes 'all' when no specific selected
+  onCategoryToggle: (next: string[]) => void;
   showMap: boolean;
 }
 
 export const DiscoverCategories: React.FC<DiscoverCategoriesProps> = ({
   categories,
-  selectedCategory,
-  onCategorySelect,
+  selectedCategories,
+  onCategoryToggle,
   showMap,
 }) => {
+  const handlePress = (category: string) => {
+    // Special behavior for 'all'
+    if (category === 'all') {
+      onCategoryToggle(['all']);
+      return;
+    }
+    // Toggle category in list, removing 'all' if present
+    const current = selectedCategories.includes('all')
+      ? []
+      : selectedCategories;
+    const next = current.includes(category)
+      ? current.filter(c => c !== category)
+      : [...current, category];
+    onCategoryToggle(next.length === 0 ? ['all'] : next);
+  };
+
+  const isActive = (category: string) => {
+    return selectedCategories.includes(category) ||
+      (category === 'all' && selectedCategories.includes('all'));
+  };
+
   return (
     <View style={[styles.categoriesContainer, showMap && styles.categoriesContainerNoTopPadding]}>
       <ScrollView
@@ -27,13 +48,13 @@ export const DiscoverCategories: React.FC<DiscoverCategoriesProps> = ({
             key={category}
             style={[
               styles.categoryButton,
-              selectedCategory === category && styles.categoryButtonActive
+              isActive(category) && styles.categoryButtonActive
             ]}
-            onPress={() => onCategorySelect(category)}
+            onPress={() => handlePress(category)}
           >
             <Text style={[
               styles.categoryText,
-              selectedCategory === category && styles.categoryTextActive
+              isActive(category) && styles.categoryTextActive
             ]}>
               {category.charAt(0).toUpperCase() + category.slice(1)}
             </Text>

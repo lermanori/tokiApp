@@ -1,3 +1,18 @@
+# File: app/(tabs)/discover.tsx
+
+### Summary
+Discover (map) screen that shows a map, category chips, and a paginated list of Tokis. It wires data from `useDiscoverData` and filtering from `useDiscoverFilters`.
+
+### Fixes Applied log
+- problem: The header count showed total nearby from global state and didn’t react to filters.
+- solution: The title now derives from `filteredEvents.length`, updating instantly with filters and category changes.
+- problem: Category chips only supported a single active category.
+- solution: Integrated multi-select categories via `useDiscoverFilters` and updated `DiscoverCategories` usage to pass and toggle an array of categories.
+
+### How Fixes Were Implemented
+- Replaced header count computation with a function that uses `filteredEvents.length` and shows “No Tokis nearby” when 0.
+- Switched from `selectedCategory` to `selectedCategories: string[]` from the filters hook and passed it to `DiscoverCategories` with `onCategoryToggle`.
+- Updated memo dependencies to include `filteredEvents.length` and the new category array. 
 # File: discover.tsx
 
 ### Summary

@@ -42,7 +42,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
 export const filterEvents = (
   events: TokiEvent[],
   searchQuery: string,
-  selectedCategory: string,
+  selectedCategories: string[], // includes 'all' when none chosen
   selectedFilters: DiscoverFilters,
   userConnections: string[]
 ): TokiEvent[] => {
@@ -53,8 +53,11 @@ export const filterEvents = (
       event.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesCategory = (selectedCategory === 'all' || event.category === selectedCategory) &&
-      (selectedFilters.category === 'all' || event.category === selectedFilters.category);
+    const categoryAnySelected = !selectedCategories.length || selectedCategories.includes('all');
+    const matchesMultiCategory = categoryAnySelected || selectedCategories.includes(event.category);
+
+    // Category chips are the single source of truth; modal category is ignored
+    const matchesCategory = matchesMultiCategory;
 
     const matchesVisibility = (() => {
       if (selectedFilters.visibility === 'all') return true;

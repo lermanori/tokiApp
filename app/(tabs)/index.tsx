@@ -7,13 +7,14 @@ import { router, useFocusEffect } from 'expo-router';
 import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
+import { DiscoverCategories } from '@/components/DiscoverCategories';
 import { useApp } from '@/contexts/AppContext';
 import { CATEGORIES, getCategoryColor } from '@/utils/categories';
 
 export default function ExploreScreen() {
   const { state, actions } = useApp();
   const { width } = useWindowDimensions();
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(['all']);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -180,7 +181,7 @@ export default function ExploreScreen() {
       dateFrom: '',
       dateTo: '',
     });
-    setSelectedCategory('all');
+    setSelectedCategories(['all']);
     setSearchQuery('');
     setShowSearch(false);
   };
@@ -204,8 +205,8 @@ export default function ExploreScreen() {
       toki.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
       toki.host.name.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory = (selectedCategory === 'all' || toki.category === selectedCategory) &&
-      (selectedFilters.category === 'all' || toki.category === selectedFilters.category);
+    const categoryAnySelected = !selectedCategories.length || selectedCategories.includes('all');
+    const matchesCategory = categoryAnySelected || selectedCategories.includes(toki.category);
 
     const matchesVisibility = (() => {
       if (selectedFilters.visibility === 'all') {
@@ -395,29 +396,12 @@ export default function ExploreScreen() {
       </LinearGradient>
 
       <View style={styles.categoriesContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesScroll}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
-              ]}
-              onPress={() => setSelectedCategory(category)}
-            >
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
-              ]}>
-                {category.charAt(0).toUpperCase() + category.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <DiscoverCategories
+          categories={categories}
+          selectedCategories={selectedCategories}
+          onCategoryToggle={setSelectedCategories}
+          showMap={false}
+        />
       </View>
 
       <View>
@@ -425,11 +409,12 @@ export default function ExploreScreen() {
           {(state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
            (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)
             ? 'Loading...' 
-            : state.totalNearbyCount > 0
-            ? `${state.totalNearbyCount} Toki${state.totalNearbyCount !== 1 ? 's' : ''} nearby`
-            : state.tokis.length > 0
-            ? `${state.tokis.length} Toki${state.tokis.length !== 1 ? 's' : ''} nearby`
-            : 'No Tokis nearby'}
+            : (() => {
+                const count = filteredTokis.length;
+                return count > 0
+                  ? `${count} Toki${count !== 1 ? 's' : ''} nearby`
+                  : 'No Tokis nearby';
+              })()}
           {searchQuery && (
             <Text style={styles.searchResultText}> for "{searchQuery}"</Text>
           )}
@@ -472,12 +457,12 @@ export default function ExploreScreen() {
             : 'No Tokis match your selected filters. Try removing some filters.'
           }
         </Text>
-        {(searchQuery || selectedCategory !== 'all') && (
+        {(searchQuery || !selectedCategories.includes('all')) && (
           <TouchableOpacity
             style={styles.clearFiltersButton}
             onPress={() => {
               setSearchQuery('');
-              setSelectedCategory('all');
+              setSelectedCategories(['all']);
               setShowSearch(false);
             }}
           >
@@ -576,6 +561,8 @@ export default function ExploreScreen() {
         onFilterChange={handleFilterChange}
         onClearAll={clearAllFilters}
         onApply={applyFilters}
+        selectedCategories={selectedCategories}
+        onCategoryToggle={setSelectedCategories}
       />
     </SafeAreaView>
   );
@@ -880,9 +867,7 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAEAEA',
+    paddingVertical: 0,
   },
   categoriesScroll: {
     paddingHorizontal: 20,

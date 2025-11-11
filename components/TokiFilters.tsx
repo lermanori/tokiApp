@@ -25,6 +25,9 @@ export interface TokiFiltersProps {
   onClearAll: () => void;
   onApply: () => void;
   showAdvancedFilters?: boolean;
+  // Category chips single source of truth (optional; when provided, modal mirrors chips)
+  selectedCategories?: string[];
+  onCategoryToggle?: (next: string[]) => void;
 }
 
 const TokiFilters: React.FC<TokiFiltersProps> = ({
@@ -35,6 +38,8 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
   onClearAll,
   onApply,
   showAdvancedFilters = false,
+  selectedCategories,
+  onCategoryToggle,
 }) => {
   const [isDatePickerVisible, setIsDatePickerVisible] = useState(false);
 
@@ -138,33 +143,67 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     <View key={section.key} style={styles.filterSection}>
       <Text style={styles.filterSectionTitle}>{section.title}</Text>
       <View style={styles.filterOptions}>
-        {section.options.map((option) => {
-          const isSelected =
-            section.key === 'time'
-              ? currentTimeOption === (option as any)
-              : (selectedFilters as any)[section.key] === option;
-          return (
-            <TouchableOpacity
-              key={option}
-              style={[
-                styles.filterOption,
-                isSelected && styles.filterOptionSelected
-              ]}
-              onPress={() =>
+        {section.key === 'category' && selectedCategories && onCategoryToggle
+          ? section.options.map((option) => {
+              const handlePress = (category: string) => {
+                if (category === 'all') {
+                  onCategoryToggle(['all']);
+                  return;
+                }
+                const current = selectedCategories.includes('all') ? [] : selectedCategories;
+                const next = current.includes(category)
+                  ? current.filter((c) => c !== category)
+                  : [...current, category];
+                onCategoryToggle(next.length === 0 ? ['all'] : next);
+              };
+              const isActive =
+                selectedCategories.includes(option) ||
+                (option === 'all' && selectedCategories.includes('all'));
+              return (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.filterOption,
+                    isActive && styles.filterOptionSelected
+                  ]}
+                  onPress={() => handlePress(option)}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    isActive && styles.filterOptionTextSelected
+                  ]}>
+                    {getOptionLabel(option, section.key)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          : section.options.map((option) => {
+              const isSelected =
                 section.key === 'time'
-                  ? handleTimeSelect(option as any)
-                  : onFilterChange(section.key, option)
-              }
-            >
-              <Text style={[
-                styles.filterOptionText,
-                isSelected && styles.filterOptionTextSelected
-              ]}>
-                {getOptionLabel(option, section.key)}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                  ? currentTimeOption === (option as any)
+                  : (selectedFilters as any)[section.key] === option;
+              return (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.filterOption,
+                    isSelected && styles.filterOptionSelected
+                  ]}
+                  onPress={() =>
+                    section.key === 'time'
+                      ? handleTimeSelect(option as any)
+                      : onFilterChange(section.key, option)
+                  }
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    isSelected && styles.filterOptionTextSelected
+                  ]}>
+                    {getOptionLabel(option, section.key)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
       </View>
     </View>
   );
