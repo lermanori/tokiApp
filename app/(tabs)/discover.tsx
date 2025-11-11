@@ -7,6 +7,7 @@ import TokiFilters from '@/components/TokiFilters';
 import DiscoverMap from '@/components/DiscoverMap';
 import { DiscoverHeader } from '@/components/DiscoverHeader';
 import { DiscoverCategories } from '@/components/DiscoverCategories';
+import TokiSortModal, { SortState } from '@/components/TokiSortModal';
 import { useApp } from '@/contexts/AppContext';
 import { useDiscoverData } from '@/hooks/useDiscoverData';
 import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
@@ -14,6 +15,7 @@ import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
+import { sortEvents } from '@/utils/sortTokis';
 
 // Platform-specific map imports
 const isWeb = Platform.OS === 'web';
@@ -55,9 +57,11 @@ export default function DiscoverScreen() {
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams();
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
   const [showMap, setShowMap] = useState(true);
   const [highlightedTokiId, setHighlightedTokiId] = useState<string | null>(null);
   const [highlightedTokiCoordinates, setHighlightedTokiCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [sort, setSort] = useState<SortState>({ sortBy: 'relevance', sortOrder: 'asc' });
   
   const selectedEventRef = useRef<TokiEvent | null>(null);
   const calloutOpeningRef = useRef(false);
@@ -90,6 +94,13 @@ export default function DiscoverScreen() {
     handleFilterChange,
     clearAllFilters,
   } = useDiscoverFilters(events, userConnections);
+
+  // Sorting
+  const sortedEvents = useMemo(() => {
+    const lat = mapRegion?.latitude ?? state.currentUser?.latitude;
+    const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
+    return sortEvents(filteredEvents as any, sort, lat, lng);
+  }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude]);
 
   // Reset refresh flag when screen loses focus
   useFocusEffect(
@@ -312,7 +323,7 @@ export default function DiscoverScreen() {
           key="discover-map" // Stable key to prevent remounting
           region={mapRegion}
           onRegionChange={handleRegionChange}
-          events={filteredEvents as any}
+          events={sortedEvents as any}
           onEventPress={handleEventPress as any}
           onMarkerPress={handleMapMarkerPress as any}
           onToggleList={toggleMapView}
@@ -321,7 +332,7 @@ export default function DiscoverScreen() {
         />
       </View>
     );
-  }, [mapRegion, filteredEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
+  }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
   
 
   const getSectionTitle = () => {
@@ -329,7 +340,7 @@ export default function DiscoverScreen() {
         (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)) {
       return 'Loading...';
     }
-    const count = filteredEvents.length;
+    const count = sortedEvents.length;
     if (count > 0) {
       return `${count} Toki${count !== 1 ? 's' : ''} nearby`;
     }
@@ -362,13 +373,14 @@ export default function DiscoverScreen() {
         onRefresh={handleRefreshWithRadius}
         onToggleMap={toggleMapView}
         onOpenFilters={() => setShowFilterModal(true)}
+        onOpenSort={() => setShowSortModal(true)}
         showMap={showMap}
         isLoading={state.loading}
       />
 
       <FlatList
         key={`flatlist-${numColumns}`}
-        data={filteredEvents}
+        data={sortedEvents}
         keyExtractor={(item) => item.id}
         style={styles.content}
         numColumns={numColumns}
@@ -385,7 +397,7 @@ export default function DiscoverScreen() {
               <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
             </View>
           </>
-        ), [showMap, renderInteractiveMap, categories, selectedCategories, setSelectedCategories, filteredEvents.length])}
+        ), [showMap, renderInteractiveMap, categories, selectedCategories, setSelectedCategories, sortedEvents.length])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,
@@ -420,6 +432,8 @@ export default function DiscoverScreen() {
           </>
         )}
         contentContainerStyle={filteredEvents.length === 0 ? styles.contentEmpty : [
+          // we keep using filteredEvents.length here to preserve empty state alignment,
+          // but item rendering uses sortedEvents.
           styles.contentList,
           numColumns > 1 && { paddingHorizontal: 12 }
         ]}
@@ -455,6 +469,13 @@ export default function DiscoverScreen() {
         selectedCategories={selectedCategories}
         onCategoryToggle={setSelectedCategories}
         showAdvancedFilters={false}
+      />
+      <TokiSortModal
+        visible={showSortModal}
+        onClose={() => setShowSortModal(false)}
+        value={sort}
+        onChange={setSort}
+        onApply={() => setShowSortModal(false)}
       />
     </SafeAreaView>
   );

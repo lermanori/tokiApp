@@ -1,6 +1,20 @@
 # File: app/(tabs)/discover.tsx
 
 ### Summary
+Discover screen combining a map and list of events with category chips, filters, and now a Sort modal to control ordering of the current result set.
+
+### Fixes Applied log
+- problem: Results order was fixed; users couldn’t change it on the map/list.
+- solution: Added client-side sorting integrated with a new Sort modal and header button.
+
+### How Fixes Were Implemented
+- Added sort state and modal trigger. Passed `onOpenSort` to `DiscoverHeader`.
+- Derived `sortedEvents` with `sortEvents`, using map region or user location for distance calculations.
+- Fed `sortedEvents` to the list and to the map markers to keep both views consistent.
+
+# File: app/(tabs)/discover.tsx
+
+### Summary
 Discover (map) screen that shows a map, category chips, and a paginated list of Tokis. It wires data from `useDiscoverData` and filtering from `useDiscoverFilters`.
 
 ### Fixes Applied log

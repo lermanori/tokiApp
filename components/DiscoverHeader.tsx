@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Filter, RefreshCw } from 'lucide-react-native';
+import { MapPin, Filter, RefreshCw, ArrowUpDown } from 'lucide-react-native';
 
 interface DiscoverHeaderProps {
   onRefresh: () => void;
   onToggleMap: () => void;
   onOpenFilters: () => void;
+  onOpenSort: () => void;
   showMap: boolean;
   isLoading: boolean;
 }
@@ -15,6 +16,7 @@ export const DiscoverHeader: React.FC<DiscoverHeaderProps> = ({
   onRefresh,
   onToggleMap,
   onOpenFilters,
+  onOpenSort,
   showMap,
   isLoading,
 }) => {
@@ -35,6 +37,9 @@ export const DiscoverHeader: React.FC<DiscoverHeaderProps> = ({
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={onToggleMap}>
             {showMap ? <MapPin size={20} color="#666666" /> : <View style={styles.listIcon} />}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton} onPress={onOpenSort}>
+            <ArrowUpDown size={20} color="#666666" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={onOpenFilters}>
             <Filter size={20} color="#666666" />

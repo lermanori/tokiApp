@@ -2,23 +2,27 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Animated, RefreshControl, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, MapPin, Clock, Users, Heart, X } from 'lucide-react-native';
+import { Search, Filter, MapPin, Clock, Users, Heart, X, ArrowUpDown } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import TokiIcon from '@/components/TokiIcon';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
+import TokiSortModal, { SortState } from '@/components/TokiSortModal';
 import { DiscoverCategories } from '@/components/DiscoverCategories';
 import { useApp } from '@/contexts/AppContext';
 import { CATEGORIES, getCategoryColor } from '@/utils/categories';
+import { sortEvents } from '@/utils/sortTokis';
 
 export default function ExploreScreen() {
   const { state, actions } = useApp();
   const { width } = useWindowDimensions();
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['all']);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [sort, setSort] = useState<SortState>({ sortBy: 'relevance', sortOrder: 'asc' });
   const [selectedFilters, setSelectedFilters] = useState({
     visibility: 'all',
     category: 'all',
@@ -313,6 +317,12 @@ export default function ExploreScreen() {
       && matchesTime;
   });
 
+  const sortedTokis = React.useMemo(() => {
+    const lat = state.currentUser?.latitude;
+    const lng = state.currentUser?.longitude;
+    return sortEvents(filteredTokis as any, sort, lat, lng);
+  }, [filteredTokis, sort, state.currentUser?.latitude, state.currentUser?.longitude]);
+
 
   const handleTokiPress = (toki: any) => {
     router.push({
@@ -389,6 +399,9 @@ export default function ExploreScreen() {
               <Text style={styles.searchPlaceholder}>Search activities...</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity style={styles.filterButton} onPress={() => setShowSortModal(true)}>
+            <ArrowUpDown size={20} color="#666666" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
             <Filter size={20} color="#B49AFF" />
           </TouchableOpacity>
@@ -410,7 +423,7 @@ export default function ExploreScreen() {
            (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)
             ? 'Loading...' 
             : (() => {
-                const count = filteredTokis.length;
+                const count = sortedTokis.length;
                 return count > 0
                   ? `${count} Toki${count !== 1 ? 's' : ''} nearby`
                   : 'No Tokis nearby';
@@ -487,7 +500,7 @@ export default function ExploreScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <FlatList
         key={`flatlist-${numColumns}`}
-        data={filteredTokis}
+        data={sortedTokis}
         keyExtractor={(item) => item.id}
         style={styles.flatList}
         numColumns={numColumns}
@@ -517,7 +530,7 @@ export default function ExploreScreen() {
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
-        contentContainerStyle={filteredTokis.length === 0 ? styles.contentEmpty : [
+        contentContainerStyle={sortedTokis.length === 0 ? styles.contentEmpty : [
           styles.contentList,
           numColumns > 1 && { paddingHorizontal: 12 }
         ]}
@@ -563,6 +576,13 @@ export default function ExploreScreen() {
         onApply={applyFilters}
         selectedCategories={selectedCategories}
         onCategoryToggle={setSelectedCategories}
+      />
+      <TokiSortModal
+        visible={showSortModal}
+        onClose={() => setShowSortModal(false)}
+        value={sort}
+        onChange={setSort}
+        onApply={() => setShowSortModal(false)}
       />
     </SafeAreaView>
   );

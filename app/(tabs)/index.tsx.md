@@ -1,6 +1,20 @@
 # File: app/(tabs)/index.tsx
 
 ### Summary
+Explore screen listing nearby Tokis with search, category chips, filtering, and now client-side sorting via a dedicated Sort modal.
+
+### Fixes Applied log
+- problem: Users could not change the ordering of results, only filter them.
+- solution: Integrated `TokiSortModal` and applied a memoized sorted array derived from the filtered list.
+
+### How Fixes Were Implemented
+- Added `showSortModal` and `sort` state, plus a new button next to Filters in the header.
+- Computed `sortedTokis` using `sortEvents(list, sort, userLat, userLng)` and fed it to the `FlatList`.
+- Included a `TokiSortModal` instance to change sort options; Apply closes the modal and reorders the list.
+
+# File: app/(tabs)/index.tsx
+
+### Summary
 This file contains the Explore screen (list view) showing nearby tokis. Implemented infinite scroll pagination and displays total count of nearby tokis.
 
 ### Fixes Applied log
