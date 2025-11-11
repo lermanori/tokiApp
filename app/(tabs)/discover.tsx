@@ -248,7 +248,8 @@ export default function DiscoverScreen() {
     if (selectedFilters.category !== 'all') queryParams.category = selectedFilters.category;
     if (selectedFilters.dateFrom) queryParams.dateFrom = selectedFilters.dateFrom;
     if (selectedFilters.dateTo) queryParams.dateTo = selectedFilters.dateTo;
-    if (selectedFilters.radius !== '10') queryParams.radius = selectedFilters.radius;
+    // Always include radius (default 500)
+    queryParams.radius = selectedFilters.radius;
 
     if (mapRegion?.latitude && mapRegion?.longitude) {
       queryParams.userLatitude = mapRegion.latitude.toString();

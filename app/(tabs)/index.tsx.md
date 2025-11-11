@@ -1,3 +1,13 @@
+### Summary
+Explore screen logic for listing nearby Tokis. Updated to use a 500 km default radius when fetching nearby Tokis.
+
+### Fixes Applied log
+- problem: Fetch radius hardcoded to 10 km, not matching new default cap.
+- solution: Changed `radius: 10` to `radius: 500` in `actions.loadNearbyTokis` call.
+
+### How Fixes Were Implemented
+- Updated the parameter passed to `loadNearbyTokis` to 500, aligning Explore with the global 500 km default and backend cap.
+
 # File: app/(tabs)/index.tsx
 
 ### Summary

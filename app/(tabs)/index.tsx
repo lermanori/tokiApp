@@ -112,7 +112,7 @@ export default function ExploreScreen() {
       const response = await actions.loadNearbyTokis({
         latitude: state.currentUser.latitude,
         longitude: state.currentUser.longitude,
-        radius: 10,
+        radius: 500,
         page: page
       }, append);
 

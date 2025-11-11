@@ -523,19 +523,27 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       queryParams.push(dateTo);
     }
 
-    // TODO: Implement radius filtering in next iteration
-    // Add radius-based filtering if coordinates provided
-    if (radius && userLatitude && userLongitude) {
-      logger.debug('🔍 [BACKEND] Radius filtering in main query:', { radius, userLatitude, userLongitude });
-      // const lat = parseFloat(userLatitude as string);
-      // const lng = parseFloat(userLongitude as string);
-      // const radiusKm = Math.min(parseFloat(radius as string) || 10, 100);
-      // 
-      // if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-      //   query += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
-      //   queryParams.push(lat, lng, radiusKm);
-      //   paramCount += 3;
-      // }
+    // Add radius-based filtering if coordinates provided; default/cap is 500km
+    if (userLatitude && userLongitude) {
+      const lat = parseFloat(userLatitude as string);
+      const lng = parseFloat(userLongitude as string);
+      const radiusKm = Math.min(parseFloat((radius as string) || '500') || 500, 500);
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        query += ` AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL`;
+        queryParams.push(lat, lng, radiusKm);
+        paramCount += 3;
+        query += `
+          AND (
+            6371 * acos(
+              cos(radians($${paramCount - 2})) * 
+              cos(radians(t.latitude)) * 
+              cos(radians(t.longitude) - radians($${paramCount - 1})) + 
+              sin(radians($${paramCount - 2})) * 
+              sin(radians(t.latitude))
+            )
+          ) <= $${paramCount}
+        `;
+      }
     }
 
     // Group by to handle tags aggregation and joins
@@ -701,7 +709,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     const {
       latitude,
       longitude,
-      radius = '10', // Default 10km radius
+      radius = '500', // Default 500km radius
       limit = '20',
       page = '1',
       category,
@@ -719,7 +727,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
 
     const lat = parseFloat(latitude as string);
     const lng = parseFloat(longitude as string);
-    const radiusKm = Math.min(parseFloat(radius as string) || 10, 100); // Max 100km
+    const radiusKm = Math.min(parseFloat(radius as string) || 500, 500); // Max 500km
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
     const pageNum = Math.max(parseInt(page as string) || 1, 1);
     const offset = (pageNum - 1) * limitNum;

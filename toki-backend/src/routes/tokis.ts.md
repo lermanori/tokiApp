@@ -1,3 +1,16 @@
+### Summary
+Tokis routes including listing, nearby search, and tag utilities. Updated to enforce a 500 km default/cap for proximity filtering.
+
+### Fixes Applied log
+- problem: Nearby endpoint defaulted to 10 km and capped at 100 km.
+- solution: Increased default to 500 km and cap to 500 km in `/tokis/nearby`.
+- problem: Main `/tokis` endpoint calculated distance but did not filter by radius.
+- solution: Added Haversine WHERE clause using `userLatitude`, `userLongitude`, and `radius` with default/cap at 500 km.
+
+### How Fixes Were Implemented
+- Changed the default `radius` to `'500'` and computed `radiusKm = Math.min(parseFloat(radius) || 500, 500)` in `/nearby`.
+- In the main list route, when `userLatitude`/`userLongitude` are provided, appended a distance condition `<= radiusKm`, pushing parameters in order `[lat, lng, radiusKm]`.
+
 # File: toki-backend/src/routes/tokis.ts
 
 ### Summary

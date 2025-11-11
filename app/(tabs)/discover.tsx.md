@@ -1,3 +1,13 @@
+### Summary
+Discover screen for browsing Tokis with filters and map. Now always includes `radius` when applying filters.
+
+### Fixes Applied log
+- problem: Radius was omitted unless different from '10', causing inconsistent backend filtering.
+- solution: Always set `queryParams.radius = selectedFilters.radius` in `applyFilters`.
+
+### How Fixes Were Implemented
+- Simplified apply logic to always include the radius parameter, aligning with the new 500 km default and backend cap.
+
 # File: app/(tabs)/discover.tsx
 
 ### Summary
