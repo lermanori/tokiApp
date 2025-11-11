@@ -1156,7 +1156,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate max attendees if provided
-    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 100)) {
+    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 1000)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid max attendees',
