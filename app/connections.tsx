@@ -234,8 +234,8 @@ export default function ConnectionsScreen() {
     
     // Add search results (new people)
     searchResults.forEach(user => {
-      // Don't add if already in connections
-      if (!connections.find(c => c.id === user.id)) {
+      // Don't add if already in connections OR if it's the current user
+      if (!connections.find(c => c.id === user.id) && user.id !== state.currentUser?.id) {
         results.push({
           id: user.id,
           name: user.name,

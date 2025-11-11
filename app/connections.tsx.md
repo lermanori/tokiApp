@@ -18,6 +18,8 @@ This file contains the Connections screen that displays user connections, pendin
 -solution: Updated Message button styling to match Remove button dimensions for consistent UI.
 -problem: Buttons needed better flex alignment to ensure they appear side by side consistently.
 -solution: Enhanced connectionActions container with flex: 1, justifyContent: 'flex-end', and added centering properties to both buttons.
+-problem: Current user appeared in search results, allowing users to try to connect to themselves.
+-solution: Added filter in getUnifiedResults() to exclude search results where user.id matches state.currentUser?.id.
 
 ### How Fixes Were Implemented
 -problem: All connection items used hardcoded fallback URL for avatars, making all users look the same.
@@ -28,3 +30,5 @@ This file contains the Connections screen that displays user connections, pendin
 -solution: Changed Message button styling from `padding: 8, borderRadius: 8` to `paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6` to match the Remove button's proportions and create visual consistency.
 -problem: Buttons needed better flex alignment and consistent sizing to appear properly side by side.
 -solution: Enhanced `connectionActions` container with `flex: 1`, `justifyContent: 'flex-end'` for right alignment, and added `justifyContent: 'center'`, `alignItems: 'center'` to both `messageButton` and `removeButton` for consistent centering and alignment.
+-problem: When searching for users, the current logged-in user could appear in search results, which doesn't make sense since users shouldn't connect to themselves.
+-solution: Updated the condition in `getUnifiedResults()` when adding search results to also check `user.id !== state.currentUser?.id`. This ensures that the current user is filtered out from search results before they are displayed, preventing self-connection attempts.
