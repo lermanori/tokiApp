@@ -13,3 +13,4 @@ Adds create, edit, and delete controls to the Waitlist Management table. Integra
 - Kept existing `WaitlistEntryModal` for view/create-user/email actions to avoid overlap.
 
 
+

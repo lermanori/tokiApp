@@ -13,3 +13,4 @@ Project dependencies and scripts configuration file. Defines all npm packages, E
 - Removed `eas-cli` from devDependencies section. EAS CLI should be installed globally (`npm install -g eas-cli`) or used via `npx eas-cli`.
 - Ran `npx expo install` to update packages to versions compatible with Expo SDK 54, ensuring all patch versions match the expected SDK requirements.
 
+

@@ -88,6 +88,28 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
 router.get('/users/:userId/activity', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
+    const viewerId = req.user!.id;
+
+    // Special case: users can always see their own activity
+    if (viewerId === userId) {
+      // Continue with activity fetch below
+    } else {
+      // Check if viewer is connected to the profile owner
+      const connectionCheck = await pool.query(
+        `SELECT status 
+         FROM user_connections 
+         WHERE ((requester_id = $1 AND recipient_id = $2) 
+            OR (requester_id = $2 AND recipient_id = $1))
+           AND status = 'accepted'`,
+        [viewerId, userId]
+      );
+
+      // Only show activity if users are connected
+      if (connectionCheck.rows.length === 0) {
+        // Users are not connected - return empty array
+        return res.json({ success: true, data: [] });
+      }
+    }
 
     // Get viewer coordinates for distance calculation
     let viewerLat: number | null = null;

@@ -667,15 +667,6 @@ export default function ProfileScreen() {
               <Text style={styles.statNumber}>{state.currentUser.connections}</Text>
               <Text style={styles.statLabel}>Connections</Text>
             </TouchableOpacity>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {typeof state.currentUser.rating === 'number' && !isNaN(state.currentUser.rating)
-                  ? state.currentUser.rating.toFixed(1)
-                  : '0.0'}
-              </Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
           </View>
 
           <View style={styles.section}>

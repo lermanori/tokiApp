@@ -65,10 +65,12 @@ All API methods are now integrated and the component uses real backend data inst
 - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
  - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
  - **Self-profile guard**: Disables action buttons when viewing your own public profile (shows disabled "Your Profile" button).
+- **Restricted Activity Visibility**: Activity is now only visible to users with accepted connections. Non-connected users see a message prompting them to connect.
 
 ### How Fixes Were Implemented
 - Imported `TokiCard`, added `publicActivity` state, `loadPublicActivity()` and invoked it when `userId` changes.
 - Inserted the section after the statistics block with a title "<FirstName>'s Activity".
 - Added conditional `state.currentUser?.id === userId` to render `disabledButton` and avoid self-requests.
+- Activity section now checks `connectionStatus?.status === 'accepted'` or `state.currentUser?.id === userId` before displaying activity. Non-connected users see "Connect with this user to see their activity" message. Uses IIFE pattern for conditional rendering logic.
 
 This component provides the foundation for user discovery and social networking features in the app.

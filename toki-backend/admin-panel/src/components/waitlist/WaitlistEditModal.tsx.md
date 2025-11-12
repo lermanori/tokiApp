@@ -12,3 +12,4 @@ Modal component to create or edit waitlist entries. Fields: Email, Location, Pla
 - On success, calls `onSaved` to refresh the table and closes the modal via parent.
 
 
+

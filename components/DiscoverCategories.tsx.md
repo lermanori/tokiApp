@@ -11,3 +11,4 @@ Horizontal category chips used on Discover screens. Now supports multi-select ca
 - Added local `handlePress` to toggle categories and normalize the "all" behavior.
 - Active state now checks inclusion in `selectedCategories` (or `'all'` presence) instead of equality against a single string.
 
+

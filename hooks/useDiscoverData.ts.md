@@ -15,3 +15,4 @@ Custom hook for managing discover screen data including events, map region, user
 - solution: Removed `mapRegion` from the dependency array and added eslint-disable comment. The effect only depends on `state.currentUser?.location` to avoid loops while still updating when the user's location changes.
 
 
+

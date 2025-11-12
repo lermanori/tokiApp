@@ -452,38 +452,59 @@ export default function UserProfileScreen() {
             <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold', color: '#111827', marginBottom: 8 }}>
               {userProfile.name.split(' ')[0]}'s Activity
             </Text>
-            {publicActivity.length === 0 ? (
-              <Text style={{ color: '#6B7280' }}>No public activity</Text>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {publicActivity.map(a => {
-                  const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
-                  const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
-                  return (
-                  <View key={a.id} style={{ width: 285, marginRight: 16 }}>
-                    <TokiCard
-                      toki={{
-                        id: a.id,
-                        title: a.title,
-                        description: a.description || '',
-                        image: a.image_url,
-                        category: a.category,
-                        location: a.location || '',
-                        time: a.time_slot || '',
-                        attendees: a.current_attendees || 0,
-                        maxAttendees: a.max_attendees || 0,
-                        scheduledTime: a.scheduled_time,
-                        host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
-                        visibility: a.visibility,
-                        tags: a.tags || [],
-                        distance,
-                      }}
-                      onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
-                    />
+            {(() => {
+              // Check if user is viewing their own profile
+              const isOwnProfile = state.currentUser?.id === userId;
+              // Check if users are connected
+              const isConnected = connectionStatus?.status === 'accepted';
+              
+              // Show activity only if connected or viewing own profile
+              if (!isOwnProfile && !isConnected) {
+                return (
+                  <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                    <Text style={{ color: '#6B7280', fontSize: 14, textAlign: 'center' }}>
+                      Connect with this user to see their activity
+                    </Text>
                   </View>
-                )})}
-              </ScrollView>
-            )}
+                );
+              }
+              
+              // Show activity if connected or own profile
+              if (publicActivity.length === 0) {
+                return <Text style={{ color: '#6B7280' }}>No public activity</Text>;
+              }
+              
+              return (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {publicActivity.map(a => {
+                    const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
+                    const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
+                    return (
+                    <View key={a.id} style={{ width: 285, marginRight: 16 }}>
+                      <TokiCard
+                        toki={{
+                          id: a.id,
+                          title: a.title,
+                          description: a.description || '',
+                          image: a.image_url,
+                          category: a.category,
+                          location: a.location || '',
+                          time: a.time_slot || '',
+                          attendees: a.current_attendees || 0,
+                          maxAttendees: a.max_attendees || 0,
+                          scheduledTime: a.scheduled_time,
+                          host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
+                          visibility: a.visibility,
+                          tags: a.tags || [],
+                          distance,
+                        }}
+                        onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
+                      />
+                    </View>
+                  )})}
+                </ScrollView>
+              );
+            })()}
           </View>
         </View>
 
