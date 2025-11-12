@@ -55,20 +55,44 @@ function RootLayoutNav() {
     // Check if user has valid tokens immediately
     const hasValidTokens = apiService.accessToken && apiService.refreshToken;
     if (hasValidTokens) {
-      console.log('⚡ [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
+      console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
       setHasCheckedFastRedirect(true);
       
       // Build the redirect URL with parameters
+      // For toki-details, we need to preserve all URL parameters
       let redirectUrl = effectiveReturnTo;
-      if (Object.keys(effectiveOtherParams).length > 0) {
-        const searchParams = new URLSearchParams(effectiveOtherParams);
+      const paramsToInclude: Record<string, string> = {};
+      
+      // Include effectiveOtherParams, but filter out internal params like 'screen' and 'params'
+      Object.entries(effectiveOtherParams).forEach(([key, value]) => {
+        if (key !== 'screen' && key !== 'params' && value !== undefined && value !== null) {
+          const stringValue = Array.isArray(value) ? value[0] : String(value);
+          // Only include if it's a valid string (not '[object Object]')
+          if (stringValue && stringValue !== '[object Object]') {
+            paramsToInclude[key] = stringValue;
+          }
+        }
+      });
+      
+      // Also check urlParams for any missing parameters (especially for toki-details)
+      if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
+        Object.entries(urlParams).forEach(([key, value]) => {
+          if (key !== 'returnTo' && key !== 'code' && key !== 'screen' && key !== 'params' && value && !paramsToInclude[key]) {
+            paramsToInclude[key] = value;
+          }
+        });
+      }
+      
+      if (Object.keys(paramsToInclude).length > 0) {
+        const searchParams = new URLSearchParams(paramsToInclude);
         redirectUrl += `?${searchParams.toString()}`;
       }
       
+      console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Full redirect URL with params:', redirectUrl);
       router.replace(redirectUrl as any);
       return;
     }
-  }, [effectiveReturnTo, effectiveOtherParams, segments, router, hasCheckedFastRedirect]);
+  }, [effectiveReturnTo, effectiveOtherParams, urlParams, segments, router, hasCheckedFastRedirect]);
 
   useEffect(() => {
     // Check if user is authenticated with debouncing
@@ -112,6 +136,14 @@ function RootLayoutNav() {
         setIsCheckingAuth(true);
         setLastAuthCheck(now);
         
+        // 🔍 LOG: Initial state when auth check runs
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Starting auth check');
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Current path:', path);
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Segments:', segments);
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] effectiveReturnTo:', effectiveReturnTo);
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] urlParams:', urlParams);
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] effectiveOtherParams:', effectiveOtherParams);
+        
         const isAuthenticated = await apiService.isAuthenticated();
         const hasUserData = state.currentUser && state.currentUser.id;
         const inLoginScreen = segments[0] === 'login';
@@ -123,24 +155,80 @@ function RootLayoutNav() {
         const inResetPasswordScreen = segments[0] === 'reset-password' || path.startsWith('/reset-password');
         
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen) {
-          // Redirect unauthenticated users to login; allow waitlist, join, health, set-password, and reset-password
-          router.replace('/login');
+          // Check if we're on toki-details page - preserve the tokiId parameter
+          const isTokiDetailsPage = path.startsWith('/toki-details') || segments[0] === 'toki-details';
+          
+          if (isTokiDetailsPage) {
+            // Extract all URL parameters including tokiId
+            // Use urlParams (from getUrlParams) which has all query params from the URL
+            const returnParams: Record<string, string> = {};
+            
+            // Get tokiId from URL params (priority) or searchParams
+            const tokiId = urlParams.tokiId || (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined);
+            if (tokiId) returnParams.tokiId = tokiId;
+            
+            // Preserve other parameters if they exist
+            if (urlParams.title) returnParams.title = urlParams.title;
+            if (urlParams.location) returnParams.location = urlParams.location;
+            if (urlParams.time) returnParams.time = urlParams.time;
+            
+            // Redirect to login with returnTo and parameters
+            const loginUrl = `/login?returnTo=/toki-details${Object.keys(returnParams).length > 0 ? '&' + new URLSearchParams(returnParams).toString() : ''}`;
+            console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving toki-details parameters, redirecting to:', loginUrl);
+            router.replace(loginUrl);
+          } else {
+            // For other pages, redirect to login normally
+            router.replace('/login');
+          }
         } else if (isAuthenticated && inLoginScreen) {
           // Redirect to main app if authenticated
           // Respect returnTo params (e.g., invite flow)
           if (effectiveReturnTo === 'join' && typeof effectiveCode === 'string' && effectiveCode.length > 0) {
             router.replace(`/join/${effectiveCode}`);
           } else if (effectiveReturnTo && effectiveReturnTo !== 'join') {
-            // Handle other returnTo paths by setting redirection and going to main app
+            // Handle other returnTo paths
             const cleanParams = Object.fromEntries(
               Object.entries(effectiveOtherParams)
-                .filter(([_, value]) => value !== undefined)
-                .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+                .filter(([key, value]) => {
+                  // Filter out internal params and invalid values
+                  if (key === 'screen' || key === 'params') return false;
+                  if (value === undefined || value === null) return false;
+                  const stringValue = Array.isArray(value) ? value[0] : String(value);
+                  return stringValue && stringValue !== '[object Object]';
+                })
+                .map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)])
             );
             const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
-            actions.setRedirection(returnToPath, cleanParams);
-            router.replace('/(tabs)');
+            
+            // For toki-details, also check urlParams for any missing parameters
+            if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+              Object.entries(urlParams).forEach(([key, value]) => {
+                if (key !== 'returnTo' && key !== 'code' && value && !cleanParams[key]) {
+                  cleanParams[key] = value;
+                }
+              });
+            }
+            
+            // If returnTo is toki-details, navigate directly instead of going through tabs
+            if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+              let redirectUrl = returnToPath;
+              if (Object.keys(cleanParams).length > 0) {
+                const searchParams = new URLSearchParams(cleanParams);
+                redirectUrl += `?${searchParams.toString()}`;
+              }
+              console.log('✅ [FLOW DEBUG] [DIRECT NAVIGATE] Navigating directly to toki-details:', redirectUrl);
+              router.replace(redirectUrl as any);
+            } else {
+              // For other paths, set redirection and go to tabs (let RedirectionGuard handle it)
+              console.log('🔄 [FLOW DEBUG] [REDIRECT TO TABS] Setting redirection for non-toki-details path:', returnToPath);
+              actions.setRedirection(returnToPath, cleanParams);
+              router.replace('/(tabs)');
+            }
           } else {
+            console.log('🚨 [FLOW DEBUG] [REDIRECT TO TABS] Condition: authenticated && inLoginScreen && NO returnTo');
+            console.log('🚨 [FLOW DEBUG] [REDIRECT TO TABS] Current path:', path);
+            console.log('🚨 [FLOW DEBUG] [REDIRECT TO TABS] Segments:', segments);
+            console.log('🚨 [FLOW DEBUG] [REDIRECT TO TABS] effectiveReturnTo:', effectiveReturnTo);
             router.replace('/(tabs)');
           }
         } else if (isAuthenticated && inJoinScreen) {
@@ -162,9 +250,24 @@ function RootLayoutNav() {
           // Handle direct redirection for authenticated users (even if on login screen)
           const cleanParams = Object.fromEntries(
             Object.entries(effectiveOtherParams)
-              .filter(([_, value]) => value !== undefined)
-              .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+              .filter(([key, value]) => {
+                // Filter out internal params and invalid values
+                if (key === 'screen' || key === 'params') return false;
+                if (value === undefined || value === null) return false;
+                const stringValue = Array.isArray(value) ? value[0] : String(value);
+                return stringValue && stringValue !== '[object Object]';
+              })
+              .map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)])
           );
+          
+          // For toki-details, also check urlParams for any missing parameters
+          if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
+            Object.entries(urlParams).forEach(([key, value]) => {
+              if (key !== 'returnTo' && key !== 'code' && key !== 'screen' && key !== 'params' && value && !cleanParams[key]) {
+                cleanParams[key] = value;
+              }
+            });
+          }
           
           // Build the redirect URL with parameters
           let redirectUrl = effectiveReturnTo;
@@ -173,6 +276,7 @@ function RootLayoutNav() {
             redirectUrl += `?${searchParams.toString()}`;
           }
           
+          console.log('🔄 [FLOW DEBUG] [AUTH REDIRECT] Redirecting authenticated user to:', redirectUrl);
           router.replace(redirectUrl as any);
         }
       } catch (error) {
@@ -223,16 +327,34 @@ function RootLayoutNav() {
       );
 
       if (effectiveReturnTo && effectiveReturnTo !== 'join') {
-        console.log('🔄 [USER DATA] User data loaded, redirecting to:', effectiveReturnTo);
+        console.log('🔄 [FLOW DEBUG] [USER DATA] User data loaded, redirecting to:', effectiveReturnTo);
         
         // Build the redirect URL with parameters
+        // effectiveOtherParams should already contain all params except returnTo and code
+        // Filter out internal params like 'screen' and 'params'
+        const paramsToInclude: Record<string, string> = {};
+        Object.entries(effectiveOtherParams).forEach(([key, value]) => {
+          if (key !== 'screen' && key !== 'params' && value) {
+            paramsToInclude[key] = value;
+          }
+        });
+        
+        // Ensure we have all parameters from the URL (double-check for toki-details)
+        if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
+          Object.entries(urlParams).forEach(([key, value]) => {
+            if (key !== 'returnTo' && key !== 'code' && key !== 'screen' && key !== 'params' && value && !paramsToInclude[key]) {
+              paramsToInclude[key] = value;
+            }
+          });
+        }
+        
         let redirectUrl = effectiveReturnTo;
-        if (Object.keys(effectiveOtherParams).length > 0) {
-          const searchParams = new URLSearchParams(effectiveOtherParams);
+        if (Object.keys(paramsToInclude).length > 0) {
+          const searchParams = new URLSearchParams(paramsToInclude);
           redirectUrl += `?${searchParams.toString()}`;
         }
         
-        console.log('🔄 [USER DATA] Redirecting to:', redirectUrl);
+        console.log('🔄 [FLOW DEBUG] [USER DATA] Redirecting to:', redirectUrl);
         router.replace(redirectUrl as any);
       }
     };

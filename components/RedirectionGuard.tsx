@@ -20,17 +20,19 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
     }
 
     const currentPath = `/${segments.join('/')}`;
-    console.log('🔄 [REDIRECTION GUARD] Checking redirection:', {
+    console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Checking redirection:', {
       returnTo: redirection.returnTo,
       currentPath,
       segments,
-      isRedirecting: redirection.isRedirecting
+      isRedirecting: redirection.isRedirecting,
+      returnParams: redirection.returnParams,
+      hasCurrentUser: !!state.currentUser?.id
     });
 
     // Check if we've reached the target page
     if (currentPath === redirection.returnTo || 
         currentPath.includes(redirection.returnTo.replace('/', ''))) {
-      console.log('✅ [REDIRECTION GUARD] Reached target page, clearing redirection');
+      console.log('✅ [FLOW DEBUG] [REDIRECTION GUARD] Reached target page, clearing redirection');
       actions.clearRedirection();
       return;
     }
@@ -38,7 +40,8 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
     // If we're in the main app but not on the target page, redirect immediately
     // Only redirect if user is authenticated
     if (segments[0] === '(tabs)' && redirection.returnTo && state.currentUser?.id) {
-      console.log('🔄 [REDIRECTION GUARD] User is in tabs and authenticated, redirecting to target page:', redirection.returnTo);
+      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User is in tabs and authenticated, redirecting to target page:', redirection.returnTo);
+      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] returnParams:', redirection.returnParams);
       
       // Small delay to ensure tabs are fully loaded
       setTimeout(() => {
@@ -49,11 +52,17 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
           redirectUrl += `?${searchParams.toString()}`;
         }
         
-        console.log('🔄 [REDIRECTION GUARD] Redirecting to:', redirectUrl);
+        console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Final redirect URL:', redirectUrl);
         router.replace(redirectUrl as any);
       }, 100);
+    } else {
+      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Not redirecting - conditions not met:', {
+        isInTabs: segments[0] === '(tabs)',
+        hasReturnTo: !!redirection.returnTo,
+        hasCurrentUser: !!state.currentUser?.id
+      });
     }
-  }, [state.redirection, segments, actions, router]);
+  }, [state.redirection, segments, actions, router, state.currentUser?.id]);
 
   return <>{children}</>;
 }

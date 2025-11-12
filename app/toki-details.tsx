@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X } from 'lucide-react-native';
@@ -179,9 +179,36 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
 export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams();
+  
+  // Fallback to read URL parameters directly (for web deep linking)
+  const getUrlParams = () => {
+    if (typeof window === 'undefined') return {};
+    if (typeof window.location === 'undefined' || !window.location.href) return {};
+    try {
+      const url = new URL(window.location.href);
+      const urlParams: Record<string, string> = {};
+      url.searchParams.forEach((value, key) => {
+        urlParams[key] = value;
+      });
+      return urlParams;
+    } catch (error) {
+      return {};
+    }
+  };
+  
+  const urlParams = getUrlParams();
+  // Use params.tokiId first, fallback to urlParams.tokiId
+  const effectiveParams = {
+    ...params,
+    tokiId: (params.tokiId as string) || urlParams.tokiId,
+    title: (params.title as string) || urlParams.title,
+    location: (params.location as string) || urlParams.location,
+    time: (params.time as string) || urlParams.time,
+  };
+  
   const [toki, setToki] = useState<TokiDetails | null>(null);
-  const fromEdit = params.fromEdit === 'true';
-  const fromCreate = params.fromCreate === 'true';
+  const fromEdit = effectiveParams.fromEdit === 'true';
+  const fromCreate = effectiveParams.fromCreate === 'true';
   const [isLoading, setIsLoading] = useState(true);
   
   const [isLiked, setIsLiked] = useState(false);
@@ -227,15 +254,15 @@ export default function TokiDetailsScreen() {
 
   // Check if Toki is saved on mount
   useEffect(() => {
-    if (params.tokiId) {
+    if (effectiveParams.tokiId) {
       checkSavedStatus();
     }
-  }, [params.tokiId]);
+  }, [effectiveParams.tokiId]);
 
   const checkSavedStatus = async () => {
     try {
-      console.log('🔍 Checking saved status for Toki:', params.tokiId);
-      const saved = await actions.checkIfSaved(params.tokiId as string);
+      console.log('🔍 Checking saved status for Toki:', effectiveParams.tokiId);
+      const saved = await actions.checkIfSaved(effectiveParams.tokiId as string);
       console.log('💾 Toki saved status:', saved);
       setIsLiked(saved);
     } catch (error) {
@@ -244,22 +271,22 @@ export default function TokiDetailsScreen() {
   };
 
   const handleSaveToggle = async () => {
-    if (isSaving || !params.tokiId) return;
+    if (isSaving || !effectiveParams.tokiId) return;
 
-    console.log('💝 Toggling save status for Toki:', params.tokiId, 'Current state:', isLiked);
+    console.log('💝 Toggling save status for Toki:', effectiveParams.tokiId, 'Current state:', isLiked);
 
     try {
       setIsSaving(true);
       if (isLiked) {
         console.log('🗑️ Unsaving Toki...');
-        const success = await actions.unsaveToki(params.tokiId as string);
+        const success = await actions.unsaveToki(effectiveParams.tokiId as string);
         if (success) {
           setIsLiked(false);
           console.log('✅ Toki unsaved successfully');
         }
       } else {
         console.log('💾 Saving Toki...');
-        const success = await actions.saveToki(params.tokiId as string);
+        const success = await actions.saveToki(effectiveParams.tokiId as string);
         if (success) {
           setIsLiked(true);
           console.log('✅ Toki saved successfully');
@@ -275,8 +302,12 @@ export default function TokiDetailsScreen() {
 
 
   const loadTokiData = async (tokiId: string, retryCount = 0) => {
-    if (!tokiId) return;
+    if (!tokiId) {
+      console.log('🚨 [FLOW DEBUG] [TOKI DETAILS] loadTokiData called with no tokiId');
+      return;
+    }
 
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Loading toki data for:', tokiId, `(attempt ${retryCount + 1})`);
     setIsLoading(true);
     try {
       const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
@@ -351,21 +382,8 @@ export default function TokiDetailsScreen() {
           })),
         };
 
-        console.log('🔍 Ownership check:', {
-          hostId: tokiData.host?.id,
-          currentUserId: state.currentUser?.id,
-          isHostedByUser: tokiData.host?.id === state.currentUser?.id,
-          hasCurrentUser: !!state.currentUser?.id,
-          hasHostId: !!tokiData.host?.id
-        });
-        
-        console.log('🔍 Toki data for invite button:', {
-          visibility: tokiData.visibility,
-          joinStatus: tokiData.joinStatus,
-          isHostedByUser: tokiData.host?.id === state.currentUser?.id
-        });
-
         setToki(transformedToki);
+        console.log('✅ [FLOW DEBUG] [TOKI DETAILS] Toki data loaded successfully:', tokiId);
 
         // Check saved status after Toki data is loaded
         checkSavedStatus();
@@ -390,7 +408,7 @@ export default function TokiDetailsScreen() {
           }, 2000);
         }
       } else {
-        console.error('Failed to load Toki data');
+        console.error('❌ [FLOW DEBUG] [TOKI DETAILS] Failed to load Toki data, status:', response.status);
         // Fallback to predefined data
         const fallbackData = tokiDetailsMap[tokiId];
         if (fallbackData) {
@@ -413,27 +431,52 @@ export default function TokiDetailsScreen() {
     }
   };
 
+  // 🔍 LOG: Component mount
+  useEffect(() => {
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ===== COMPONENT MOUNTED =====');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams:', effectiveParams);
+    
+    return () => {
+      console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ===== COMPONENT UNMOUNTING =====');
+      console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] This might indicate redirect to explore page');
+    };
+  }, []);
+
   // Load data when component mounts or tokiId changes
   useEffect(() => {
-    const tokiId = params.tokiId as string;
+    const tokiId = effectiveParams.tokiId as string;
+    
+    // 🔍 LOG: Component effect triggered
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Component effect triggered');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams.tokiId:', effectiveParams.tokiId);
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] params.tokiId:', params.tokiId);
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] urlParams.tokiId:', urlParams.tokiId);
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Current URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] lastProcessedTokiId:', lastProcessedTokiId.current);
 
     if (tokiId && tokiId !== lastProcessedTokiId.current) {
       lastProcessedTokiId.current = tokiId;
+      console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ✅ Valid tokiId found, loading data:', tokiId);
       // Ensure current user is loaded before loading Toki data
       if (!state.currentUser?.id) {
+        console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Waiting for current user to load...');
         actions.loadCurrentUser().then(() => {
           loadTokiData(tokiId);
         });
       } else {
         loadTokiData(tokiId);
       }
+    } else if (!tokiId) {
+      console.log('🚨 [FLOW DEBUG] [TOKI DETAILS] ❌ NO tokiId found! Component will not load.');
+      console.log('🚨 [FLOW DEBUG] [TOKI DETAILS] This is why we might be seeing explore page instead');
     }
-  }, [params.tokiId, state.currentUser?.id]);
+  }, [effectiveParams.tokiId, state.currentUser?.id]);
 
   // Force reload when coming from create (works on all platforms)
   useEffect(() => {
-    if (fromCreate && params.tokiId) {
-      const tokiId = params.tokiId as string;
+    if (fromCreate && effectiveParams.tokiId) {
+      const tokiId = effectiveParams.tokiId as string;
       // Add a small delay to ensure database is ready, then force a fresh fetch
       const timer = setTimeout(() => {
         console.log('📍 [TOKI DETAILS] Forcing fresh data load after creation');
@@ -442,17 +485,17 @@ export default function TokiDetailsScreen() {
       
       return () => clearTimeout(timer);
     }
-  }, [fromCreate, params.tokiId]);
+  }, [fromCreate, effectiveParams.tokiId]);
 
   // Refresh data when screen comes into focus (e.g., after editing)
   useFocusEffect(
     React.useCallback(() => {
-      const tokiId = params.tokiId as string;
+      const tokiId = effectiveParams.tokiId as string;
       if (tokiId && !fromCreate) {
         // Only auto-refresh on focus if not coming from create (we handle that separately)
         loadTokiData(tokiId);
       }
-    }, [params.tokiId, fromCreate])
+    }, [effectiveParams.tokiId, fromCreate])
   );
 
   const handleJoinRequest = async () => {
@@ -591,7 +634,22 @@ export default function TokiDetailsScreen() {
     console.log('🔍 [SHARE] Toki data:', { id: toki.id, title: toki.title });
     
     try {
-      console.log('🔍 [SHARE] Generating share options...');
+      const shareUrl = generateTokiShareUrl(toki);
+      const shareMessage = generateTokiShareMessage(toki);
+      
+      // On iOS, use native share sheet
+      if (Platform.OS === 'ios') {
+        console.log('🔍 [SHARE] Using iOS native share sheet');
+        await RNShare.share({
+          message: `${shareMessage}\n\n${shareUrl}`,
+          url: shareUrl,
+          title: toki.title
+        });
+        return;
+      }
+      
+      // On web/Android, show custom modal
+      console.log('🔍 [SHARE] Showing custom share modal');
       const shareOptions = generateTokiShareOptions(toki);
       console.log('🔍 [SHARE] Share options generated:', shareOptions);
       

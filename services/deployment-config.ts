@@ -8,10 +8,10 @@ export const deploymentConfig = {
     baseUrl: 'https://lermanori.github.io/tokiApp'
   },
   
-  // Custom domain deployment (future use)
+  // Custom domain deployment
   customDomain: {
     basePath: '',  // No base path for custom domain
-    baseUrl: 'https://yourdomain.com'  // Replace with your actual domain
+    baseUrl: 'https://toki-app.com'  // Your actual custom domain
   },
   
   // Local development
@@ -22,7 +22,7 @@ export const deploymentConfig = {
 };
 
 // Current deployment type
-export const currentDeployment = 'githubPages'; // Change to 'customDomain' when ready
+export const currentDeployment = 'local'; // Using custom domain https://toki-app.com
 
 // Helper function to get current deployment config
 export const getCurrentDeploymentConfig = () => {
