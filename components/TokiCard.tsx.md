@@ -1,19 +1,25 @@
-# File: TokiCard.tsx
+# File: components/TokiCard.tsx
 
 ### Summary
-This component displays Toki cards in lists with consistent formatting for distance, time, and other metadata.
+This component displays a Toki (event) card with image, title, location, time, host information, and interaction buttons. It supports saving/unsaving tokis and navigation to details or host profile.
 
 ### Fixes Applied log
-- problem: Distance formatting function was duplicated locally instead of using shared utility.
-- solution: Removed local `formatDistanceDisplay` function and imported from shared `@/utils/distance` utility.
-- problem: Location text could overflow horizontally in cards with long location names.
-- solution: Added text truncation with ellipsis for location display in cards.
+
+- **problem**: No way to track when images finish loading, causing loading state to clear before images are ready
+- **solution**: Added image loading tracking with `onImageLoad` callback prop. Tracks both header image and host avatar loading states, and notifies parent component when all images are loaded.
 
 ### How Fixes Were Implemented
-- problem: Distance formatting was inconsistent across components.
-- solution: Updated to import and use `formatDistanceDisplay` from the shared utility, ensuring the same formatting logic is used throughout the app for consistent user experience.
-- problem: Long location strings (e.g., "Rothschild Boulevard ,רוטשילד תל אביב") could extend beyond the card width.
-- solution: 
-  - Added `numberOfLines={1}` and `ellipsizeMode="tail"` props to the location Text component
-  - Created `locationContainer` style with `flex: 1` and `minWidth: 0` to enable proper flex truncation
-  - This ensures location text truncates with "..." when it exceeds the available horizontal space, keeping the card layout clean
+
+1. **Image Loading State**:
+   - Added `imagesLoaded` state to track header image and host avatar loading
+   - Header image and host avatar both have `onLoad` and `onError` handlers
+   - If host has no avatar, it's considered "loaded" immediately (fallback view)
+
+2. **Callback Prop**:
+   - Added `onImageLoad?: () => void` prop to TokiCardProps interface
+   - When both images are loaded, calls `onImageLoad()` to notify parent
+   - Error handlers also mark images as "loaded" to prevent blocking
+
+3. **State Reset**:
+   - Image loading state resets when toki ID, image URL, or host avatar changes
+   - Ensures accurate tracking when toki data updates

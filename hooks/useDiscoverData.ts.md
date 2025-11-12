@@ -1,18 +1,20 @@
-# File: useDiscoverData.ts
+# File: hooks/useDiscoverData.ts
 
 ### Summary
-Custom hook for managing discover screen data including events, map region, user connections, pagination, and data loading. Handles transformation of backend Toki data to event format, map region initialization from user profile, and API calls for loading nearby Tokis.
+Custom hook for managing discover screen data including nearby tokis loading, pagination, map region, and user connections.
 
 ### Fixes Applied log
-- problem: Map region was being updated unnecessarily when user profile location was geocoded, causing map flickering even when the location was very close to the default region.
-- solution: Added check to only update map region if the difference between the geocoded location and current region is significant (> 0.01 degrees, approximately 1km). This prevents unnecessary map updates when the location is close to the default region. Also removed `mapRegion` from useEffect dependencies to avoid dependency loops.
+
+- **problem**: Default radius was set to 10km instead of 500km, causing the map to only show tokis within 10km instead of the full 500km default
+- **solution**: Changed default radius from 10km to 500km in both the radius parsing logic and the initial load call. Now matches the backend default and filter default of 500km.
 
 ### How Fixes Were Implemented
-- problem: `setMapRegion` was being called even when the geocoded location was very close to the default region, causing unnecessary map updates
-- solution: Before calling `setMapRegion`, calculate the difference between geocoded coordinates and current map region. Only update if `latDiff > 0.01 || lngDiff > 0.01` (approximately 1km difference). This prevents flickering when the location is close to the default.
 
-- problem: `mapRegion` was in the useEffect dependency array, which could cause dependency loops
-- solution: Removed `mapRegion` from the dependency array and added eslint-disable comment. The effect only depends on `state.currentUser?.location` to avoid loops while still updating when the user's location changes.
+1. **Default Radius Update**:
+   - Changed `parseFloat(radius || '10') || 10` to `parseFloat(radius || '500') || 500`
+   - Updated initial load to explicitly pass '500' as radius parameter
+   - Ensures consistency with backend default (500km) and filter default
 
-
-
+2. **Initial Load**:
+   - Initial load now explicitly passes '500' as radius to ensure it uses the correct default
+   - Matches the selectedFilters.radius default value from useDiscoverFilters

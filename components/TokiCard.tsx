@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { MapPin, Users, Heart, Clock, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -38,6 +38,7 @@ export interface TokiCardProps {
     };
     onPress: () => void;
     onHostPress?: () => void;
+    onImageLoad?: () => void; // Callback when images finish loading
 }
 
 // Helper functions now imported from centralized categories
@@ -192,10 +193,14 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
     return time;
 };
 
-export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) {
+export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: TokiCardProps) {
     const { actions } = useApp();
     const [isSaved, setIsSaved] = useState(toki.isSaved || false);
     const [isSaving, setIsSaving] = useState(false);
+    const [imagesLoaded, setImagesLoaded] = useState({
+        headerImage: false,
+        hostAvatar: !toki.host.avatar // If no avatar, consider it "loaded"
+    });
 
     // Update saved status when prop changes
     useEffect(() => {
@@ -203,6 +208,33 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
             setIsSaved(toki.isSaved);
         }
     }, [toki.isSaved]);
+
+    // Track if we've already notified parent (prevent multiple calls)
+    const hasNotifiedRef = useRef(false);
+    // Store callback in ref to avoid dependency issues
+    const onImageLoadRef = useRef(onImageLoad);
+
+    // Update ref when callback changes
+    useEffect(() => {
+        onImageLoadRef.current = onImageLoad;
+    }, [onImageLoad]);
+
+    // Reset image loading state when toki changes
+    useEffect(() => {
+        setImagesLoaded({
+            headerImage: false,
+            hostAvatar: !toki.host.avatar
+        });
+        hasNotifiedRef.current = false; // Reset notification flag
+    }, [toki.id, toki.image, toki.host.avatar]);
+
+    // Notify parent when all images are loaded (only once)
+    useEffect(() => {
+        if (imagesLoaded.headerImage && imagesLoaded.hostAvatar && onImageLoadRef.current && !hasNotifiedRef.current) {
+            hasNotifiedRef.current = true;
+            onImageLoadRef.current();
+        }
+    }, [imagesLoaded.headerImage, imagesLoaded.hostAvatar]);
 
     const handleSaveToggle = async () => {
         if (isSaving) return;
@@ -239,6 +271,8 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                         uri: toki.image || getActivityPhoto(toki.category)
                     }}
                     style={styles.headerImage}
+                    onLoad={() => setImagesLoaded(prev => ({ ...prev, headerImage: true }))}
+                    onError={() => setImagesLoaded(prev => ({ ...prev, headerImage: true }))} // Consider error as "loaded" to not block
                 />
                 {/* <View style={styles.headerImageOverlay} /> */}
             </View>
@@ -331,6 +365,8 @@ export default function TokiCard({ toki, onPress, onHostPress }: TokiCardProps) 
                             <Image
                                 source={{ uri: toki.host.avatar }}
                                 style={styles.hostAvatar}
+                                onLoad={() => setImagesLoaded(prev => ({ ...prev, hostAvatar: true }))}
+                                onError={() => setImagesLoaded(prev => ({ ...prev, hostAvatar: true }))} // Consider error as "loaded" to not block
                             />
                         ) : (
                             <View style={[styles.hostAvatar, styles.fallbackAvatar]}>

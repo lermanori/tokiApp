@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Animated, RefreshControl, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity, Image, TextInput, Animated, RefreshControl, Alert, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Filter, MapPin, Clock, Users, Heart, X, ArrowUpDown } from 'lucide-react-native';
@@ -15,6 +15,11 @@ import { sortEvents } from '@/utils/sortTokis';
 
 export default function ExploreScreen() {
   const { state, actions } = useApp();
+  
+  // Image loading tracking
+  const [imageLoadTracking, setImageLoadTracking] = useState<Set<string>>(new Set());
+  const imageLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialBatchSize = 20; // Match initialNumToRender
   const { width } = useWindowDimensions();
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['all']);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -323,6 +328,62 @@ export default function ExploreScreen() {
     return sortEvents(filteredTokis as any, sort, lat, lng);
   }, [filteredTokis, sort, state.currentUser?.latitude, state.currentUser?.longitude]);
 
+  // Reset image loading tracking when data changes (new load)
+  useEffect(() => {
+    if (!state.loading && state.tokis.length > 0) {
+      setImageLoadTracking(new Set());
+      // Clear any existing timeout
+      if (imageLoadTimeoutRef.current) {
+        clearTimeout(imageLoadTimeoutRef.current);
+        imageLoadTimeoutRef.current = null;
+      }
+    }
+  }, [state.loading, state.tokis.length]);
+
+  // Handle image load completion
+  const handleImageLoad = useCallback((tokiId: string) => {
+    setImageLoadTracking(prev => {
+      const updated = new Set(prev);
+      updated.add(tokiId);
+      return updated;
+    });
+  }, []);
+
+  // Check if initial batch images are loaded and update loading state
+  useEffect(() => {
+    if (state.loading || sortedTokis.length === 0) return;
+
+    const initialBatch = sortedTokis.slice(0, initialBatchSize);
+    const loadedCount = imageLoadTracking.size;
+    const expectedCount = initialBatch.length;
+
+    // If all initial images are loaded, clear loading state
+    if (loadedCount >= expectedCount) {
+      if (imageLoadTimeoutRef.current) {
+        clearTimeout(imageLoadTimeoutRef.current);
+        imageLoadTimeoutRef.current = null;
+      }
+      // Small delay to ensure images are rendered
+      setTimeout(() => {
+        if (state.loading) {
+          actions.setLoading(false);
+        }
+      }, 100);
+      return;
+    }
+
+    // Set timeout fallback (3 seconds max wait)
+    if (!imageLoadTimeoutRef.current && expectedCount > 0) {
+      imageLoadTimeoutRef.current = setTimeout(() => {
+        console.log('⏱️ [EXPLORE] Image loading timeout, clearing loading state');
+        if (state.loading) {
+          actions.setLoading(false);
+        }
+        imageLoadTimeoutRef.current = null;
+      }, 3000);
+    }
+  }, [imageLoadTracking, sortedTokis, state.loading, actions]);
+
 
   const handleTokiPress = (toki: any) => {
     router.push({
@@ -419,22 +480,41 @@ export default function ExploreScreen() {
 
       <View>
         <Text style={styles.sectionTitle}>
-          {(state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
-           (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)
-            ? 'Loading...' 
-            : (() => {
-                const count = sortedTokis.length;
-                return count > 0
-                  ? `${count} Toki${count !== 1 ? 's' : ''} nearby`
-                  : 'No Tokis nearby';
-              })()}
+          {(() => {
+            // Show loading state only when actually loading and no data
+            if (state.loading && state.tokis.length === 0) {
+              return 'Loading...';
+            }
+            
+            // Check if filters/search are applied
+            const hasFilters = (selectedCategories.length > 0 && !selectedCategories.includes('all')) || 
+                              searchQuery || 
+                              Object.values(selectedFilters).some(v => v !== 'all' && v !== '');
+            
+            // If filters are applied, show filtered count
+            if (hasFilters) {
+              const filteredCount = sortedTokis.length;
+              return filteredCount > 0 
+                ? `${filteredCount} Toki${filteredCount !== 1 ? 's' : ''} nearby`
+                : 'No Tokis nearby';
+            }
+            
+            // No filters: show actual total from API, or loaded count, or 0
+            const displayCount = state.totalNearbyCount >= 0 ? state.totalNearbyCount : (state.tokis.length > 0 ? state.tokis.length : 0);
+            
+            if (displayCount > 0) {
+              return `${displayCount} Toki${displayCount !== 1 ? 's' : ''} nearby`;
+            }
+            return 'No Tokis nearby';
+          })()}
           {searchQuery && (
             <Text style={styles.searchResultText}> for "{searchQuery}"</Text>
           )}
         </Text>
 
-        {state.loading && (
+        {state.loading && state.tokis.length === 0 && (
           <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#B49AFF" />
             <Text style={styles.loadingText}>Loading Tokis...</Text>
           </View>
         )}
@@ -491,6 +571,7 @@ export default function ExploreScreen() {
     if (!isLoadingMore) return null;
     return (
       <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color="#B49AFF" />
         <Text style={styles.loadingMoreText}>Loading more...</Text>
       </View>
     );
@@ -522,6 +603,13 @@ export default function ExploreScreen() {
                       isGroup: 'false'
                     }
                   });
+                }
+              }}
+              onImageLoad={() => {
+                // Only track initial batch
+                const index = sortedTokis.findIndex(t => t.id === item.id);
+                if (index < initialBatchSize) {
+                  handleImageLoad(item.id);
                 }
               }}
             />
@@ -743,11 +831,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 40,
+    gap: 12,
   },
   loadingText: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#666666',
+    marginTop: 8,
   },
   errorContainer: {
     alignItems: 'center',
@@ -917,6 +1007,9 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 20,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   loadingMoreText: {
     fontSize: 14,

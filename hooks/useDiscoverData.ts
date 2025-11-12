@@ -127,7 +127,7 @@ export const useDiscoverData = () => {
         setIsLoadingMore(true);
       }
 
-      const searchRadius = parseFloat(radius || '10') || 10;
+      const searchRadius = parseFloat(radius || '500') || 500;
       const response = await actions.loadNearbyTokis({
         latitude: currentLat,
         longitude: currentLng,
@@ -155,7 +155,8 @@ export const useDiscoverData = () => {
     
     if (lat && lng) {
       // Use the callback directly but don't include it in deps to avoid circular updates
-      loadNearbyTokis(1, false, lat, lng).then(() => {
+      // Default to 500km radius for initial load (matches backend default)
+      loadNearbyTokis(1, false, lat, lng, '500').then(() => {
         hasInitiallyLoadedRef.current = true;
       }).catch(() => {
         hasInitiallyLoadedRef.current = true; // Mark as loaded even on error

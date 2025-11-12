@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
@@ -70,6 +70,11 @@ export default function DiscoverScreen() {
   const renderCountRef = useRef(0);
   const justSetHighlightRef = useRef(false); // Track if we just set highlight to prevent immediate clearing
   
+  // Image loading tracking
+  const [imageLoadTracking, setImageLoadTracking] = useState<Set<string>>(new Set());
+  const imageLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialBatchSize = 20; // Match initialNumToRender
+  
   // Track component renders
   renderCountRef.current += 1;
 
@@ -93,6 +98,7 @@ export default function DiscoverScreen() {
     filteredEvents,
     handleFilterChange,
     clearAllFilters,
+    searchQuery,
   } = useDiscoverFilters(events, userConnections);
 
   // Sorting
@@ -101,6 +107,62 @@ export default function DiscoverScreen() {
     const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
     return sortEvents(filteredEvents as any, sort, lat, lng);
   }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude]);
+
+  // Reset image loading tracking when data changes (new load)
+  useEffect(() => {
+    if (!state.loading && state.tokis.length > 0) {
+      setImageLoadTracking(new Set());
+      // Clear any existing timeout
+      if (imageLoadTimeoutRef.current) {
+        clearTimeout(imageLoadTimeoutRef.current);
+        imageLoadTimeoutRef.current = null;
+      }
+    }
+  }, [state.loading, state.tokis.length]);
+
+  // Handle image load completion
+  const handleImageLoad = useCallback((tokiId: string) => {
+    setImageLoadTracking(prev => {
+      const updated = new Set(prev);
+      updated.add(tokiId);
+      return updated;
+    });
+  }, []);
+
+  // Check if initial batch images are loaded and update loading state
+  useEffect(() => {
+    if (state.loading || sortedEvents.length === 0) return;
+
+    const initialBatch = sortedEvents.slice(0, initialBatchSize);
+    const loadedCount = imageLoadTracking.size;
+    const expectedCount = initialBatch.length;
+
+    // If all initial images are loaded, clear loading state
+    if (loadedCount >= expectedCount) {
+      if (imageLoadTimeoutRef.current) {
+        clearTimeout(imageLoadTimeoutRef.current);
+        imageLoadTimeoutRef.current = null;
+      }
+      // Small delay to ensure images are rendered
+      setTimeout(() => {
+        if (state.loading) {
+          actions.setLoading(false);
+        }
+      }, 100);
+      return;
+    }
+
+    // Set timeout fallback (3 seconds max wait)
+    if (!imageLoadTimeoutRef.current && expectedCount > 0) {
+      imageLoadTimeoutRef.current = setTimeout(() => {
+        console.log('⏱️ [DISCOVER] Image loading timeout, clearing loading state');
+        if (state.loading) {
+          actions.setLoading(false);
+        }
+        imageLoadTimeoutRef.current = null;
+      }, 3000);
+    }
+  }, [imageLoadTracking, sortedEvents, state.loading, actions]);
 
   // Reset refresh flag when screen loses focus
   useFocusEffect(
@@ -337,13 +399,29 @@ export default function DiscoverScreen() {
   
 
   const getSectionTitle = () => {
-    if ((state.loading && state.totalNearbyCount === 0 && state.tokis.length === 0) || 
-        (state.totalNearbyCount === 0 && state.tokis.length === 0 && !state.error)) {
+    // Show loading state only when actually loading and no data
+    if (state.loading && state.tokis.length === 0) {
       return 'Loading...';
     }
-    const count = sortedEvents.length;
-    if (count > 0) {
-      return `${count} Toki${count !== 1 ? 's' : ''} nearby`;
+    
+    // Check if filters/search are applied
+    const hasFilters = (selectedCategories.length > 0 && !selectedCategories.includes('all')) || 
+                      searchQuery || 
+                      Object.values(selectedFilters).some(v => v !== 'all' && v !== '');
+    
+    // If filters are applied, show filtered count
+    if (hasFilters) {
+      const filteredCount = sortedEvents.length;
+      return filteredCount > 0 
+        ? `${filteredCount} Toki${filteredCount !== 1 ? 's' : ''} nearby`
+        : 'No Tokis nearby';
+    }
+    
+    // No filters: show actual total from API, or loaded count, or 0
+    const displayCount = state.totalNearbyCount >= 0 ? state.totalNearbyCount : (state.tokis.length > 0 ? state.tokis.length : 0);
+    
+    if (displayCount > 0) {
+      return `${displayCount} Toki${displayCount !== 1 ? 's' : ''} nearby`;
     }
     return 'No Tokis nearby';
   };
@@ -397,8 +475,14 @@ export default function DiscoverScreen() {
             <View>
               <Text style={styles.sectionTitle}>{getSectionTitle()}</Text>
             </View>
+            {state.loading && state.tokis.length === 0 && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#B49AFF" />
+                <Text style={styles.loadingText}>Loading Tokis...</Text>
+              </View>
+            )}
           </>
-        ), [showMap, renderInteractiveMap, categories, selectedCategories, setSelectedCategories, sortedEvents.length])}
+        ), [showMap, renderInteractiveMap, categories, selectedCategories, setSelectedCategories, sortedEvents.length, state.loading, state.tokis.length])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,
@@ -419,6 +503,13 @@ export default function DiscoverScreen() {
                   });
                 }
               }}
+              onImageLoad={() => {
+                // Only track initial batch
+                const index = sortedEvents.findIndex(e => e.id === item.id);
+                if (index < initialBatchSize) {
+                  handleImageLoad(item.id);
+                }
+              }}
             />
           </View>
         )}
@@ -426,6 +517,7 @@ export default function DiscoverScreen() {
           <>
             {isLoadingMore && (
               <View style={styles.loadingMoreContainer}>
+                <ActivityIndicator size="small" color="#B49AFF" />
                 <Text style={styles.loadingMoreText}>Loading more...</Text>
               </View>
             )}
@@ -520,6 +612,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginLeft: 20,
   },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#666666',
+    marginTop: 8,
+  },
   bottomSpacing: {
     height: 20,
   },
@@ -527,6 +631,9 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 20,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   loadingMoreText: {
     fontSize: 14,

@@ -1096,16 +1096,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const response = await apiService.getNearbyTokis({
         latitude: params.latitude,
         longitude: params.longitude,
-        radius: params.radius || 10,
+        radius: params.radius || 500,
         limit: 50,
         page: params.page || 1,
         category: params.category,
         timeSlot: params.timeSlot
       });
 
-      // Get current user ID from API service
-      const currentUserId = apiService.getAccessToken() ? 
-        (await apiService.getCurrentUser()).user.id : null;
+      // Log response for debugging
+      console.log('📊 [APP CONTEXT] Nearby tokis response:', {
+        tokisCount: response.tokis?.length || 0,
+        pagination: response.pagination,
+        page: params.page || 1,
+        limit: 50
+      });
+
+      // Get current user ID from API service (with error handling)
+      let currentUserId: string | null = null;
+      try {
+        if (apiService.getAccessToken()) {
+          const userResponse = await apiService.getCurrentUser();
+          currentUserId = userResponse?.user?.id || null;
+        }
+      } catch (userError) {
+        console.warn('⚠️ [APP CONTEXT] Failed to get current user for nearby tokis:', userError);
+        // Continue without user ID - tokis will still load
+      }
 
       const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
         id: apiToki.id,
@@ -1148,11 +1164,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const pagination = response.pagination || (response as any).data?.pagination;
       const total = pagination?.total;
       
-      if (total !== undefined && total !== null && total > 0) {
+      // Log count comparison for debugging
+      const actualCount = append ? state.tokis.length + apiTokis.length : apiTokis.length;
+      console.log('📊 [APP CONTEXT] Count comparison:', {
+        totalFromAPI: total,
+        actualTokisLoaded: actualCount,
+        newTokisInThisPage: apiTokis.length,
+        append,
+        hasMore: pagination?.hasMore,
+        page: pagination?.page || params.page || 1
+      });
+      
+      // Update total count - allow 0 as valid value
+      // Always update to ensure we have the latest count from API (even if 0)
+      if (total !== undefined && total !== null && !isNaN(total) && total >= 0) {
         dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
+      } else if (!append) {
+        // If not appending and we got invalid total, reset to 0
+        dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: 0 });
+        console.warn('⚠️ [APP CONTEXT] Invalid total count from API, resetting to 0:', total);
       }
 
-      return { pagination: pagination || response.pagination };
+      return { pagination: pagination || { hasMore: false, total: 0 } };
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to load nearby Tokis:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load nearby activities' });
@@ -2676,6 +2709,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     clearRedirection: () => {
       dispatch({ type: 'CLEAR_REDIRECTION' });
+    },
+    // Loading state actions
+    setLoading: (loading: boolean) => {
+      dispatch({ type: 'SET_LOADING', payload: loading });
     },
   };
 
