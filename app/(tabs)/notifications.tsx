@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle, X, UserPlus, UserCheck, UserX, Clock, MapPin } from 'lucide-react-native';
+import { Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle, X, UserPlus, UserCheck, UserX, Clock, MapPin } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '@/contexts/AppContext';
@@ -394,9 +394,6 @@ export default function NotificationsScreen() {
         style={styles.header}
       >
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#1C1C1C" />
-          </TouchableOpacity>
           <Text style={styles.title}>Notifications</Text>
           {unreadCount > 0 && (
             <TouchableOpacity onPress={markAllAsRead} style={styles.markAllReadButton}>
@@ -574,9 +571,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     position: 'relative',
   },
-  backButton: {
-    zIndex: 2,
-  },
   markAllReadButton: {
     zIndex: 2,
     paddingVertical: 8,
@@ -586,11 +580,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     color: '#1C1C1C',
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    flex: 1,
     textAlign: 'center',
-    zIndex: 1,
   },
   markAllRead: {
     fontSize: 14,
@@ -780,3 +771,4 @@ const styles = StyleSheet.create({
     height: 20,
   },
 });
+

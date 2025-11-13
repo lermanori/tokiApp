@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS tokis (
   category VARCHAR(50) NOT NULL, -- 'sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'
   visibility VARCHAR(20) DEFAULT 'public', -- 'public', 'connections', 'friends'
   image_url VARCHAR(500),
-  external_link VARCHAR(500),
   status VARCHAR(20) DEFAULT 'active', -- 'active', 'cancelled', 'completed'
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()

@@ -33,7 +33,6 @@ interface Toki {
   longitude?: number;
   scheduledTime?: string; // Add scheduled time for better display
   isSaved?: boolean;
-  algorithmScore?: number | null;
 }
 
 interface User {
@@ -138,6 +137,9 @@ interface AppState {
   notifications: NotificationItem[];
   unreadNotificationsCount: number;
   totalNearbyCount: number;
+  connections: any[];
+  pendingConnections: any[];
+  userConnectionsIds: string[];
 }
 
 type AppAction =
@@ -168,7 +170,12 @@ type AppAction =
   | { type: 'SET_UNREAD_NOTIFICATIONS_COUNT'; payload: number }
   | { type: 'MARK_NOTIFICATION_READ'; payload: { id: string } }
   | { type: 'MARK_ALL_NOTIFICATIONS_READ' }
-  | { type: 'SET_TOTAL_NEARBY_COUNT'; payload: number };
+  | { type: 'SET_TOTAL_NEARBY_COUNT'; payload: number }
+  | { type: 'SET_CONNECTIONS'; payload: any[] }
+  | { type: 'SET_PENDING_CONNECTIONS'; payload: any[] }
+  | { type: 'ADD_CONNECTION'; payload: any }
+  | { type: 'REMOVE_CONNECTION'; payload: string }
+  | { type: 'UPDATE_CONNECTION'; payload: { id: string; updates: any } };
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -293,6 +300,9 @@ const initialState: AppState = {
   notifications: [],
   unreadNotificationsCount: 0,
   totalNearbyCount: 0,
+  connections: [],
+  pendingConnections: [],
+  userConnectionsIds: [],
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -466,6 +476,44 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_TOTAL_NEARBY_COUNT':
       return { ...state, totalNearbyCount: action.payload };
+    case 'SET_CONNECTIONS': {
+      const ids = action.payload.map((c: any) => c.user?.id || c.id).filter(Boolean);
+      return { 
+        ...state, 
+        connections: action.payload,
+        userConnectionsIds: ids 
+      };
+    }
+    case 'SET_PENDING_CONNECTIONS':
+      return { ...state, pendingConnections: action.payload };
+    case 'ADD_CONNECTION': {
+      const newConnections = [...state.connections, action.payload];
+      const ids = newConnections.map((c: any) => c.user?.id || c.id).filter(Boolean);
+      return { 
+        ...state, 
+        connections: newConnections,
+        userConnectionsIds: ids 
+      };
+    }
+    case 'REMOVE_CONNECTION': {
+      const filtered = state.connections.filter((c: any) => 
+        (c.user?.id || c.id) !== action.payload
+      );
+      const ids = filtered.map((c: any) => c.user?.id || c.id).filter(Boolean);
+      return { 
+        ...state, 
+        connections: filtered,
+        userConnectionsIds: ids 
+      };
+    }
+    case 'UPDATE_CONNECTION': {
+      const updated = state.connections.map((c: any) => 
+        (c.user?.id || c.id) === action.payload.id 
+          ? { ...c, ...action.payload.updates }
+          : c
+      );
+      return { ...state, connections: updated };
+    }
     default:
       return state;
   }
@@ -576,6 +624,7 @@ interface AppContextType {
     loadNotifications: () => Promise<NotificationItem[]>;
     markNotificationRead: (id: string, source?: string, externalId?: string) => Promise<void>;
     markAllNotificationsRead: () => Promise<void>;
+    markNotificationsAsRead: () => Promise<void>;
     // Redirection actions
     setRedirection: (returnTo: string, params?: Record<string, string>) => void;
     clearRedirection: () => void;
@@ -594,6 +643,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastConnectionCheckMs, setLastConnectionCheckMs] = useState(0);
   const [isCheckingAuthStatus, setIsCheckingAuthStatus] = useState(false);
   const [lastAuthStatusCheckMs, setLastAuthStatusCheckMs] = useState(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [isLoadingSavedTokis, setIsLoadingSavedTokis] = useState(false);
+  const [isLoadingConnections, setIsLoadingConnections] = useState(false);
+  const [isLoadingPendingConnections, setIsLoadingPendingConnections] = useState(false);
 
   // Load data from AsyncStorage on mount
   useEffect(() => {
@@ -758,6 +811,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Clean up any existing listeners first
     socketService.offMessageReceived();
     socketService.offTokiMessageReceived();
+    socketService.offNotificationReceived();
     
     // Listen for new individual messages
     socketService.onMessageReceived((message: any) => {
@@ -833,6 +887,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         // Also refresh from API (but this won't have the right unread count until backend is fixed)
         actions.getTokiGroupChats();
+      }
+    });
+
+    // Listen for new notifications
+    socketService.onNotificationReceived((notification: any) => {
+      console.log('📬 [APP CONTEXT] RECEIVED EVENT: notification-received');
+      console.log('📬 [APP CONTEXT] Notification structure:', {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        created_at: notification.created_at,
+        timestamp: notification.timestamp,
+        user_id: notification.user_id,
+        userId: notification.userId,
+        source: notification.source
+      });
+      console.log('📬 [APP CONTEXT] Current user ID:', state.currentUser?.id);
+      
+      // Check if notification is for current user
+      // For system notifications: notification.user_id === currentUser.id
+      // For connection requests: notification is sent to recipient's room, so if we received it, it's for us
+      const isForCurrentUser = state.currentUser?.id && (
+        notification.user_id === state.currentUser.id || // System notifications
+        notification.source === 'connection_pending' || // Connection requests (sent to recipient's room)
+        notification.source === 'connection_accepted' // Connection accepted (sent to requester's room)
+      );
+      
+      if (isForCurrentUser) {
+        console.log('🔄 [APP CONTEXT] Updating notifications for new notification');
+        
+        // Transform backend notification format to frontend format
+        // Handle both system notifications and connection requests (from combined route format)
+        const transformedNotification = {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          created_at: notification.timestamp || notification.created_at,
+          read: notification.read || false,
+          tokiId: notification.related_toki_id || notification.tokiId,
+          userId: notification.related_user_id || notification.userId,
+          source: notification.source || 'system', // Use source from notification if provided
+          externalId: notification.externalId || notification.id,
+          actionRequired: notification.actionRequired,
+        };
+        
+        // Add new notification to the beginning of the list
+        const currentNotifications = state.notifications || [];
+        const updatedNotifications = [transformedNotification, ...currentNotifications];
+        
+        // Update state with new notification (reducer will automatically recalculate unread count)
+        dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifications });
+        
+        console.log('✅ [APP CONTEXT] Notification added to state, unread count will be recalculated');
+      } else {
+        console.log('⏭️ [APP CONTEXT] Notification not for current user, skipping');
       }
     });
 
@@ -996,7 +1107,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // ADD MISSING COORDINATES
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
-        algorithmScore: (apiToki as any).algorithmScore ?? null,
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1061,7 +1171,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // ADD MISSING COORDINATES
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
-        algorithmScore: (apiToki as any).algorithmScore ?? null,
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1099,32 +1208,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const response = await apiService.getNearbyTokis({
         latitude: params.latitude,
         longitude: params.longitude,
-        radius: params.radius || 500,
+        radius: params.radius || 10,
         limit: 50,
         page: params.page || 1,
         category: params.category,
         timeSlot: params.timeSlot
       });
 
-      // Log response for debugging
-      console.log('📊 [APP CONTEXT] Nearby tokis response:', {
-        tokisCount: response.tokis?.length || 0,
-        pagination: response.pagination,
-        page: params.page || 1,
-        limit: 50
-      });
-
-      // Get current user ID from API service (with error handling)
-      let currentUserId: string | null = null;
-      try {
-        if (apiService.getAccessToken()) {
-          const userResponse = await apiService.getCurrentUser();
-          currentUserId = userResponse?.user?.id || null;
-        }
-      } catch (userError) {
-        console.warn('⚠️ [APP CONTEXT] Failed to get current user for nearby tokis:', userError);
-        // Continue without user ID - tokis will still load
-      }
+      // Get current user ID from API service
+      const currentUserId = apiService.getAccessToken() ? 
+        (await apiService.getCurrentUser()).user.id : null;
 
       const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
         id: apiToki.id,
@@ -1167,28 +1260,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const pagination = response.pagination || (response as any).data?.pagination;
       const total = pagination?.total;
       
-      // Log count comparison for debugging
-      const actualCount = append ? state.tokis.length + apiTokis.length : apiTokis.length;
-      console.log('📊 [APP CONTEXT] Count comparison:', {
-        totalFromAPI: total,
-        actualTokisLoaded: actualCount,
-        newTokisInThisPage: apiTokis.length,
-        append,
-        hasMore: pagination?.hasMore,
-        page: pagination?.page || params.page || 1
-      });
-      
-      // Update total count - allow 0 as valid value
-      // Always update to ensure we have the latest count from API (even if 0)
-      if (total !== undefined && total !== null && !isNaN(total) && total >= 0) {
+      if (total !== undefined && total !== null && total > 0) {
         dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
-      } else if (!append) {
-        // If not appending and we got invalid total, reset to 0
-        dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: 0 });
-        console.warn('⚠️ [APP CONTEXT] Invalid total count from API, resetting to 0:', total);
       }
 
-      return { pagination: pagination || { hasMore: false, total: 0 } };
+      return { pagination: pagination || response.pagination };
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to load nearby Tokis:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load nearby activities' });
@@ -2047,11 +2123,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Connection actions
   const getConnections = async (): Promise<{ connections: any[]; pagination: any }> => {
     try {
+      // Prevent duplicate API calls
+      if (isLoadingConnections) {
+        console.log('⏳ Connections already loading, returning cached data');
+        return { connections: state.connections, pagination: { page: 1, limit: 10, total: state.connections.length, pages: 1 } };
+      }
+
+      setIsLoadingConnections(true);
       const response = await apiService.getConnections();
+      
+      // Update global state
+      dispatch({ type: 'SET_CONNECTIONS', payload: response.connections });
+      
       return response;
     } catch (error) {
       console.error('❌ Failed to load connections:', error);
-      return { connections: [], pagination: { page: 1, limit: 10, total: 0, pages: 0 } };
+      return { connections: state.connections, pagination: { page: 1, limit: 10, total: state.connections.length, pages: 1 } };
+    } finally {
+      setIsLoadingConnections(false);
     }
   };
 
@@ -2068,12 +2157,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const getPendingConnections = async (): Promise<any[]> => {
     try {
+      // Prevent duplicate API calls
+      if (isLoadingPendingConnections) {
+        console.log('⏳ Pending connections already loading, returning cached data');
+        return state.pendingConnections;
+      }
+
+      setIsLoadingPendingConnections(true);
       const response = await apiService.getPendingConnections();
+      
+      // Update global state
+      dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: response });
+      
       console.log('✅ Pending connections loaded successfully');
       return response;
     } catch (error) {
       console.error('❌ Failed to load pending connections:', error);
-      return [];
+      return state.pendingConnections;
+    } finally {
+      setIsLoadingPendingConnections(false);
     }
   };
 
@@ -2091,6 +2193,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const acceptConnectionRequest = async (userId: string): Promise<boolean> => {
     try {
       await apiService.respondToConnectionRequest(userId, 'accept');
+      
+      // Find the pending connection and move it to connections
+      const pendingConn = state.pendingConnections.find((p: any) => 
+        (p.user?.id || p.requester_id || p.id) === userId
+      );
+      
+      if (pendingConn) {
+        // Remove from pending
+        dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) => 
+          (p.user?.id || p.requester_id || p.id) !== userId
+        )});
+        
+        // Add to connections (need to fetch full connection data)
+        await getConnections();
+      }
+      
       console.log('✅ Connection request accepted successfully');
       return true;
     } catch (error) {
@@ -2102,6 +2220,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const declineConnectionRequest = async (userId: string): Promise<boolean> => {
     try {
       await apiService.respondToConnectionRequest(userId, 'decline');
+      
+      // Remove from pending connections
+      dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) => 
+        (p.user?.id || p.requester_id || p.id) !== userId
+      )});
+      
       console.log('✅ Connection request declined successfully');
       return true;
     } catch (error) {
@@ -2113,6 +2237,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeConnection = async (userId: string): Promise<boolean> => {
     try {
       await apiService.removeConnection(userId);
+      
+      // Remove from global state
+      dispatch({ type: 'REMOVE_CONNECTION', payload: userId });
+      
       console.log('✅ Connection removed successfully');
       return true;
     } catch (error) {
@@ -2406,12 +2534,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Saved Tokis actions
   const getSavedTokis = async (): Promise<SavedToki[]> => {
     try {
+      // Prevent duplicate API calls
+      if (isLoadingSavedTokis) {
+        console.log('⏳ Saved Tokis already loading, returning cached data');
+        return state.savedTokis;
+      }
+
+      setIsLoadingSavedTokis(true);
       const savedTokis = await apiService.getSavedTokis();
       dispatch({ type: 'SET_SAVED_TOKIS', payload: savedTokis });
       return savedTokis;
     } catch (error) {
       console.error('❌ Failed to load saved Tokis:', error);
-      return [];
+      return state.savedTokis;
+    } finally {
+      setIsLoadingSavedTokis(false);
     }
   };
 
@@ -2469,6 +2606,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // =========================
   const loadNotifications = async (): Promise<NotificationItem[]> => {
     try {
+      // Prevent duplicate API calls
+      if (isLoadingNotifications) {
+        console.log('⏳ Notifications already loading, returning cached data');
+        return state.notifications;
+      }
+
+      setIsLoadingNotifications(true);
+      
       // Use unified backend endpoint
       const response = await fetch(`${getBackendUrl()}/api/notifications/combined`, {
         method: 'GET',
@@ -2505,24 +2650,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('❌ Failed to load notifications:', error);
       dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
       return [];
+    } finally {
+      setIsLoadingNotifications(false);
     }
   };
 
   const markNotificationRead = async (id: string, source?: string, externalId?: string): Promise<void> => {
     try {
-      // Optimistic update for now
-      dispatch({ type: 'MARK_NOTIFICATION_READ', payload: { id } });
-      // Backend PATCH unified
-      try {
-        await fetch(`${getBackendUrl()}/api/notifications/read`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${await apiService.getAccessToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(source && externalId ? { source, externalId } : { items: [{ source: 'system', externalId: id.replace(/^sys-/, '') }] }),
-        });
-      } catch {}
+      // Use timestamp marker system - mark all notifications as read
+      await fetch(`${getBackendUrl()}/api/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      // Refresh notifications to get updated read status
+      await loadNotifications();
     } catch (error) {
       console.error('❌ Failed to mark notification as read:', error);
     }
@@ -2530,22 +2674,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const markAllNotificationsRead = async (): Promise<void> => {
     try {
-      // Optimistic update for now
-      dispatch({ type: 'MARK_ALL_NOTIFICATIONS_READ' });
-      // Backend PATCH in batch
-      try {
-        const items = (state.notifications || []).map((n: any) => ({ source: n.source || 'system', externalId: n.externalId || String(n.id).replace(/^sys-/, '') }));
-        await fetch(`${getBackendUrl()}/api/notifications/read`, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${await apiService.getAccessToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ items }),
-        });
-      } catch {}
+      // Use timestamp marker system
+      await fetch(`${getBackendUrl()}/api/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      // Refresh notifications to get updated read status
+      await loadNotifications();
     } catch (error) {
       console.error('❌ Failed to mark all notifications as read:', error);
+    }
+  };
+
+  const markNotificationsAsRead = async (): Promise<void> => {
+    try {
+      console.log('✅ [APP CONTEXT] Marking notifications as read via timestamp marker');
+      
+      // Call backend to set timestamp marker
+      await fetch(`${getBackendUrl()}/api/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      // Refresh notifications to get updated read status
+      await loadNotifications();
+    } catch (error) {
+      console.error('❌ Failed to mark notifications as read:', error);
     }
   };
 
@@ -2606,6 +2766,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadNotifications();
     }
   }, [state.currentUser?.id]); // Remove state.isConnected dependency
+
+  // Load initial data once when user is authenticated
+  useEffect(() => {
+    const loadInitialAppData = async () => {
+      if (state.isConnected && state.currentUser?.id) {
+        console.log('📦 Loading initial app data (notifications, saved tokis, connections)...');
+        try {
+          await Promise.all([
+            loadNotifications(),
+            getSavedTokis(),
+            getConnections(),
+            getPendingConnections(),
+          ]);
+          console.log('✅ Initial app data loaded');
+        } catch (error) {
+          console.error('❌ Failed to load initial app data:', error);
+        }
+      }
+    };
+    
+    // Load when user becomes available (loading guards will prevent duplicate calls)
+    if (state.currentUser?.id && state.isConnected) {
+      loadInitialAppData();
+    }
+  }, [state.currentUser?.id, state.isConnected]);
 
         const actions = {
         checkConnection,
@@ -2706,16 +2891,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    markNotificationsAsRead,
     // Redirection actions
     setRedirection: (returnTo: string, params?: Record<string, string>) => {
       dispatch({ type: 'SET_REDIRECTION', payload: { returnTo, returnParams: params } });
     },
     clearRedirection: () => {
       dispatch({ type: 'CLEAR_REDIRECTION' });
-    },
-    // Loading state actions
-    setLoading: (loading: boolean) => {
-      dispatch({ type: 'SET_LOADING', payload: loading });
     },
   };
 

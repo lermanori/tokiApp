@@ -33,37 +33,21 @@ interface SavedToki {
 }
 
 export default function SavedTokisScreen() {
-  const { actions } = useApp();
-  const [savedTokis, setSavedTokis] = useState<SavedToki[]>([]);
+  const { state, actions } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Load saved Tokis on mount
-  useEffect(() => {
-    loadSavedTokis();
-  }, []);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Refresh saved Tokis when screen comes into focus (e.g., after saving/unsaving a Toki)
   useFocusEffect(
     React.useCallback(() => {
-      loadSavedTokis();
+      // Refresh from server to ensure we have latest data
+      actions.getSavedTokis().catch(err => {
+        console.error('Failed to refresh saved Tokis:', err);
+      });
     }, [])
   );
 
-  const loadSavedTokis = async () => {
-    try {
-      setIsLoading(true);
-      const tokis = await actions.getSavedTokis();
-      setSavedTokis(tokis);
-    } catch (error) {
-      console.error('Failed to load saved Tokis:', error);
-      Alert.alert('Error', 'Failed to load saved Tokis. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const filteredTokis = savedTokis.filter(toki =>
+  const filteredTokis = (state.savedTokis || []).filter(toki =>
     toki.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     toki.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -81,8 +65,7 @@ export default function SavedTokisScreen() {
     try {
       const success = await actions.unsaveToki(tokiId);
       if (success) {
-        // Remove from local state
-        setSavedTokis(prev => prev.filter(toki => toki.id !== tokiId));
+        // State is automatically updated by the action
         Alert.alert('Success', 'Toki removed from saved list');
       } else {
         Alert.alert('Error', 'Failed to remove Toki from saved list');
@@ -104,7 +87,7 @@ export default function SavedTokisScreen() {
             <ArrowLeft size={24} color="#1F2937" />
           </TouchableOpacity>
           <Text style={styles.title}>Saved Tokis</Text>
-          <TouchableOpacity onPress={loadSavedTokis}>
+          <TouchableOpacity onPress={() => actions.getSavedTokis()}>
             <Search size={24} color="#8B5CF6" />
           </TouchableOpacity>
         </View>
@@ -120,12 +103,12 @@ export default function SavedTokisScreen() {
             <Heart size={48} color="#D1D5DB" />
             <Text style={styles.emptyTitle}>No saved Tokis</Text>
             <Text style={styles.emptyDescription}>
-              {savedTokis.length === 0 
+              {state.savedTokis.length === 0 
                 ? 'Save interesting Tokis to find them easily later'
                 : 'No Tokis match your search'
               }
             </Text>
-            {savedTokis.length === 0 && (
+            {state.savedTokis.length === 0 && (
               <TouchableOpacity 
                 style={styles.exploreButton} 
                 onPress={() => router.push('/(tabs)')}

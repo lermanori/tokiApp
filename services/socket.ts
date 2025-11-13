@@ -240,6 +240,24 @@ class SocketService {
     }
   }
 
+  // Listen for new notifications
+  onNotificationReceived(callback: (notification: any) => void) {
+    if (this.socket) {
+      console.debug('👂 [FRONTEND] Setting up notification-received listener');
+      console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
+      console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
+      
+      this.socket.on('notification-received', (notification) => {
+        console.debug('📬 [FRONTEND] RECEIVED EVENT: notification-received');
+        console.debug('📬 [FRONTEND] Notification data:', notification);
+        console.debug('📬 [FRONTEND] Current rooms:', Array.from(this.currentRooms));
+        callback(notification);
+      });
+    } else {
+      console.warn('❌ [FRONTEND] Cannot set up notification-received listener - no socket');
+    }
+  }
+
   // Remove message listeners
   offMessageReceived() {
     if (this.socket) {
@@ -250,6 +268,12 @@ class SocketService {
   offTokiMessageReceived() {
     if (this.socket) {
       this.socket.off('toki-message-received');
+    }
+  }
+
+  offNotificationReceived() {
+    if (this.socket) {
+      this.socket.off('notification-received');
     }
   }
 

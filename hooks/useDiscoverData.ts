@@ -15,7 +15,6 @@ export const useDiscoverData = () => {
   const { state, actions } = useApp();
   const [events, setEvents] = useState<TokiEvent[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(DEFAULT_REGION);
-  const [userConnections, setUserConnections] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -43,22 +42,6 @@ export const useDiscoverData = () => {
       }
     }
   }, [state.tokis]);
-
-  // Load user connections
-  useEffect(() => {
-    const loadConnections = async () => {
-      try {
-        const result = await actions.getConnections();
-        const ids = (result.connections || []).map((c: any) => c.user?.id || c.id).filter((v: string) => v);
-        setUserConnections(ids);
-      } catch (e) {
-        // Silent fail
-      }
-    };
-    if (state.isConnected && state.currentUser?.id) {
-      loadConnections();
-    }
-  }, [state.isConnected, state.currentUser?.id, actions]);
 
   // Initialize map region from user profile location - only once on mount
   useEffect(() => {
@@ -198,14 +181,18 @@ export const useDiscoverData = () => {
       const lat = state.currentUser?.latitude || mapRegion.latitude;
       const lng = state.currentUser?.longitude || mapRegion.longitude;
       if (lat && lng) {
-        await loadNearbyTokis(1, false, lat, lng, radius);
+        // Refresh both tokis and notifications in parallel
+        await Promise.all([
+          loadNearbyTokis(1, false, lat, lng, radius),
+          actions.loadNotifications() // Also refresh notifications
+        ]);
       }
     } catch (error) {
       console.error('❌ [DISCOVER] Failed to refresh Tokis:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis, actions]);
 
   const updateMapRegion = useCallback((region: MapRegion, userInitiated: boolean = false) => {
     // Validate region has valid coordinates before setting
@@ -222,7 +209,7 @@ export const useDiscoverData = () => {
   return {
     events,
     mapRegion,
-    userConnections,
+    userConnections: state.userConnectionsIds, // Use centralized state
     currentPage,
     isLoadingMore,
     hasMore,

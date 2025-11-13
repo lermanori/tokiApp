@@ -87,3 +87,37 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - If user is on a deep link page OR if initial URL handling is still in progress, the auth check returns early without redirecting
   - Only redirects authenticated users to tabs if they're on an unrecognized page AND initial URL handling is complete
   - This ensures that when app opens fresh from universal link, authenticated users stay on the target deep link page instead of being redirected to explore
+- problem: When clicking notifications from the profile screen, users were sometimes redirected to `/exMap` (explore) instead of the intended notification destination. This happened because `window.location.pathname` could be stale during navigation transitions, causing the auth check to read an old path (like `/exMap`) and preserve it as `returnTo`, which then triggered a redirect to that stale path.
+- solution:
+  - Changed path detection to prefer `segments` over `window.location.pathname` since segments are more reliable during navigation transitions
+  - Added validation to detect path mismatches between segments and window.location, preferring segments when they differ
+  - Added check to detect race conditions: if user has tokens but `isAuthenticated` is false, don't preserve the path (just redirect to login and let fast redirect handle it)
+  - Added validation to prevent preserving stale tab routes: if the path is a tab route (like `/exMap`, `/profile`) but doesn't match current segments, don't preserve it as `returnTo`
+  - This prevents stale paths from being preserved and causing incorrect redirects when clicking notifications
+- **Path detection fix**: Updated `getCurrentPath()` to prefer segments over `window.location.pathname`:
+  - Segments are more reliable during navigation transitions
+  - Added logging to detect mismatches between segments and window.location
+  - When mismatch is detected, prefer segments path as it's more up-to-date
+- **Race condition detection**: Added check before preserving paths as `returnTo`:
+  - If user has tokens but `isAuthenticated` is false, it's likely a race condition
+  - In this case, don't preserve the path - just redirect to login and let fast redirect handle it
+  - This prevents stale paths from being preserved during authentication state transitions
+- **Stale path validation**: Added validation to prevent preserving stale tab routes:
+  - If path is a tab route (`/(tabs)`, `/exMap`, `/profile`, `/messages`) but doesn't match current segments
+  - Don't preserve it as `returnTo` - just redirect to login without preserving path
+  - This prevents incorrect redirects when clicking notifications from profile screen
+- **Critical fix for intermittent redirects**: Added check to only respect `effectiveReturnTo` when on login screen:
+  - When navigating from authenticated screens (like notifications), ignore stale `returnTo` in URL
+  - The redirect logic at line 834 now checks `if (segments[0] !== 'login')` before processing `effectiveReturnTo`
+  - This prevents intermittent redirects that happened when:
+    - User clicks notification from profile screen
+    - URL still has stale `returnTo=/exMap` from previous navigation
+    - Auth check runs and sees `isAuthenticated && effectiveReturnTo` → triggers redirect
+  - Now the redirect only happens when actually on login screen, not when navigating from authenticated screens
+  - This fixes the "works sometimes" issue by ensuring `returnTo` is only respected in legitimate redirect scenarios
+- **Fix for notifications redirect issue**: Added all valid authenticated routes to the auth check:
+  - Problem: When clicking notifications from profile screen, `/notifications` was being treated as an "unrecognized page" and redirecting to tabs
+  - The auth check at line 761 only recognized deep link pages (`toki-details`, `user-profile`, `join`) but not regular authenticated routes
+  - Solution: Added all valid authenticated routes to the check: `notifications`, `connections`, `chat`, `edit-profile`, `my-tokis`, `saved-tokis`
+  - Now authenticated users can stay on these valid pages instead of being redirected to tabs
+  - This fixes the "Maximum update depth exceeded" error that was caused by redirect loops

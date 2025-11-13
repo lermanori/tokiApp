@@ -1,21 +1,20 @@
 # File: app/(tabs)/profile.tsx
 
 ### Summary
-This file contains the Profile screen showing user information, activity, saved Tokis count, and profile settings. Displays user avatar, stats, activity feed, and settings options.
+Profile screen displaying user information, stats, and navigation to various sections. Now uses global state for notification count and saved tokis count instead of local state.
 
 ### Fixes Applied log
-- problem: White space appeared above the tab bar on the Profile screen.
-- solution: Added `edges={['top', 'left', 'right']}` to SafeAreaView to exclude the bottom edge, preventing double spacing since the tab bar already handles bottom spacing.
-
-- problem: The "Connections" label in the stats section was splitting across two lines due to insufficient container width.
-- solution: Reduced padding on stats container from 16 to 14, reduced divider margins from 8 to 6, and added `minWidth: 70` to stat items to ensure sufficient space for longer labels.
-
-- problem: Rating stat was displayed in the profile statistics section but is no longer needed.
-- solution: Removed the rating stat item and its preceding divider from the stats container. The stats section now only displays Tokis Joined, Tokis Created, and Connections.
+- problem: Profile page maintained local state for unreadNotifications and savedTokisCount, causing inconsistencies when notifications were marked as read or tokis were saved/unsaved.
+- solution: Removed local state variables and functions. Updated UI to read directly from global state (state.unreadNotificationsCount and state.savedTokis.length).
+- problem: ReferenceError in refreshUserData - calls to non-existent functions `loadUnreadNotificationsCount()` and `loadSavedTokisCount()`.
+- solution: Replaced with correct AppContext actions: `actions.loadNotifications()` and `actions.getSavedTokis()`.
 
 ### How Fixes Were Implemented
-- Modified SafeAreaView component to exclude the bottom edge by adding the `edges` prop. This prevents SafeAreaView from adding bottom padding for the safe area (home indicator), which was creating double spacing with the tab bar's reserved space.
-
-- Adjusted stats section layout to prevent text wrapping: Reduced `statsContainer` padding from 16 to 14 pixels to allocate more horizontal space to the stat items themselves. Reduced `statDivider` marginHorizontal from 8 to 6 pixels to minimize space taken by dividers. Added `minWidth: 70` to `statItem` style to ensure each stat container has sufficient width for longer labels like "Connections". This ensures all stat labels, including "Connections", fit on a single line.
-
-- Removed rating stat from profile statistics: Deleted the rating stat View component (lines 671-678) and its preceding divider (line 670) from the statsContainer. The stats section now displays only three items: Tokis Joined, Tokis Created, and Connections, providing a cleaner and more focused profile statistics display.
+- Removed `const [unreadNotifications, setUnreadNotifications] = useState(0);`
+- Removed `const [savedTokisCount, setSavedTokisCount] = useState(0);`
+- Removed `loadUnreadNotificationsCount()` and `loadSavedTokisCount()` functions.
+- Updated notification count display to use `state.unreadNotificationsCount || 0`.
+- Updated saved tokis count display to use `state.savedTokis.length > 0 ? state.savedTokis.length : '-'`.
+- Removed `loadSavedTokisCount()` call from useFocusEffect.
+- Fixed `refreshUserData()` function: replaced `await loadUnreadNotificationsCount()` with `await actions.loadNotifications()`.
+- Fixed `refreshUserData()` function: replaced `await loadSavedTokisCount()` with `await actions.getSavedTokis()`.

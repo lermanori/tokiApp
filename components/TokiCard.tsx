@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { MapPin, Users, Heart, Clock, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -236,6 +236,45 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: To
         }
     }, [imagesLoaded.headerImage, imagesLoaded.hostAvatar]);
 
+    // Memoize image sources to prevent unnecessary reloads
+    const headerImageSource = useMemo(() => ({
+        uri: toki.image || getActivityPhoto(toki.category)
+    }), [toki.image, toki.category]);
+
+    const hostAvatarSource = useMemo(() => ({
+        uri: toki.host.avatar
+    }), [toki.host.avatar]);
+
+    // Memoize onLoad handlers to prevent infinite loops
+    // Only update state if not already loaded to prevent unnecessary re-renders
+    const handleHeaderImageLoad = useCallback(() => {
+        setImagesLoaded(prev => {
+            if (prev.headerImage) return prev; // Already loaded, no update needed
+            return { ...prev, headerImage: true };
+        });
+    }, []);
+
+    const handleHeaderImageError = useCallback(() => {
+        setImagesLoaded(prev => {
+            if (prev.headerImage) return prev; // Already loaded, no update needed
+            return { ...prev, headerImage: true };
+        });
+    }, []);
+
+    const handleHostAvatarLoad = useCallback(() => {
+        setImagesLoaded(prev => {
+            if (prev.hostAvatar) return prev; // Already loaded, no update needed
+            return { ...prev, hostAvatar: true };
+        });
+    }, []);
+
+    const handleHostAvatarError = useCallback(() => {
+        setImagesLoaded(prev => {
+            if (prev.hostAvatar) return prev; // Already loaded, no update needed
+            return { ...prev, hostAvatar: true };
+        });
+    }, []);
+
     const handleSaveToggle = async () => {
         if (isSaving) return;
 
@@ -267,12 +306,10 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: To
             {/* Header Image - Pexels photo based on activity type */}
             <View style={styles.headerImageContainer}>
                 <Image
-                    source={{
-                        uri: toki.image || getActivityPhoto(toki.category)
-                    }}
+                    source={headerImageSource}
                     style={styles.headerImage}
-                    onLoad={() => setImagesLoaded(prev => ({ ...prev, headerImage: true }))}
-                    onError={() => setImagesLoaded(prev => ({ ...prev, headerImage: true }))} // Consider error as "loaded" to not block
+                    onLoad={handleHeaderImageLoad}
+                    onError={handleHeaderImageError}
                 />
                 {/* <View style={styles.headerImageOverlay} /> */}
             </View>
@@ -363,10 +400,10 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: To
                     <View style={styles.hostInfo}>
                         {toki.host.avatar ? (
                             <Image
-                                source={{ uri: toki.host.avatar }}
+                                source={hostAvatarSource}
                                 style={styles.hostAvatar}
-                                onLoad={() => setImagesLoaded(prev => ({ ...prev, hostAvatar: true }))}
-                                onError={() => setImagesLoaded(prev => ({ ...prev, hostAvatar: true }))} // Consider error as "loaded" to not block
+                                onLoad={handleHostAvatarLoad}
+                                onError={handleHostAvatarError}
                             />
                         ) : (
                             <View style={[styles.hostAvatar, styles.fallbackAvatar]}>

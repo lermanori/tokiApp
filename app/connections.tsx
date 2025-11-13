@@ -83,9 +83,6 @@ interface UnifiedUser {
 
 export default function ConnectionsScreen() {
   const { state, actions } = useApp();
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [pendingConnections, setPendingConnections] = useState<any[]>([]);
-  const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -99,7 +96,7 @@ export default function ConnectionsScreen() {
   const [showRemovePrompt, setShowRemovePrompt] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null);
 
-  // Load connections from backend
+  // Load connections from backend on mount
   useEffect(() => {
     loadConnections();
     loadPendingConnections();
@@ -127,24 +124,8 @@ export default function ConnectionsScreen() {
 
     setIsLoading(true);
     try {
-      const response = await actions.getConnections();
-      const backendConnections = response.connections;
-      
-      // Transform backend data to match our interface
-      const transformedConnections: Connection[] = backendConnections.map((conn: BackendConnection) => ({
-        id: conn.user.id,
-        name: conn.user.name,
-        avatar: conn.user.avatar || '',
-        bio: conn.user.bio || 'No bio available',
-        location: conn.user.location || 'Location not set',
-        rating: conn.user.rating || 'N/A',
-        tokisCreated: conn.user.tokisCreated || 0,
-        mutualConnections: 0,
-        tokisAttended: 0,
-        lastSeen: 'Recently',
-      }));
-      
-      setConnections(transformedConnections);
+      // This will update global state automatically
+      await actions.getConnections();
     } catch (error) {
       console.error('Failed to load connections:', error);
       Alert.alert('Error', 'Failed to load connections. Please try again.');
@@ -159,8 +140,8 @@ export default function ConnectionsScreen() {
     }
 
     try {
-      const pendingConnections = await actions.getPendingConnections();
-      setPendingConnections(pendingConnections);
+      // This will update global state automatically
+      await actions.getPendingConnections();
     } catch (error) {
       console.error('Failed to load pending connections:', error);
     }
@@ -173,30 +154,8 @@ export default function ConnectionsScreen() {
     }
 
     try {
-      const backendUrl = getBackendUrl();
-      const accessToken = apiService.getAccessToken();
-      
-      console.log('🚫 [LOAD BLOCKED] Loading blocked users...');
-      console.log('🚫 [LOAD BLOCKED] Backend URL:', backendUrl);
-      console.log('🚫 [LOAD BLOCKED] Access Token exists:', !!accessToken);
-      
-      const response = await fetch(`${backendUrl}/api/blocks/blocked-users`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('🚫 [LOAD BLOCKED] Response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('🚫 [LOAD BLOCKED] Success, blocked users:', data.data.blockedUsers.length);
-        setBlockedUsers(data.data.blockedUsers);
-      } else {
-        const errorData = await response.text();
-        console.log('🚫 [LOAD BLOCKED] Error response:', errorData);
-      }
+      // Use the action from context which updates global state
+      await actions.loadBlockedUsers();
     } catch (error) {
       console.error('🚫 [LOAD BLOCKED] Exception error:', error);
     }
@@ -219,12 +178,29 @@ export default function ConnectionsScreen() {
     }
   };
 
+  // Transform global state connections to Connection format
+  const getTransformedConnections = (): Connection[] => {
+    return (state.connections || []).map((conn: BackendConnection) => ({
+      id: conn.user?.id || conn.id,
+      name: conn.user?.name || 'Unknown',
+      avatar: conn.user?.avatar || '',
+      bio: conn.user?.bio || 'No bio available',
+      location: conn.user?.location || 'Location not set',
+      rating: conn.user?.rating || 'N/A',
+      tokisCreated: conn.user?.tokisCreated || 0,
+      mutualConnections: 0,
+      tokisAttended: 0,
+      lastSeen: 'Recently',
+    }));
+  };
+
   // Get unified results combining connections, search results, and pending
   const getUnifiedResults = (): UnifiedUser[] => {
     const results: UnifiedUser[] = [];
+    const transformedConnections = getTransformedConnections();
     
     // Add existing connections first (priority)
-    connections.forEach(conn => {
+    transformedConnections.forEach(conn => {
       results.push({
         ...conn,
         userType: 'friend',
@@ -236,7 +212,7 @@ export default function ConnectionsScreen() {
     // Add search results (new people)
     searchResults.forEach(user => {
       // Don't add if already in connections OR if it's the current user
-      if (!connections.find(c => c.id === user.id) && user.id !== state.currentUser?.id) {
+      if (!transformedConnections.find(c => c.id === user.id) && user.id !== state.currentUser?.id) {
         results.push({
           id: user.id,
           name: user.name,
@@ -251,7 +227,7 @@ export default function ConnectionsScreen() {
     });
     
     // Add pending connections
-    pendingConnections.forEach(pending => {
+    (state.pendingConnections || []).forEach(pending => {
       // Access requester data the same way as the Pending tab does
       const requester = pending.requester;
       results.push({
@@ -272,7 +248,7 @@ export default function ConnectionsScreen() {
 
   const filters = [
     { key: 'all', label: 'All', count: getUnifiedResults().length },
-    { key: 'recent', label: 'Recent', count: connections.length },
+    { key: 'recent', label: 'Recent', count: state.connections.length },
   ];
 
   const filteredResults = getUnifiedResults().filter(user => {
@@ -643,7 +619,7 @@ export default function ConnectionsScreen() {
             styles.tabText,
             selectedTab === 'pending' && styles.tabTextActive
           ]}>
-            Pending ({pendingConnections.length})
+            Pending ({state.pendingConnections.length})
           </Text>
         </TouchableOpacity>
         {/* Blocked tab hidden for now */}
@@ -658,7 +634,7 @@ export default function ConnectionsScreen() {
             styles.tabText,
             selectedTab === 'blocked' && styles.tabTextActive
           ]}>
-            Blocked ({blockedUsers.length})
+            Blocked ({state.blockedUsers.length})
           </Text>
         </TouchableOpacity> */}
       </View>
@@ -818,7 +794,7 @@ export default function ConnectionsScreen() {
           )
         ) : selectedTab === 'pending' ? (
           // Pending Connections Tab
-          pendingConnections.length === 0 ? (
+          state.pendingConnections.length === 0 ? (
             <View style={styles.emptyState}>
               <UserPlus size={48} color="#D1D5DB" />
               <Text style={styles.emptyTitle}>No pending requests</Text>
@@ -828,7 +804,7 @@ export default function ConnectionsScreen() {
             </View>
           ) : (
             <View style={styles.connectionsContainer}>
-              {pendingConnections.map((request: any) => (
+              {state.pendingConnections.map((request: any) => (
                 <View key={request.id} style={styles.connectionCard}>
                   <View style={styles.connectionHeader}>
                     <TouchableOpacity style={styles.avatarContainer}>

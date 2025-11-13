@@ -154,17 +154,12 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     }
     const user = result.rows[0];
     
-    // Debug: Check what avatar_url is in the database
-    logger.debug('🔍 [AUTH /me] User avatar_url from database:', user.avatar_url);
-    logger.debug('🔍 [AUTH /me] Full user object:', user);
-    
     // Calculate user stats dynamically instead of querying user_stats table
     // Get Tokis created count
     const createdResult = await pool.query(
       'SELECT COUNT(*) as count FROM tokis WHERE host_id = $1 AND status = $2',
       [user.id, 'active']
     );
-    logger.debug('🔍 [AUTH] Tokis created query result:', { userId: user.id, count: createdResult.rows[0].count });
 
     // Get Tokis joined count (as participant)
     // Count only unique Tokis where user is a participant (not the host)
@@ -178,17 +173,6 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
          AND t.status = 'active'`,
       [user.id]
     );
-    logger.debug('🔍 [AUTH] Tokis joined query result:', { userId: user.id, count: joinedResult.rows[0].count });
-    
-    // Debug: Check what toki_participants entries exist for this user
-    const debugJoinedResult = await pool.query(
-      `SELECT tp.toki_id, tp.status, t.title, t.host_id
-       FROM toki_participants tp
-       JOIN tokis t ON tp.toki_id = t.id
-       WHERE tp.user_id = $1`,
-      [user.id]
-    );
-    logger.debug('🔍 [AUTH] Debug: User toki_participants entries:', debugJoinedResult.rows);
 
     // Get connections count
     const connectionsResult = await pool.query(
@@ -197,7 +181,6 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
          AND (requester_id = $1 OR recipient_id = $1)`,
       [user.id]
     );
-    logger.debug('🔍 [AUTH] Connections query result:', { userId: user.id, count: connectionsResult.rows[0].count });
 
     // Calculate user's rating dynamically from user_ratings table
     const ratingResult = await pool.query(
@@ -208,20 +191,12 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     );
     const calculatedRating = ratingResult.rows[0].average_rating;
     const totalRatings = parseInt(ratingResult.rows[0].total_ratings);
-    logger.debug('🔍 [AUTH] Rating calculation result:', { userId: user.id, calculatedRating, totalRatings });
 
     const stats = {
       tokis_created: parseInt(createdResult.rows[0].count),
       tokis_joined: parseInt(joinedResult.rows[0].count),
       connections_count: parseInt(connectionsResult.rows[0].count)
     };
-    logger.debug('🔍 [AUTH] Final stats object:', stats);
-    
-    // Debug: Check what Tokis exist in the database
-    const debugResult = await pool.query(
-      'SELECT id, host_id, title, status FROM tokis LIMIT 5'
-    );
-    logger.debug('🔍 [AUTH] Debug: Sample Tokis in database:', debugResult.rows);
     
     const socialLinksResult = await pool.query(
       'SELECT platform, username FROM user_social_links WHERE user_id = $1',
@@ -1005,7 +980,6 @@ router.get('/users/search', async (req: Request, res: Response) => {
       hasConnections 
     } = req.query;
     
-    logger.debug('🔍 [AUTH SEARCH] Search request:', { q, page, limit, verified, hasConnections });
 
     const pageNum = parseInt(page as string) || 1;
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
@@ -1063,12 +1037,9 @@ router.get('/users/search', async (req: Request, res: Response) => {
     query += ` LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
     queryParams.push(limitNum, offset);
 
-    logger.debug('🔍 [AUTH SEARCH] Executing query with params:', queryParams);
-    logger.debug('🔍 [AUTH SEARCH] Query:', query);
     
     const result = await pool.query(query, queryParams);
     
-    logger.debug('🔍 [AUTH SEARCH] Query result rows:', result.rows.length);
 
     const users = result.rows.map(row => ({
       id: row.id,
@@ -1111,7 +1082,6 @@ router.get('/users/search', async (req: Request, res: Response) => {
 router.get('/users/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    logger.debug('🔍 [AUTH] Getting profile for userId:', userId);
 
     // Get user profile
     const userResult = await pool.query(
@@ -1127,7 +1097,6 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
       [userId]
     );
 
-    logger.debug('🔍 [AUTH] Database query result rows:', userResult.rows.length);
     if (userResult.rows.length === 0) {
       logger.info('❌ [AUTH] User not found in database for userId:', userId);
       return res.status(404).json({

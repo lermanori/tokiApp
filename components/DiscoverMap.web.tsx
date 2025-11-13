@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useCallback } from 'react';
 import { CATEGORY_COLORS } from '@/utils/categories';
 import { CATEGORY_CONFIG, getIconAsset } from '@/utils/categoryConfig';
 import { View } from 'react-native';
@@ -103,6 +103,43 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
   const markerRefs = useRef<Map<string, any>>(new Map());
   // Store map instance ref
   const mapInstanceRef = useRef<any>(null);
+  
+  // Memoize icon creation per cluster to prevent flickering
+  const iconCache = useRef<Map<string, any>>(new Map());
+  
+  const getMarkerIcon = useCallback((group: { key: string; items: EventItem[]; lat: number; lng: number }) => {
+    const cacheKey = `${group.key}-${group.items[0].category}-${group.items.length}`;
+    
+    if (iconCache.current.has(cacheKey)) {
+      return iconCache.current.get(cacheKey);
+    }
+    
+    const icon = L.divIcon({
+      className: 'custom-marker',
+      html: `
+        <div style="
+          background-color: #FFFFFF;
+          width: 32px; height: 32px; border-radius: 50%; border: 3px solid ${getCategoryColorForMap(group.items[0].category)};
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: visible; position: relative;">
+          <img src="${ICON_WEB[resolveCategoryKey(group.items[0].category)] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
+          ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}
+        </div>`,
+      iconSize: [32, 32], 
+      iconAnchor: [16, 16]
+    });
+    
+    iconCache.current.set(cacheKey, icon);
+    return icon;
+  }, [ICON_WEB]);
+
+  // Clear icon cache when events change significantly
+  useEffect(() => {
+    // Only clear if the number of clusters changed significantly
+    const currentClusterCount = clustered.length;
+    if (iconCache.current.size > currentClusterCount * 2) {
+      iconCache.current.clear();
+    }
+  }, [clustered.length]);
 
   // MapController component - must be inside MapContainer to use useMap hook
   const MapController = () => {
@@ -111,6 +148,17 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
     useEffect(() => {
       mapInstanceRef.current = map;
     }, [map]);
+    
+    // Handle map centering when highlighted coordinates change
+    useEffect(() => {
+      if (highlightedTokiId && highlightedCoordinates && map) {
+        map.setView(
+          [highlightedCoordinates.latitude, highlightedCoordinates.longitude],
+          16,
+          { animate: true, duration: 0.5 }
+        );
+      }
+    }, [highlightedTokiId, highlightedCoordinates, map]);
     
     return null;
   };
@@ -207,9 +255,9 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
         }
       };
 
-      // Wait for map to render and center (MapContainer key change will remount)
+      // Wait for map to render and center
       // Use shorter delays for faster popup opening
-      // First attempt after map centers (200ms - map should be ready quickly after remount)
+      // First attempt after map centers (200ms - map should be ready quickly)
       const timeoutId1 = setTimeout(() => openPopup(1), 200);
       // Second attempt in case first fails (500ms)
       const timeoutId2 = setTimeout(() => openPopup(2), 500);
@@ -246,7 +294,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
             : [region.latitude, region.longitude]}
           zoom={highlightedTokiId ? 16 : 13}
           style={{ width: '100%', height: '100%' }}
-          key={highlightedTokiId ? `map-${highlightedTokiId}` : 'map-default'}
+          key="map-container"
         >
           <MapController />
           <TileLayer
@@ -266,18 +314,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
                   }
                 }}
                 position={[group.lat, group.lng]}
-                icon={L.divIcon({
-                  className: 'custom-marker',
-                  html: `
-                    <div style="
-                      background-color: #FFFFFF;
-                      width: 32px; height: 32px; border-radius: 50%; border: 3px solid ${getCategoryColorForMap(group.items[0].category)};
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; overflow: visible; position: relative;">
-                      <img src="${ICON_WEB[resolveCategoryKey(group.items[0].category)] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
-                      ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}
-                    </div>`,
-                  iconSize: [32, 32], iconAnchor: [16, 16]
-                })}
+                icon={getMarkerIcon(group)}
                 eventHandlers={{ click: () => onMarkerPress(group.items[0]) }}
               >
                 <Popup>

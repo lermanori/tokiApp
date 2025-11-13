@@ -14,28 +14,10 @@ export default function ProfileScreen() {
   const { state, actions, dispatch } = useApp();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [savedTokisCount, setSavedTokisCount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [myActivity, setMyActivity] = useState<any[]>([]);
   const [previewAsMember, setPreviewAsMember] = useState(false);
-
-  const loadUnreadNotificationsCount = async () => {
-    // Use unified count from context only
-    setUnreadNotifications(state.unreadNotificationsCount || 0);
-  };
-
-  const loadSavedTokisCount = async () => {
-    try {
-      const savedTokis = await actions.getSavedTokis();
-      setSavedTokisCount(savedTokis.length);
-      console.log('💾 Saved Tokis count loaded:', savedTokis.length);
-    } catch (error) {
-      console.error('❌ Failed to load saved Tokis count:', error);
-      setSavedTokisCount(0);
-    }
-  };
 
   const handleProfileImageUpdate = async (newImageUrl: string) => {
     try {
@@ -81,11 +63,10 @@ export default function ProfileScreen() {
     console.log('👤 Profile: currentUser changed:', state.currentUser.name);
   }, [state.currentUser, forceUpdate]);
 
-  // Refresh saved Tokis count when profile page comes into focus
+  // Refresh my activity when profile page comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (state.isConnected && state.currentUser?.id) {
-        loadSavedTokisCount();
         (async () => {
           try {
             const list = await apiService.getMyActivity();
@@ -140,9 +121,12 @@ export default function ProfileScreen() {
         return;
       }
 
-      // Load current user profile first (don't clear data unnecessarily)
-      console.log('👤 Loading current user...');
-      await actions.loadCurrentUser();
+      // Load current user profile and notifications in parallel
+      console.log('👤 Loading current user and notifications in parallel...');
+      await Promise.all([
+        actions.loadCurrentUser(),
+        actions.loadNotifications()
+      ]);
       console.log('👤 Current user loaded, current state:', state.currentUser.name);
       console.log('📊 Current user stats after load:', {
         tokisCreated: state.currentUser.tokisCreated,
@@ -191,10 +175,10 @@ export default function ProfileScreen() {
       await actions.getConnections();
       // Load blocked users
       await actions.loadBlockedUsers();
-      // Load unread notifications count
-      await loadUnreadNotificationsCount();
-      // Load saved Tokis count
-      await loadSavedTokisCount();
+      // Refresh notifications to update unread count
+      await actions.loadNotifications();
+      // Refresh saved Tokis to update count
+      await actions.getSavedTokis();
       console.log('✅ Profile data refreshed successfully');
     } catch (error) {
       console.error('❌ Failed to refresh profile data:', error);
@@ -674,7 +658,7 @@ export default function ProfileScreen() {
               <Bell size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Notifications</Text>
               <View style={styles.notificationIndicator}>
-                <Text style={styles.notificationCount}>{unreadNotifications}</Text>
+                <Text style={styles.notificationCount}>{state.unreadNotificationsCount || 0}</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleMyTokis}>
@@ -686,7 +670,7 @@ export default function ProfileScreen() {
               <Heart size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Saved Tokis</Text>
               <Text style={styles.menuBadge}>
-                {savedTokisCount > 0 ? savedTokisCount : '-'}
+                {state.savedTokis.length > 0 ? state.savedTokis.length : '-'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleConnections}>

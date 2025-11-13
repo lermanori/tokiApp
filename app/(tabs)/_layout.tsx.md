@@ -1,13 +1,15 @@
 # File: app/(tabs)/_layout.tsx
 
 ### Summary
-Defines the bottom tab bar with Explore, Map, Create, Messages, and Profile. Now shows a numeric notifications badge on the Profile icon, capped at 9+ and aligned with the Messages unread indicator behavior.
+Tab bar navigation layout. Added notifications tab with Bell icon and moved notification count badge from profile to notifications tab.
 
 ### Fixes Applied log
-- problem: Profile tab had no indicator for unread notifications.
-- solution: Added `unreadNotificationsCount` derivation and a numeric badge rendered on the Profile icon with 9+ cap.
+- problem: Notifications were only accessible from profile tab, and badge was on profile tab instead of a dedicated notifications tab.
+- solution: Added new notifications tab with Bell icon and notification count badge. Removed badge from profile tab.
 
 ### How Fixes Were Implemented
-- Computed `unreadNotificationsCount` (temporary derivation from `state.tokis` pending a dedicated notifications store). If a dedicated `state.unreadNotificationsCount` exists later, swap to that.
-- Wrapped the `User` icon with a container and rendered a red badge when the count > 0. Badge text shows exact number up to 9, then `9+`.
-- Added `countBadge` and `countBadgeText` styles and reused existing responsive sizing logic for consistency.
+- Added Bell import from lucide-react-native
+- Added new Tabs.Screen for notifications with Bell icon
+- Moved notification count badge from profile tab to notifications tab
+- Removed badge and iconContainer wrapper from profile tab (now just User icon)
+- Badge shows unread count (capped at 99, displays "9+" for 10+)

@@ -1,5 +1,5 @@
 import '@/utils/logger';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Stack, useRouter, useSegments, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -83,11 +83,38 @@ function RootLayoutNav() {
     }
   };
   
-  const urlParams = getUrlParams();
+  // Memoize urlParams to prevent creating new object on every render
+  // This prevents infinite loops in useEffect hooks that depend on it
+  const urlParams = useMemo(() => {
+    return getUrlParams();
+  }, [typeof window !== 'undefined' && typeof window.location !== 'undefined' ? window.location.href : null]);
+  
   const effectiveReturnTo = returnTo || urlParams.returnTo;
   const effectiveCode = code || urlParams.code;
-  const effectiveOtherParams = Object.keys(otherParams).length > 0 ? otherParams : 
-    Object.fromEntries(Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code'));
+  
+  // Memoize effectiveOtherParams to prevent creating new object on every render
+  // This prevents infinite loops in useEffect hooks that depend on it
+  // Create a stable key from searchParams entries (excluding returnTo and code) for comparison
+  const otherParamsKey = useMemo(() => {
+    const entries = Object.entries(searchParams).filter(([key]) => key !== 'returnTo' && key !== 'code');
+    return entries.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join('|');
+  }, [searchParams]);
+  
+  // Create a stable urlParams key for comparison
+  const urlParamsKey = useMemo(() => {
+    const entries = Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code');
+    return entries.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join('|');
+  }, [urlParams]);
+  
+  const effectiveOtherParams = useMemo(() => {
+    // Always create a new object from the values to ensure stability
+    // Use otherParams if it has keys, otherwise use filtered urlParams
+    if (Object.keys(otherParams).length > 0) {
+      return Object.fromEntries(Object.entries(otherParams));
+    } else {
+      return Object.fromEntries(Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code'));
+    }
+  }, [otherParamsKey, urlParamsKey]);
   const [isReady, setIsReady] = useState(false);
   const [lastAuthCheck, setLastAuthCheck] = useState(0);
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
@@ -95,6 +122,11 @@ function RootLayoutNav() {
   const [hasHandledInitialUrl, setHasHandledInitialUrl] = useState(false);
   const [initialUrl, setInitialUrl] = useState<string | null>(null);
   const [isWaitingForInitialUrl, setIsWaitingForInitialUrl] = useState(false);
+  const lastProcessedSegmentsRef = useRef<string>('');
+  
+  // Create a stable string representation of segments for dependency comparison
+  // Use JSON.stringify to create a stable key that only changes when segments actually change
+  const segmentsKey = useMemo(() => JSON.stringify(segments), [segments.length, segments[0], segments[1]]);
 
   // Handle initial URL when app opens from universal link (not-found case)
   useEffect(() => {
@@ -429,7 +461,7 @@ function RootLayoutNav() {
     }
 
     // Check if user has valid tokens immediately
-    const hasValidTokens = apiService.accessToken && apiService.refreshToken;
+    const hasValidTokens = apiService.hasToken();
     if (hasValidTokens) {
       console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
       setHasCheckedFastRedirect(true);
@@ -482,20 +514,40 @@ function RootLayoutNav() {
   useEffect(() => {
     // Check if user is authenticated with debouncing
     const checkAuth = async () => {
-      // Cross-platform path detection: use window.location for web, segments for native
+      // Skip if we've already processed these exact segments
+      if (segmentsKey === lastProcessedSegmentsRef.current) {
+        console.log('⏭️ [AUTH CHECK] Skipping - segments unchanged:', segmentsKey);
+        return;
+      }
+      
+      // Cross-platform path detection: prefer segments over window.location for accuracy
+      // Segments are more reliable during navigation transitions
       const getCurrentPath = () => {
-        // Web: use window.location.pathname
+        // First, try to build path from segments (most reliable during navigation)
+        if (segments.length > 0) {
+          const segmentsPath = `/${segments.join('/')}`;
+          // On web, validate against window.location to catch mismatches
+          if (typeof window !== 'undefined' && window.location?.pathname) {
+            const windowPath = window.location.pathname;
+            // If segments path doesn't match window path, there might be a navigation in progress
+            // In that case, prefer segments as they're more up-to-date during transitions
+            if (segmentsPath !== windowPath && segmentsPath !== '/' && windowPath !== '/') {
+              console.log('⚠️ [PATH DETECTION] Mismatch detected - segments:', segmentsPath, 'window:', windowPath, 'using segments');
+            }
+          }
+          return segmentsPath;
+        }
+        // Fallback: use window.location.pathname on web
         if (typeof window !== 'undefined' && window.location?.pathname) {
           return window.location.pathname;
-        }
-        // Native: build path from segments
-        if (segments.length > 0) {
-          return `/${segments.join('/')}`;
         }
         return '';
       };
       
       const path = getCurrentPath();
+      
+      // Build path from segments for validation
+      const segmentsPath = segments.length > 0 ? `/${segments.join('/')}` : '';
       const pathIsJoin = path.startsWith('/join');
       const pathIsLogin = path.startsWith('/login');
       const isOnNotFound = segments[0] === '+not-found';
@@ -516,6 +568,10 @@ function RootLayoutNav() {
       if (now - lastAuthCheck < 5000) {
         return;
       }
+      
+      // Mark these segments as processed BEFORE any async operations or redirects
+      lastProcessedSegmentsRef.current = segmentsKey;
+      console.log('📝 [AUTH CHECK] Marked segments as processed:', segmentsKey);
       
       // If we are navigating directly to a join link, do not block initial render
       // Let the join page fetch public invite info and handle login flow
@@ -563,9 +619,18 @@ function RootLayoutNav() {
         const inHealthScreen = segments[0] === 'health';
         const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
         const inSetPasswordScreen = segments[0] === 'set-password' || path.startsWith('/set-password');
-        const inResetPasswordScreen = segments[0] === 'reset-password' || path.startsWith('/reset-password');
+        const inResetPasswordScreen = (segments[0] as string) === 'reset-password' || path.startsWith('/reset-password');
         
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen) {
+          // If user has tokens but isAuthenticated is false, it's likely a race condition
+          // Don't preserve the path - just redirect to login and let fast redirect handle it
+          const hasTokens = apiService.hasToken();
+          if (hasTokens) {
+            console.log('⚠️ [FLOW DEBUG] [AUTH CHECK] Race condition detected: has tokens but not authenticated, redirecting to login without preserving path');
+            router.replace('/login');
+            return;
+          }
+          
           // Check if we're on toki-details page - preserve the tokiId parameter
           // Cross-platform: check both path (web) and segments (native)
           const isTokiDetailsPage = path.startsWith('/toki-details') || segments[0] === 'toki-details';
@@ -591,7 +656,7 @@ function RootLayoutNav() {
             // Redirect to login with returnTo and parameters
             const loginUrl = `/login?returnTo=/toki-details${Object.keys(returnParams).length > 0 ? '&' + new URLSearchParams(returnParams).toString() : ''}`;
             console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving toki-details parameters, redirecting to:', loginUrl);
-            router.replace(loginUrl);
+            router.replace(loginUrl as any);
           } else if (pathIsJoin) {
             // Preserve join link path - extract code from path
             const pathParts = path.split('/');
@@ -601,7 +666,7 @@ function RootLayoutNav() {
               // Redirect to login with returnTo=join and code parameter
               const loginUrl = `/login?returnTo=join&code=${codeFromPath}`;
               console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving join link, redirecting to:', loginUrl);
-              router.replace(loginUrl);
+              router.replace(loginUrl as any);
             } else {
               // Fallback: redirect to login normally if code can't be extracted
               console.log('⚠️ [FLOW DEBUG] [DEEP LINK] Could not extract code from join path, redirecting to login');
@@ -609,11 +674,32 @@ function RootLayoutNav() {
             }
           } else {
             // For other pages, preserve the path as returnTo
-            const preservedPath = path || `/${segments.join('/')}`;
+            // Use segments path if available and consistent, otherwise use window path
+            let preservedPath = segmentsPath || path;
+            
+            // Validate: if we have both segments and window path, they should match
+            // If they don't match, it might be a stale path from a previous navigation
+            if (segmentsPath && path && segmentsPath !== path && path !== '/' && segmentsPath !== '/') {
+              console.log('⚠️ [FLOW DEBUG] [DEEP LINK] Path mismatch detected - segments:', segmentsPath, 'window:', path);
+              // Prefer segments path as it's more reliable during navigation
+              preservedPath = segmentsPath;
+            }
+            
+            // Don't preserve paths that are clearly invalid or stale
+            // Skip if path is a tab route that doesn't match current segments
             if (preservedPath && preservedPath !== '/login' && preservedPath !== '/') {
+              // Additional validation: if segments show we're on a different tab, don't preserve stale path
+              const isTabRoute = preservedPath.startsWith('/(tabs)') || preservedPath.startsWith('/exMap') || preservedPath.startsWith('/profile') || preservedPath.startsWith('/messages');
+              if (isTabRoute && segmentsPath && segmentsPath !== preservedPath && segmentsPath !== '/') {
+                console.log('⚠️ [FLOW DEBUG] [DEEP LINK] Stale tab path detected, not preserving:', preservedPath, 'current segments:', segmentsPath);
+                // Don't preserve stale path, just redirect to login
+                router.replace('/login');
+                return;
+              }
+              
               const loginUrl = `/login?returnTo=${encodeURIComponent(preservedPath)}`;
               console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving path, redirecting to:', loginUrl);
-              router.replace(loginUrl);
+              router.replace(loginUrl as any);
             } else {
               // Fallback: redirect to login normally
               router.replace('/login');
@@ -700,29 +786,62 @@ function RootLayoutNav() {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
         } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
-          // IMPORTANT: Don't redirect authenticated users if they're on a valid deep link page
-          // This prevents redirecting to tabs when app opens fresh from universal link
-          const isOnDeepLinkPage = 
-            segments[0] === 'toki-details' || 
-            segments[0] === 'user-profile' ||
+          // IMPORTANT: Don't redirect authenticated users if they're on a valid page
+          // List of valid authenticated routes (both deep links and regular authenticated routes)
+          const validAuthenticatedRoutes = [
+            'toki-details',
+            'user-profile',
+            'join',
+            'notifications',
+            'connections',
+            'chat',
+            'edit-profile',
+            'my-tokis',
+            'saved-tokis',
+          ];
+          
+          const isOnValidPage = 
+            validAuthenticatedRoutes.some(route => segments[0] === route) ||
             path.startsWith('/toki-details') ||
             path.startsWith('/user-profile/') ||
-            path.startsWith('/join/');
+            path.startsWith('/join/') ||
+            path.startsWith('/notifications') ||
+            path.startsWith('/connections') ||
+            path.startsWith('/chat') ||
+            path.startsWith('/edit-profile') ||
+            path.startsWith('/my-tokis') ||
+            path.startsWith('/saved-tokis');
           
           // Also check if we're still handling initial URL (on native, this might take a moment)
           const isHandlingInitialUrl = isOnNotFound && !hasHandledInitialUrl;
           
-          if (isOnDeepLinkPage || isHandlingInitialUrl) {
-            console.log('✅ [AUTH CHECK] Authenticated user on deep link page or handling initial URL, staying put');
-            console.log('✅ [AUTH CHECK] isOnDeepLinkPage:', isOnDeepLinkPage, 'isHandlingInitialUrl:', isHandlingInitialUrl);
-            return; // Don't redirect, let them stay on the deep link page or wait for initial URL handler
+          if (isOnValidPage || isHandlingInitialUrl) {
+            console.log('✅ [AUTH CHECK] Authenticated user on valid page, staying put');
+            console.log('✅ [AUTH CHECK] isOnValidPage:', isOnValidPage, 'isHandlingInitialUrl:', isHandlingInitialUrl, 'segments:', segments, 'path:', path);
+            return; // Don't redirect, let them stay on the valid page
           }
           
           // If we get here, user is authenticated but on an unrecognized page
           // Only redirect to tabs if we're not in the middle of initial URL handling
-          if (hasHandledInitialUrl || Platform.OS === 'web') {
+          // AND we're not already on tabs (check segments to avoid redirect loops)
+          // On web, path '/' is the root and should be treated as "on tabs" to prevent redirect loops
+          const isOnTabs = segments[0] === '(tabs)' || 
+                          (segments as string[]).includes('(tabs)') || 
+                          path.startsWith('/(tabs)') || 
+                          (path === '/' && Platform.OS === 'web'); // Root path on web = tabs
+          
+          if ((hasHandledInitialUrl || Platform.OS === 'web') && !isOnTabs) {
             console.log('🔄 [AUTH CHECK] Authenticated user on unrecognized page, redirecting to tabs');
+            console.log('🔄 [AUTH CHECK] Current segments:', segments, 'path:', path);
+            // Update ref before redirect to prevent re-processing
+            lastProcessedSegmentsRef.current = segmentsKey;
             router.replace('/(tabs)');
+          } else {
+            console.log('✅ [AUTH CHECK] Already on tabs or skipping redirect. isOnTabs:', isOnTabs, 'segments:', segments, 'path:', path);
+            // If we're on root path, just set ready without redirecting
+            if (path === '/' && Platform.OS === 'web') {
+              setIsReady(true);
+            }
           }
         } else if ((isAuthenticated || hasUserData) && state.redirection.isRedirecting && state.redirection.returnTo) {
           // Handle pending redirection after login
@@ -757,7 +876,15 @@ function RootLayoutNav() {
           console.log('🔄 [FLOW DEBUG] [REDIRECTION] Executing redirect now...');
           router.replace(redirectUrl as any);
         } else if (isAuthenticated && effectiveReturnTo && !inJoinScreen) {
-          // Handle direct redirection for authenticated users (even if on login screen)
+          // CRITICAL FIX: Only respect returnTo if we're on login screen
+          // When navigating from authenticated screens (like notifications), ignore stale returnTo
+          // This prevents intermittent redirects to stale paths when clicking notifications
+          if (segments[0] !== 'login') {
+            console.log('⚠️ [FLOW DEBUG] [AUTH REDIRECT] Ignoring stale returnTo when navigating from authenticated screen:', effectiveReturnTo, 'current segments:', segments);
+            return; // Don't redirect, let normal navigation proceed
+          }
+          
+          // Handle direct redirection for authenticated users (only on login screen)
           const cleanParams = Object.fromEntries(
             Object.entries(effectiveOtherParams)
               .filter(([key, value]) => {
@@ -811,7 +938,7 @@ function RootLayoutNav() {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
         // Only redirect if we're not on the login, join, health, waitlist, set-password, or reset-password screen and have no current user
-        if (segments[0] !== 'login' && segments[0] !== 'join' && segments[0] !== 'health' && segments[0] !== 'waitlist' && segments[0] !== 'set-password' && segments[0] !== 'reset-password' && (!state.currentUser || !state.currentUser.id)) {
+        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -822,7 +949,7 @@ function RootLayoutNav() {
     };
     
     checkAuth();
-  }, [segments, state.currentUser.id]);
+  }, [segmentsKey]); // Use memoized segments key to prevent infinite loops from array reference changes
 
   // Handle redirection when user data becomes available
   useEffect(() => {

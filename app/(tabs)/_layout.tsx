@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View, useWindowDimensions, Text } from 'react-native';
 import React, { useMemo } from 'react';
-import { Map, Plus, MessageCircle, User, Compass } from 'lucide-react-native';
+import { Map, Plus, MessageCircle, User, Compass, Bell } from 'lucide-react-native';
 import { useApp } from '../../contexts/AppContext';
 
 export default function TabLayout() {
@@ -65,18 +65,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => (
-            <Compass size={responsiveStyles.iconSize} color={color} />
-          ),
+          href: null, // Hide from tab bar
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
-          title: 'Map',
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="exMap"
+        options={{
+          title: 'Explore',
           tabBarIcon: ({ color }) => (
-            <Map size={responsiveStyles.iconSize} color={color} />
+            <Compass size={responsiveStyles.iconSize} color={color} />
           ),
         }}
       />
@@ -107,12 +110,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="notifications"
         options={{
-          title: 'Profile',
+          title: 'Notifications',
           tabBarIcon: ({ color }) => (
             <View style={styles.iconContainer}>
-              <User size={responsiveStyles.iconSize} color={color} />
+              <Bell size={responsiveStyles.iconSize} color={color} />
               {unreadNotificationsCount > 0 && (
                 <View style={[styles.countBadge]}>
                   <Text style={styles.countBadgeText}>
@@ -121,6 +124,15 @@ export default function TabLayout() {
                 </View>
               )}
             </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <User size={responsiveStyles.iconSize} color={color} />
           ),
         }}
       />

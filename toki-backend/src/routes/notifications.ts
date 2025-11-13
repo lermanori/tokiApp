@@ -5,20 +5,6 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
-// Ensure helper table exists for read tracking of external (non-table) items
-async function ensureReadTrackingTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS notification_reads (
-      id SERIAL PRIMARY KEY,
-      user_id VARCHAR(255) NOT NULL,
-      source VARCHAR(64) NOT NULL,
-      external_id VARCHAR(255) NOT NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      UNIQUE(user_id, source, external_id)
-    );
-  `);
-}
-
 // Get unread notifications count for a user
 router.get('/count', authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -106,7 +92,12 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
     const limitNum = Math.min(parseInt(limit as string) || 50, 100);
     const offset = ((parseInt(page as string) || 1) - 1) * limitNum;
 
-    await ensureReadTrackingTable();
+    // Get read state timestamp
+    const readStateResult = await pool.query(
+      `SELECT last_read_at FROM notification_read_state WHERE user_id = $1`,
+      [userId]
+    );
+    const lastReadAt = readStateResult.rows[0]?.last_read_at || null;
 
     // 1) System notifications table
     const sysRows = (await pool.query(
@@ -325,22 +316,12 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
       read: false,
     }));
 
-    // Read tracking from helper table
-    const readRows = (await pool.query(
-      `SELECT source, external_id FROM notification_reads WHERE user_id = $1`,
-      [userId]
-    )).rows;
-    const readSet = new Set(readRows.map((r: any) => `${r.source}:${r.external_id}`));
-
     let items = [...sysRows, ...connPending, ...connAccepted, ...hostPending, ...userApproved, ...hostApproved, ...userPending];
-    // Preserve explicit read=true from item producers (e.g., approved items),
-    // otherwise compute read from notification_reads for external sources
-    items = items.map(i => ({
-      ...i,
-      read: i.source === 'system'
-        ? i.read
-        : (i.read === true ? true : readSet.has(`${i.source}:${i.externalId}`))
-    }));
+    // Use timestamp marker to determine read status for all sources
+    items = items.map(i => {
+      const isRead = lastReadAt && new Date(i.timestamp) <= new Date(lastReadAt);
+      return { ...i, read: isRead || false };
+    });
 
     // Sort and paginate in-memory after merge
     items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -367,96 +348,33 @@ router.get('/combined', authenticateToken, async (req: Request, res: Response) =
   }
 });
 
-// Mark unified item as read (works for system and external sources)
-router.patch('/read', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const { items, source, externalId } = req.body as any;
-
-    await ensureReadTrackingTable();
-
-    const toMark: Array<{ source: string; externalId: string }> = Array.isArray(items) ? items : (source && externalId ? [{ source, externalId }] : []);
-
-    // Mark system notifications via table; external via notification_reads
-    for (const it of toMark) {
-      if (it.source === 'system') {
-        await pool.query('UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2', [it.externalId, userId]);
-      } else {
-        await pool.query(
-          `INSERT INTO notification_reads (user_id, source, external_id)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (user_id, source, external_id) DO NOTHING`,
-          [userId, it.source, it.externalId]
-        );
-      }
-    }
-
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Unified mark read error:', error);
-    return res.status(500).json({ success: false, error: 'Server error', message: 'Failed to mark read' });
-  }
-});
-
-// Mark notification as read
-router.put('/:id/read', authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user!.id;
-
-    // Update notification to read
-    const result = await pool.query(
-      'UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *',
-      [id, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Notification not found',
-        message: 'The specified notification does not exist'
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Notification marked as read',
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Mark notification as read error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Server error',
-      message: 'Failed to mark notification as read'
-    });
-  }
-});
-
-// Mark all notifications as read for a user
-router.put('/read-all', authenticateToken, async (req: Request, res: Response) => {
+// Mark notifications as read using timestamp marker (replaces individual marking)
+router.post('/read', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
 
-    // Update all notifications to read
-    const result = await pool.query(
-      'UPDATE notifications SET read = true WHERE user_id = $1 RETURNING COUNT(*) as count',
+    // Update or insert the read state using current timestamp
+    await pool.query(
+      `INSERT INTO notification_read_state (user_id, last_read_at)
+       VALUES ($1, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET 
+         last_read_at = CASE 
+           WHEN notification_read_state.last_read_at < NOW() THEN NOW()
+           ELSE notification_read_state.last_read_at
+         END`,
       [userId]
     );
 
-    const updatedCount = parseInt(result.rows[0].count);
-
     return res.status(200).json({
       success: true,
-      message: `Marked ${updatedCount} notifications as read`,
+      message: 'Notifications marked as read',
       data: {
-        updatedCount
+        last_read_at: new Date().toISOString()
       }
     });
-
   } catch (error) {
-    console.error('Mark all notifications as read error:', error);
+    console.error('Mark notifications as read error:', error);
     return res.status(500).json({
       success: false,
       error: 'Server error',

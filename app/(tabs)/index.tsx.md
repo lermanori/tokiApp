@@ -1,30 +1,13 @@
 # File: app/(tabs)/index.tsx
 
 ### Summary
-The Explore screen displays a list of nearby Tokis with filtering, sorting, and search capabilities. Similar to Discover but without the map view.
+Explore screen - now redirects to exMap since exMap is the main explore screen. The original explore functionality has been moved to exMap.
 
 ### Fixes Applied log
-
-- **problem**: Loading state cleared before images finished loading, causing flicker and poor UX
-- **solution**: Implemented image loading tracking that waits for initial batch of images (first 20 items) to load before clearing loading state. Includes 3-second timeout fallback to prevent indefinite loading.
+- problem: Index route was the old explore screen, but exMap is now the main explore screen.
+- solution: Replaced entire component with a simple redirect to exMap.
 
 ### How Fixes Were Implemented
-
-1. **Image Loading Tracking**:
-   - Added `imageLoadTracking` state (Set of toki IDs that have loaded images)
-   - Tracks only the initial batch (first 20 items matching `initialNumToRender`)
-   - Each TokiCard calls `onImageLoad` when its images finish loading
-
-2. **Loading State Management**:
-   - Loading state only clears when all initial batch images are loaded
-   - Includes 100ms delay after images load to ensure rendering
-   - 3-second timeout fallback prevents indefinite loading if images fail
-
-3. **State Reset**:
-   - Image tracking resets when new data loads (when `state.loading` becomes false)
-   - Clears any existing timeout when resetting
-
-4. **Integration**:
-   - TokiCard components receive `onImageLoad` callback
-   - Only tracks images in initial batch (index < initialBatchSize)
-   - Prevents tracking images from pagination/append operations
+- Removed all explore screen code.
+- Added useEffect that redirects to '/(tabs)/exMap' on mount.
+- Returns null since it's just a redirect component.

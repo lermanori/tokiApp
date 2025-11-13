@@ -1531,10 +1531,13 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
 // Create an invite (host only)
 router.post('/:id/invites', authenticateToken, async (req: Request, res: Response) => {
+  logger.info('📥 [TOKIS] POST /:id/invites endpoint called');
   try {
     const { id } = req.params;
     const { invitedUserId } = req.body as { invitedUserId: string };
     const userId = (req as any).user.id;
+    
+    logger.info('📥 [TOKIS] Invite request:', { tokiId: id, invitedUserId, inviterId: userId });
 
     if (!invitedUserId) {
       return res.status(400).json({ success: false, error: 'Missing invitedUserId' });
@@ -1569,6 +1572,8 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     const inviterName = (req as any).user.name;
     const inviterType = isHost ? 'the host' : 'an attendee';
     
+    logger.info('📥 [TOKIS] About to create notification, io available:', !!req.app.get('io'));
+    
     await createSystemNotificationAndPush({
       userId: invitedUserId,
       type: 'invite',
@@ -1576,7 +1581,8 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
       message: `You've been invited to join "${tokiTitle}" by ${inviterName} (${inviterType})`,
       relatedTokiId: id,
       relatedUserId: userId,
-      pushData: { source: 'system' }
+      pushData: { source: 'system' },
+      io: req.app.get('io')
     });
 
     return res.status(201).json({ success: true, data: { invite: result.rows[0] } });
@@ -1714,7 +1720,8 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
         message: `You've accepted the invite to join "${tokiTitle}"`,
         relatedTokiId: String(tokiId),
         relatedUserId: String(notificationRow.rows[0].related_user_id),
-        pushData: { source: 'system' }
+        pushData: { source: 'system' },
+        io: req.app.get('io')
       });
       // Mark as read since it's just a confirmation
       await pool.query('UPDATE notifications SET read = true WHERE user_id = $1 AND type = $2 AND related_toki_id = $3 ORDER BY created_at DESC LIMIT 1', [userId, 'invite_accepted', tokiId]);
@@ -2516,17 +2523,16 @@ router.post('/join-by-link', authenticateToken, async (req: Request, res: Respon
     await incrementLinkUsage(inviteCode);
 
     // Create notification for host (no actions needed since user is already approved)
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, message, type, related_toki_id, related_user_id, read, created_at)
-       VALUES ($1, $2, $3, 'participant_joined', $4, $5, false, NOW())`,
-      [
-        linkData.created_by, // Host user ID
-        'New Participant Joined',
-        `${req.user!.name} joined your event "${linkData.toki_title}" via invite link`,
-        tokiId,
-        userId
-      ]
-    );
+    await createSystemNotificationAndPush({
+      userId: linkData.created_by, // Host user ID
+      type: 'participant_joined',
+      title: 'New Participant Joined',
+      message: `${req.user!.name} joined your event "${linkData.toki_title}" via invite link`,
+      relatedTokiId: tokiId,
+      relatedUserId: userId,
+      pushData: { source: 'system' },
+      io: req.app.get('io')
+    });
 
     // Get updated toki details
     const tokiResult = await pool.query(

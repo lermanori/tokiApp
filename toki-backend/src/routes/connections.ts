@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { sendPushToUsers } from '../utils/push';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -313,10 +314,32 @@ router.post('/:userId', authenticateToken, async (req: Request, res: Response) =
       [req.user!.id, userId]
     );
 
-    // Push to recipient (unified feed shows connection_request)
+    // Emit WebSocket event in the format that matches the combined route
+    const requesterName = (req as any).user.name || 'Someone';
+    const io = req.app.get('io');
+    if (io) {
+      const roomName = `user-${userId}`;
+      const notificationData = {
+        id: `conn-pending-${result.rows[0].id}`,
+        source: 'connection_pending',
+        externalId: String(result.rows[0].id),
+        type: 'connection_request',
+        title: 'New Connection Request',
+        message: `${requesterName} sent you a connection request`,
+        timestamp: result.rows[0].created_at,
+        read: false,
+        actionRequired: true,
+        userId: String(req.user!.id),
+      };
+      
+      logger.info('📬 [NOTIFY] Connection request notification sent to room:', roomName);
+      io.to(roomName).emit('notification-received', notificationData);
+    }
+
+    // Also send push notification
     await sendPushToUsers([userId], {
       title: 'New Connection Request',
-      body: `${(req as any).user.name || 'Someone'} sent you a connection request` ,
+      body: `${requesterName} sent you a connection request`,
       data: { type: 'connection_request', source: 'connection_pending', externalId: result.rows[0].id }
     });
 
@@ -601,15 +624,37 @@ router.put('/:userId', authenticateToken, async (req: Request, res: Response) =>
       [req.user!.id]
     );
 
-    // Notify requester about the outcome
+    // Notify requester about the outcome via WebSocket (matching combined route format)
     const requesterId = userId;
     const currentUserName = currentUserResult.rows[0]?.name || 'Someone';
-    const body = action === 'accept'
+    const message = action === 'accept'
       ? `${currentUserName} accepted your connection request`
       : `${currentUserName} declined your connection request`;
+    
+    const io = req.app.get('io');
+    if (io && action === 'accept') {
+      // Only emit for accepted (declined doesn't show in combined route)
+      const roomName = `user-${requesterId}`;
+      const notificationData = {
+        id: `conn-accepted-${result.rows[0].id}`,
+        source: 'connection_accepted',
+        externalId: String(result.rows[0].id),
+        type: 'connection_accepted',
+        title: 'Connection Request Accepted',
+        message: message,
+        timestamp: result.rows[0].updated_at,
+        read: false,
+        userId: String(req.user!.id),
+      };
+      
+      logger.info('📬 [NOTIFY] Connection accepted notification sent to room:', roomName);
+      io.to(roomName).emit('notification-received', notificationData);
+    }
+
+    // Send push notification
     await sendPushToUsers([requesterId], {
       title: 'Connection Update',
-      body,
+      body: message,
       data: { type: action === 'accept' ? 'connection_accepted' : 'connection_declined', source: 'connection_accepted' }
     });
 
