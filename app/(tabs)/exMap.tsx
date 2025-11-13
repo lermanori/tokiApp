@@ -616,13 +616,23 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#FFFFFF',
     paddingBottom: 20,
+    marginTop: -10, // Overlaps with header for seamless transition
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: 50,
-    paddingBottom: 30,
+    paddingBottom: 20, // Reduced to allow overlap
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    marginBottom: -10, // Pulls content up
   },
   headerContent: {
     marginBottom: 30,
