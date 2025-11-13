@@ -58,9 +58,18 @@ function RootLayoutNav() {
       console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
       setHasCheckedFastRedirect(true);
       
+      // Special handling for join route: construct /join/[code] path
+      let redirectUrl = effectiveReturnTo;
+      if (effectiveReturnTo === 'join' && effectiveCode) {
+        const codeValue = Array.isArray(effectiveCode) ? effectiveCode[0] : effectiveCode;
+        redirectUrl = `/join/${codeValue}`;
+        console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Constructed join URL:', redirectUrl);
+        router.replace(redirectUrl as any);
+        return;
+      }
+      
       // Build the redirect URL with parameters
       // For toki-details, we need to preserve all URL parameters
-      let redirectUrl = effectiveReturnTo;
       const paramsToInclude: Record<string, string> = {};
       
       // Include effectiveOtherParams, but filter out internal params like 'screen' and 'params'
@@ -92,7 +101,7 @@ function RootLayoutNav() {
       router.replace(redirectUrl as any);
       return;
     }
-  }, [effectiveReturnTo, effectiveOtherParams, urlParams, segments, router, hasCheckedFastRedirect]);
+  }, [effectiveReturnTo, effectiveCode, effectiveOtherParams, urlParams, segments, router, hasCheckedFastRedirect]);
 
   useEffect(() => {
     // Check if user is authenticated with debouncing
@@ -157,6 +166,15 @@ function RootLayoutNav() {
         const isAuthenticated = await apiService.isAuthenticated();
         const hasUserData = state.currentUser && state.currentUser.id;
         const inLoginScreen = segments[0] === 'login';
+        
+        console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Auth status:', {
+          isAuthenticated,
+          hasUserData,
+          currentUserId: state.currentUser?.id,
+          hasToken: apiService.hasToken(),
+          inLoginScreen,
+          redirectionState: state.redirection
+        });
         // Treat the URL path as join during the very first render before segments are populated
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
         const inHealthScreen = segments[0] === 'health';
@@ -257,17 +275,37 @@ function RootLayoutNav() {
         } else if (isAuthenticated && inJoinScreen) {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
-        } else if (isAuthenticated && state.redirection.isRedirecting && state.redirection.returnTo) {
+        } else if ((isAuthenticated || hasUserData) && state.redirection.isRedirecting && state.redirection.returnTo) {
           // Handle pending redirection after login
+          // Use hasUserData as fallback if isAuthenticated check hasn't updated yet
           const { returnTo, returnParams } = state.redirection;
           
-          // Build the redirect URL with parameters
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION] Processing redirection:', { 
+            returnTo, 
+            returnParams,
+            isAuthenticated,
+            hasUserData,
+            currentUserId: state.currentUser?.id
+          });
+          
+          // Special handling for join route: construct /join/[code] path
           let redirectUrl = returnTo;
-          if (returnParams && Object.keys(returnParams).length > 0) {
+          if (returnTo === 'join' && returnParams?.code) {
+            redirectUrl = `/join/${returnParams.code}`;
+            // Remove code from params since it's in the path
+            const { code, ...otherParams } = returnParams;
+            if (Object.keys(otherParams).length > 0) {
+              const queryString = new URLSearchParams(otherParams);
+              redirectUrl += `?${queryString.toString()}`;
+            }
+            console.log('🔄 [FLOW DEBUG] [REDIRECTION] Constructed join URL:', redirectUrl);
+          } else if (returnParams && Object.keys(returnParams).length > 0) {
             const queryString = new URLSearchParams(returnParams);
             redirectUrl += `?${queryString.toString()}`;
           }
           
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION] Final redirect URL:', redirectUrl);
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION] Executing redirect now...');
           router.replace(redirectUrl as any);
         } else if (isAuthenticated && effectiveReturnTo && !inJoinScreen) {
           // Handle direct redirection for authenticated users (even if on login screen)
@@ -300,9 +338,19 @@ function RootLayoutNav() {
             });
           }
           
-          // Build the redirect URL with parameters
+          // Special handling for join route: construct /join/[code] path
           let redirectUrl = effectiveReturnTo;
-          if (Object.keys(cleanParams).length > 0) {
+          if (effectiveReturnTo === 'join' && code) {
+            const codeValue = Array.isArray(code) ? code[0] : code;
+            redirectUrl = `/join/${codeValue}`;
+            // Remove code from params since it's in the path
+            delete cleanParams.code;
+            if (Object.keys(cleanParams).length > 0) {
+              const queryString = new URLSearchParams(cleanParams);
+              redirectUrl += `?${queryString.toString()}`;
+            }
+            console.log('🔄 [FLOW DEBUG] [AUTH REDIRECT] Constructed join URL:', redirectUrl);
+          } else if (Object.keys(cleanParams).length > 0) {
             const queryString = new URLSearchParams(cleanParams);
             redirectUrl += `?${queryString.toString()}`;
           }

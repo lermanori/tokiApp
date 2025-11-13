@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
-import { Link, Users, MapPin, Clock, User } from 'lucide-react-native';
+import { apiService } from '@/services/api';
+import { getInitials } from '@/utils/tokiUtils';
+import { Link, Users, MapPin, Clock } from 'lucide-react-native';
 
 export default function JoinByCode() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -16,12 +18,22 @@ export default function JoinByCode() {
   const [tokiDetails, setTokiDetails] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  console.log('🔗 JoinByCode component loaded with code:', code);
+  console.log('🔗 [JOIN FLOW] Component mounted with code:', code);
+  console.log('🔗 [JOIN FLOW] Current user:', state.currentUser?.id ? `ID: ${state.currentUser.id}` : 'Not logged in');
+  console.log('🔗 [JOIN FLOW] Current state - loading:', loading, 'joining:', joining, 'hasLinkInfo:', !!linkInfo, 'error:', error);
 
   useEffect(() => {
-    console.log('🔗 useEffect triggered with code:', code, 'user:', state.currentUser?.id);
+    console.log('🔗 [JOIN FLOW] useEffect triggered');
+    console.log('🔗 [JOIN FLOW] Dependencies - code:', code, 'user ID:', state.currentUser?.id);
     loadLinkInfo();
   }, [code, state.currentUser?.id]);
+
+  useEffect(() => {
+    console.log('🔗 [JOIN FLOW] Component mounted');
+    return () => {
+      console.log('🔗 [JOIN FLOW] Component unmounting');
+    };
+  }, []);
 
   const normalizeToki = (raw: any) => {
     if (!raw) return null;
@@ -39,35 +51,90 @@ export default function JoinByCode() {
   };
 
   const loadLinkInfo = async () => {
+    console.log('🔗 [JOIN FLOW] loadLinkInfo called');
+    console.log('🔗 [JOIN FLOW] Code:', code);
+    console.log('🔗 [JOIN FLOW] Current user ID:', state.currentUser?.id);
+    console.log('🔗 [JOIN FLOW] Has tokens:', apiService.hasToken());
+    
     if (!code) {
+      console.log('🔗 [JOIN FLOW] ❌ No code provided, setting error');
       setError('Invalid invite code');
       setLoading(false);
       return;
     }
 
-    // If user is not logged in, redirect to login first
-    if (!state.currentUser?.id) {
+    // Check both user state and tokens - if tokens exist but user state not loaded yet, wait a bit
+    const hasTokens = apiService.hasToken();
+    const hasUserData = !!state.currentUser?.id;
+    
+    console.log('🔗 [JOIN FLOW] Auth check:', { hasTokens, hasUserData });
+    
+    if (!hasUserData && !hasTokens) {
+      console.log('🔗 [JOIN FLOW] ⚠️ User not logged in and no tokens, redirecting to login');
+      console.log('🔗 [JOIN FLOW] Redirect URL: /login?returnTo=join&code=' + code);
       router.replace(`/login?returnTo=join&code=${code}`);
       return;
     }
-
+    
+    // If we have tokens but user data isn't loaded yet, wait a moment for state to sync
+    if (hasTokens && !hasUserData) {
+      console.log('🔗 [JOIN FLOW] ⚠️ Has tokens but user data not loaded yet, waiting for state sync...');
+      // Give it a moment for the user state to load from storage/API
+      setTimeout(() => {
+        if (state.currentUser?.id) {
+          console.log('🔗 [JOIN FLOW] ✅ User state loaded, proceeding');
+        } else {
+          console.log('🔗 [JOIN FLOW] ⚠️ User state still not loaded, proceeding with token auth');
+        }
+        // Proceed anyway - the API call will work with tokens
+        proceedWithLoadLinkInfo();
+      }, 300);
+      return;
+    }
+    
+    proceedWithLoadLinkInfo();
+  };
+  
+  const proceedWithLoadLinkInfo = async () => {
+    console.log('🔗 [JOIN FLOW] ✅ User is authenticated (has user data or tokens), proceeding to load link info');
     try {
       setLoading(true);
+      console.log('🔗 [JOIN FLOW] Calling getInviteLinkInfo with code:', code);
       const info = await actions.getInviteLinkInfo(code);
+      console.log('🔗 [JOIN FLOW] Received invite link info:', {
+        hasInfo: !!info,
+        isActive: info?.isActive,
+        hasToki: !!info?.toki,
+        tokiId: info?.toki?.id,
+        tokiTitle: info?.toki?.title
+      });
       
       if (info && info.isActive) {
+        console.log('🔗 [JOIN FLOW] ✅ Invite link is active');
         const normalized = { ...info, toki: normalizeToki(info.toki) };
+        console.log('🔗 [JOIN FLOW] Normalized toki:', {
+          id: normalized.toki?.id,
+          title: normalized.toki?.title,
+          host_id: normalized.toki?.host_id
+        });
         setLinkInfo(normalized);
         setError(null);
         
         // Load full details and check participant status
         try {
+          console.log('🔗 [JOIN FLOW] Loading full toki details for ID:', normalized.toki.id);
           const full = await actions.getTokiById?.(normalized.toki.id);
+          console.log('🔗 [JOIN FLOW] Full toki details received:', {
+            hasFull: !!full,
+            joinStatus: full?.joinStatus,
+            participantsCount: Array.isArray(full?.participants) ? full.participants.length : 0
+          });
           if (full) setTokiDetails(normalizeToki(full));
           
           // Check if current user is the host
-          if (normalized.toki?.host_id === state.currentUser.id) {
-            // Host should go directly to event page
+          if (normalized.toki?.host_id === state.currentUser?.id) {
+            console.log('🔗 [JOIN FLOW] 🎯 User is the host, redirecting to toki-details');
+            console.log('🔗 [JOIN FLOW] Redirect URL: /toki-details?tokiId=' + normalized.toki.id);
             router.replace(`/toki-details?tokiId=${normalized.toki.id}`);
             return;
           }
@@ -77,73 +144,122 @@ export default function JoinByCode() {
             (full && full.joinStatus && (full.joinStatus === 'joined' || full.joinStatus === 'approved')) ||
             (Array.isArray(full?.participants) && full.participants.some((p: any) => (p.user?.id || p.id) === state.currentUser?.id));
 
+          console.log('🔗 [JOIN FLOW] Checking if user is already a participant:', {
+            isAlreadyIn,
+            joinStatus: full?.joinStatus,
+            checkedParticipants: Array.isArray(full?.participants) ? full.participants.map((p: any) => ({ id: p.user?.id || p.id, name: p.user?.name || p.name })) : []
+          });
+
           if (isAlreadyIn) {
-            // User is already a participant, go to event page
+            console.log('🔗 [JOIN FLOW] ✅ User is already a participant, redirecting to toki-details');
+            console.log('🔗 [JOIN FLOW] Redirect URL: /toki-details?tokiId=' + normalized.toki.id);
             router.replace(`/toki-details?tokiId=${normalized.toki.id}`);
             return;
           }
+          
+          console.log('🔗 [JOIN FLOW] ✅ User is not a participant yet, showing join UI');
         } catch (e: any) {
+          console.log('🔗 [JOIN FLOW] ⚠️ Error loading full toki details:', {
+            isAuthError: e?.isAuthError,
+            status: e?.status,
+            message: e?.message
+          });
           if (e?.isAuthError || e?.status === 401) {
+            console.log('🔗 [JOIN FLOW] ⚠️ Auth error, redirecting to login');
             router.replace(`/login?returnTo=join&code=${code}`);
             return;
           }
-          console.log('⚠️ Could not load full toki details for join page');
+          console.log('🔗 [JOIN FLOW] ⚠️ Could not load full toki details for join page, continuing with basic info');
         }
       } else {
+        console.log('🔗 [JOIN FLOW] ❌ Invite link is not active or missing');
         setError('This invite link is no longer active');
       }
     } catch (err: any) {
+      console.log('🔗 [JOIN FLOW] ❌ Error in proceedWithLoadLinkInfo:', {
+        message: err?.message,
+        status: err?.status,
+        isAuthError: err?.isAuthError,
+        error: err
+      });
+      
       // Handle invalid invite codes without redirecting to login
       if (err?.message?.includes('Invalid') || err?.message?.includes('not found') || err?.status === 404) {
+        console.log('🔗 [JOIN FLOW] ❌ Invalid invite code (404 or not found)');
         setError('Invalid invite code. Please check the link and try again.');
         setLoading(false);
         return;
       }
       
       if (err?.isAuthError || err?.status === 401) {
+        console.log('🔗 [JOIN FLOW] ⚠️ Auth error (401), redirecting to login');
         router.replace(`/login?returnTo=join&code=${code}`);
         return;
       }
-      console.error('Failed to load invite link info:', err);
+      console.error('🔗 [JOIN FLOW] ❌ Failed to load invite link info:', err);
       setError('Failed to load event details');
     } finally {
+      console.log('🔗 [JOIN FLOW] proceedWithLoadLinkInfo completed, setting loading to false');
       setLoading(false);
     }
   };
 
   const handleJoin = async () => {
+    console.log('🔗 [JOIN FLOW] handleJoin called');
+    console.log('🔗 [JOIN FLOW] Code:', code, 'User ID:', state.currentUser?.id);
+    console.log('🔗 [JOIN FLOW] Link info:', {
+      hasLinkInfo: !!linkInfo,
+      tokiId: linkInfo?.toki?.id
+    });
+    
     if (!code || !state.currentUser?.id) {
+      console.log('🔗 [JOIN FLOW] ❌ Missing code or user ID, redirecting to login');
       router.replace(`/login?returnTo=join&code=${code}`);
       return;
     }
 
     try {
+      console.log('🔗 [JOIN FLOW] Setting joining state to true');
       setJoining(true);
+      console.log('🔗 [JOIN FLOW] Calling joinByInviteCode with code:', code);
       const success = await actions.joinByInviteCode(code);
+      console.log('🔗 [JOIN FLOW] Join result:', { success });
       
       if (success) {
+        console.log('🔗 [JOIN FLOW] ✅ Successfully joined event');
         // Redirect directly to event page after successful join
         if (linkInfo?.toki?.id) {
+          console.log('🔗 [JOIN FLOW] Redirecting to toki-details with ID:', linkInfo.toki.id);
           router.replace(`/toki-details?tokiId=${linkInfo.toki.id}`);
         } else {
+          console.log('🔗 [JOIN FLOW] ⚠️ No toki ID in linkInfo, redirecting to tabs');
           router.replace('/(tabs)');
         }
       } else {
-        console.error('Failed to join the event');
+        console.error('🔗 [JOIN FLOW] ❌ Failed to join the event (success = false)');
       }
     } catch (err: any) {
+      console.log('🔗 [JOIN FLOW] ❌ Error in handleJoin:', {
+        message: err?.message,
+        status: err?.status,
+        isAuthError: err?.isAuthError,
+        error: err
+      });
       if (err?.isAuthError || err?.status === 401) {
+        console.log('🔗 [JOIN FLOW] ⚠️ Auth error (401), redirecting to login');
         router.replace(`/login?returnTo=join&code=${code}`);
         return;
       }
-      console.error('Failed to join event:', err);
+      console.error('🔗 [JOIN FLOW] ❌ Failed to join event:', err);
     } finally {
+      console.log('🔗 [JOIN FLOW] handleJoin completed, setting joining to false');
       setJoining(false);
     }
   };
 
 
   if (loading) {
+    console.log('🔗 [JOIN FLOW] Rendering loading state');
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -155,12 +271,16 @@ export default function JoinByCode() {
   }
 
   if (error) {
+    console.log('🔗 [JOIN FLOW] Rendering error state:', error);
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Unable to Join Event</Text>
           <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.push('/(tabs)')}>
+          <TouchableOpacity style={styles.backButton} onPress={() => {
+            console.log('🔗 [JOIN FLOW] Error screen: Navigating to tabs');
+            router.push('/(tabs)');
+          }}>
             <Text style={styles.backButtonText}>Go to Dashboard</Text>
           </TouchableOpacity>
         </View>
@@ -169,18 +289,29 @@ export default function JoinByCode() {
   }
 
   if (!linkInfo) {
+    console.log('🔗 [JOIN FLOW] Rendering no linkInfo state');
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Event Not Found</Text>
           <Text style={styles.errorMessage}>This invite link is invalid or expired.</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.push('/(tabs)')}>
+          <TouchableOpacity style={styles.backButton} onPress={() => {
+            console.log('🔗 [JOIN FLOW] No linkInfo screen: Navigating to tabs');
+            router.push('/(tabs)');
+          }}>
             <Text style={styles.backButtonText}>Go to Dashboard</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
+  
+  console.log('🔗 [JOIN FLOW] Rendering join UI with linkInfo:', {
+    hasLinkInfo: !!linkInfo,
+    tokiId: linkInfo?.toki?.id,
+    tokiTitle: linkInfo?.toki?.title,
+    hostName: linkInfo?.host?.name
+  });
 
   const { toki, host, inviteLink } = linkInfo;
   // Prefer richer details from tokiDetails when available
@@ -235,16 +366,20 @@ export default function JoinByCode() {
           <View style={styles.hostSection}>
             <Text style={styles.hostLabel}>Hosted by</Text>
             <View style={styles.hostInfo}>
-              {host.avatar ? (
-                <View style={styles.hostAvatar}>
-                  <Text style={styles.hostAvatarText}>
-                    {host.name?.charAt(0)?.toUpperCase() || 'H'}
+              {host?.avatar ? (
+                <Image
+                  source={{ uri: host.avatar }}
+                  style={styles.hostAvatar}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.hostAvatar, styles.hostAvatarFallback]}>
+                  <Text style={styles.hostAvatarInitials}>
+                    {getInitials(host?.name || 'Host')}
                   </Text>
                 </View>
-              ) : (
-                <User size={20} color="#8B5CF6" />
               )}
-              <Text style={styles.hostName}>{host.name}</Text>
+              <Text style={styles.hostName}>{host?.name || 'Unknown Host'}</Text>
             </View>
           </View>
 
@@ -402,15 +537,20 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#8B5CF6',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: 12,
   },
-  hostAvatarText: {
-    fontSize: 14,
+  hostAvatarFallback: {
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  hostAvatarInitials: {
+    fontSize: 12,
     fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
+    color: '#6B7280',
+    textAlign: 'center',
   },
   hostName: {
     fontSize: 16,

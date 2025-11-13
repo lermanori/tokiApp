@@ -21,3 +21,5 @@ This file contains a RedirectionGuard component that handles post-login redirect
   - Whether conditions are met for redirection
   - Final redirect URL being used
   - Why redirection might not be happening (conditions not met)
+- **Problem**: After login with `returnTo=join&code=6I69YTSU`, the redirection was constructing `join?code=6I69YTSU` instead of `/join/6I69YTSU`, causing "This screen doesn't exist" error.
+- **Solution**: Added special handling for join route redirection to construct `/join/[code]` path when `returnTo=join` and `code` is in `returnParams`, extracting the code from params and building the correct path format.

@@ -76,3 +76,14 @@ This file implements the Toki details screen, displaying comprehensive informati
   - Fixed console.log statements to safely access `window.location?.href` using optional chaining
   - Applied fixes to all share functions (`shareToTwitter`, `shareToFacebook`, `shareToLinkedIn`, `shareToWhatsApp`, `shareToTelegram`) and all share modal button handlers
   - Added error handling with `.catch()` for `Linking.openURL()` calls to prevent crashes if URL can't be opened
+- **Problem**: Invite links generated in the backend used hardcoded URLs that didn't respect the frontend deployment configuration (local/customDomain/githubPages), causing incorrect URLs in different environments.
+- **Solution**: Updated invite link handling to reconstruct URLs on the frontend using deployment configuration, following the same pattern as share URLs.
+
+### How Fixes Were Implemented
+- **Problem**: Invite links didn't use deployment configuration for URL generation
+- **Solution**:
+  - Added `reconstructInviteLink()` helper function that takes an invite link object and reconstructs the `inviteUrl` using `generateInviteLinkUrl()` from `@/utils/tokiUrls`
+  - Updated `loadInviteLinks()` to reconstruct URLs for all links and the active link after receiving data from backend
+  - Updated `handleRegenerateInviteLink()` and `handleCreateInviteLink()` to reconstruct the URL when setting the active invite link
+  - Imported `generateInviteLinkUrl` from `@/utils/tokiUrls` which uses `config.frontend.baseUrl` (from deployment-config)
+  - This ensures invite links use the correct base URL based on the current deployment environment (local development, custom domain, or GitHub Pages)

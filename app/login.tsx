@@ -103,6 +103,10 @@ export default function LoginScreen() {
           // Save credentials for dev environment
           saveCredentials(email, password, name);
           
+          // Clear auth cache to force fresh authentication check
+          apiService.clearAuthCache();
+          console.log('🔐 [LOGIN] Cleared auth cache after successful login');
+          
           // Convert API user to frontend user format
           const user = {
             ...response.data.user,
@@ -114,6 +118,7 @@ export default function LoginScreen() {
           
           // Update the app state with the authenticated user
           dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
+          console.log('🔐 [LOGIN] Updated current user in state:', user.id);
           
           // Load all data BEFORE redirecting for instant experience
           console.log('🚀 Loading data after login...');

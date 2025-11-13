@@ -38,16 +38,29 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
     }
 
     // If we're in the main app but not on the target page, redirect immediately
-    // Only redirect if user is authenticated
-    if (segments[0] === '(tabs)' && redirection.returnTo && state.currentUser?.id) {
-      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User is in tabs and authenticated, redirecting to target page:', redirection.returnTo);
+    // Only redirect if user is authenticated (check by user ID in state)
+    const hasUserData = !!state.currentUser?.id;
+    if (segments[0] === '(tabs)' && redirection.returnTo && hasUserData) {
+      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User is in tabs and has user data, redirecting to target page:', redirection.returnTo);
       console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] returnParams:', redirection.returnParams);
+      console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User ID:', state.currentUser?.id);
       
       // Small delay to ensure tabs are fully loaded
       setTimeout(() => {
         // Build the redirect URL with parameters
         let redirectUrl = redirection.returnTo;
-        if (redirection.returnParams && Object.keys(redirection.returnParams).length > 0) {
+        
+        // Special handling for join route: construct /join/[code] path
+        if (redirection.returnTo === 'join' && redirection.returnParams?.code) {
+          redirectUrl = `/join/${redirection.returnParams.code}`;
+          // Remove code from params since it's in the path
+          const { code, ...otherParams } = redirection.returnParams;
+          if (Object.keys(otherParams).length > 0) {
+            const searchParams = new URLSearchParams(otherParams);
+            redirectUrl += `?${searchParams.toString()}`;
+          }
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Constructed join URL:', redirectUrl);
+        } else if (redirection.returnParams && Object.keys(redirection.returnParams).length > 0) {
           const searchParams = new URLSearchParams(redirection.returnParams);
           redirectUrl += `?${searchParams.toString()}`;
         }

@@ -99,3 +99,14 @@ export const generateTokiShareOptions = (toki: any) => {
     }
   };
 };
+
+/**
+ * Generate an invite link URL for joining a Toki
+ * @param inviteCode - The invite code for the Toki
+ * @param baseUrl - Optional base URL (defaults to config)
+ * @returns Complete invite link URL
+ */
+export const generateInviteLinkUrl = (inviteCode: string, baseUrl?: string): string => {
+  const base = getBaseUrl(baseUrl);
+  return `${base}/join/${inviteCode}`;
+};

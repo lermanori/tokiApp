@@ -13,7 +13,7 @@ import ParticipantsModal from '@/components/ParticipantsModal';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
-import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions } from '@/utils/tokiUrls';
+import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions, generateInviteLinkUrl } from '@/utils/tokiUrls';
 import { formatDistanceDisplay, calculateDistance } from '@/utils/distance';
 import { getInitials, getActivityEmoji, getActivityLabel, formatLocationDisplay, formatTimeDisplay, canUserInvite, canUserManage, getJoinButtonText, getJoinButtonStyle } from '@/utils/tokiUtils';
 import MetaTags from '@/components/MetaTags';
@@ -951,14 +951,29 @@ export default function TokiDetailsScreen() {
     setParticipantToRemove(null);
   };
 
+  // Helper function to reconstruct invite link URL using deployment config
+  const reconstructInviteLink = (link: any) => {
+    if (!link) return null;
+    if (link.inviteCode) {
+      return {
+        ...link,
+        inviteUrl: generateInviteLinkUrl(link.inviteCode)
+      };
+    }
+    return link;
+  };
+
   // Invite Link Management Functions
   const loadInviteLinks = async () => {
     if (!toki) return;
     try {
       setIsLoadingInviteLinks(true);
       const data = await actions.getInviteLinksForToki(toki.id);
-      setInviteLinks(data.links || []);
-      setActiveInviteLink(data.activeLink || null);
+      // Reconstruct URLs using deployment config
+      const reconstructedLinks = (data.links || []).map((link: any) => reconstructInviteLink(link));
+      const reconstructedActiveLink = data.activeLink ? reconstructInviteLink(data.activeLink) : null;
+      setInviteLinks(reconstructedLinks);
+      setActiveInviteLink(reconstructedActiveLink);
     } catch (e) {
       console.error('Failed to load invite links:', e);
     } finally {
@@ -996,7 +1011,9 @@ export default function TokiDetailsScreen() {
         message: inviteLinkMessage || null
       });
       if (link) {
-        setActiveInviteLink(link.data);
+        // Reconstruct URL using deployment config
+        const reconstructedLink = reconstructInviteLink(link.data);
+        setActiveInviteLink(reconstructedLink);
         await loadInviteLinks(); // Refresh the list
         setInviteLinkMessage('');
         setInviteLinkMaxUses(null);
@@ -1017,7 +1034,9 @@ export default function TokiDetailsScreen() {
         message: inviteLinkMessage || null
       });
       if (link) {
-        setActiveInviteLink(link.data);
+        // Reconstruct URL using deployment config
+        const reconstructedLink = reconstructInviteLink(link.data);
+        setActiveInviteLink(reconstructedLink);
         await loadInviteLinks(); // Refresh the list
         setInviteLinkMessage('');
         setInviteLinkMaxUses(null);

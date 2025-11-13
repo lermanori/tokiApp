@@ -19,6 +19,10 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - Fixed the redirect logic to navigate directly to toki-details when `returnTo` is `/toki-details` instead of going through tabs
   - Added filtering to remove internal params (`screen`, `params`) and invalid values (`[object Object]`) from URL parameters
   - Added comprehensive logging to track the redirect flow
+- **Problem**: After login with `returnTo=join&code=6I69YTSU`, the redirection was constructing `join?code=6I69YTSU` instead of `/join/6I69YTSU`, causing "This screen doesn't exist" error.
+- **Solution**: Added special handling for join route redirection to construct `/join/[code]` path when `returnTo=join` and `code` is in params, in both the state redirection handler and direct redirection handler.
+- **Problem**: Fast redirect (when tokens exist on login page) was redirecting to "join" instead of `/join/[code]`, causing routing errors.
+- **Solution**: Added special handling in fast redirect logic to check if `effectiveReturnTo === 'join'` and `effectiveCode` exists, then construct `/join/${code}` path before redirecting.
 
 ### How Fixes Were Implemented
 - Added `import '@/utils/logger'` as the first import so console patching happens before other modules run. This ensures existing `console.*` calls across the app are filtered by level.
