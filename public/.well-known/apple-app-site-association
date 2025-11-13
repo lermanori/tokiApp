@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "PA7L4ZHG8D.com.toki.socialmap",
+        "paths": [
+          "/toki-details*",
+          "/join/*",
+          "/user-profile/*"
+        ]
+      }
+    ]
+  }
+}
+

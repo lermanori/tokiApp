@@ -84,8 +84,8 @@ function RootLayoutNav() {
       }
       
       if (Object.keys(paramsToInclude).length > 0) {
-        const searchParams = new URLSearchParams(paramsToInclude);
-        redirectUrl += `?${searchParams.toString()}`;
+        const queryString = new URLSearchParams(paramsToInclude);
+        redirectUrl += `?${queryString.toString()}`;
       }
       
       console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Full redirect URL with params:', redirectUrl);
@@ -97,10 +97,20 @@ function RootLayoutNav() {
   useEffect(() => {
     // Check if user is authenticated with debouncing
     const checkAuth = async () => {
-      // Ensure routing has recognized the initial path (especially for deep links like /join/:code)
-      const path = typeof window !== 'undefined' && window.location?.pathname 
-        ? window.location.pathname 
-        : '';
+      // Cross-platform path detection: use window.location for web, segments for native
+      const getCurrentPath = () => {
+        // Web: use window.location.pathname
+        if (typeof window !== 'undefined' && window.location?.pathname) {
+          return window.location.pathname;
+        }
+        // Native: build path from segments
+        if (segments.length > 0) {
+          return `/${segments.join('/')}`;
+        }
+        return '';
+      };
+      
+      const path = getCurrentPath();
       const pathIsJoin = path.startsWith('/join');
       const pathIsLogin = path.startsWith('/login');
 
@@ -156,21 +166,26 @@ function RootLayoutNav() {
         
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen) {
           // Check if we're on toki-details page - preserve the tokiId parameter
+          // Cross-platform: check both path (web) and segments (native)
           const isTokiDetailsPage = path.startsWith('/toki-details') || segments[0] === 'toki-details';
           
           if (isTokiDetailsPage) {
             // Extract all URL parameters including tokiId
-            // Use urlParams (from getUrlParams) which has all query params from the URL
+            // Cross-platform: use searchParams (works on both web and native) with urlParams fallback (web only)
             const returnParams: Record<string, string> = {};
             
-            // Get tokiId from URL params (priority) or searchParams
-            const tokiId = urlParams.tokiId || (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined);
+            // Get tokiId: priority is searchParams (works on both platforms), then urlParams (web only)
+            const tokiId = (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined) || urlParams.tokiId;
             if (tokiId) returnParams.tokiId = tokiId;
             
-            // Preserve other parameters if they exist
-            if (urlParams.title) returnParams.title = urlParams.title;
-            if (urlParams.location) returnParams.location = urlParams.location;
-            if (urlParams.time) returnParams.time = urlParams.time;
+            // Preserve other parameters if they exist (check searchParams first for cross-platform support)
+            const title = (typeof searchParams.title === 'string' ? searchParams.title : Array.isArray(searchParams.title) ? searchParams.title[0] : undefined) || urlParams.title;
+            const location = (typeof searchParams.location === 'string' ? searchParams.location : Array.isArray(searchParams.location) ? searchParams.location[0] : undefined) || urlParams.location;
+            const time = (typeof searchParams.time === 'string' ? searchParams.time : Array.isArray(searchParams.time) ? searchParams.time[0] : undefined) || urlParams.time;
+            
+            if (title) returnParams.title = title;
+            if (location) returnParams.location = location;
+            if (time) returnParams.time = time;
             
             // Redirect to login with returnTo and parameters
             const loginUrl = `/login?returnTo=/toki-details${Object.keys(returnParams).length > 0 ? '&' + new URLSearchParams(returnParams).toString() : ''}`;
@@ -200,8 +215,16 @@ function RootLayoutNav() {
             );
             const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
             
-            // For toki-details, also check urlParams for any missing parameters
+            // For toki-details, also check searchParams and urlParams for any missing parameters (cross-platform)
             if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+              // Check searchParams first (works on both platforms)
+              ['tokiId', 'title', 'location', 'time'].forEach(key => {
+                if (!cleanParams[key]) {
+                  const value = typeof searchParams[key] === 'string' ? searchParams[key] : Array.isArray(searchParams[key]) ? searchParams[key][0] : undefined;
+                  if (value) cleanParams[key] = value;
+                }
+              });
+              // Also check urlParams for web (fallback)
               Object.entries(urlParams).forEach(([key, value]) => {
                 if (key !== 'returnTo' && key !== 'code' && value && !cleanParams[key]) {
                   cleanParams[key] = value;
@@ -213,8 +236,8 @@ function RootLayoutNav() {
             if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
               let redirectUrl = returnToPath;
               if (Object.keys(cleanParams).length > 0) {
-                const searchParams = new URLSearchParams(cleanParams);
-                redirectUrl += `?${searchParams.toString()}`;
+                const queryString = new URLSearchParams(cleanParams);
+                redirectUrl += `?${queryString.toString()}`;
               }
               console.log('✅ [FLOW DEBUG] [DIRECT NAVIGATE] Navigating directly to toki-details:', redirectUrl);
               router.replace(redirectUrl as any);
@@ -241,8 +264,8 @@ function RootLayoutNav() {
           // Build the redirect URL with parameters
           let redirectUrl = returnTo;
           if (returnParams && Object.keys(returnParams).length > 0) {
-            const searchParams = new URLSearchParams(returnParams);
-            redirectUrl += `?${searchParams.toString()}`;
+            const queryString = new URLSearchParams(returnParams);
+            redirectUrl += `?${queryString.toString()}`;
           }
           
           router.replace(redirectUrl as any);
@@ -260,8 +283,16 @@ function RootLayoutNav() {
               .map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)])
           );
           
-          // For toki-details, also check urlParams for any missing parameters
+          // For toki-details, also check searchParams and urlParams for any missing parameters (cross-platform)
           if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
+            // Check searchParams first (works on both platforms)
+            ['tokiId', 'title', 'location', 'time'].forEach(key => {
+              if (!cleanParams[key]) {
+                const value = typeof searchParams[key] === 'string' ? searchParams[key] : Array.isArray(searchParams[key]) ? searchParams[key][0] : undefined;
+                if (value) cleanParams[key] = value;
+              }
+            });
+            // Also check urlParams for web (fallback)
             Object.entries(urlParams).forEach(([key, value]) => {
               if (key !== 'returnTo' && key !== 'code' && key !== 'screen' && key !== 'params' && value && !cleanParams[key]) {
                 cleanParams[key] = value;
@@ -272,8 +303,8 @@ function RootLayoutNav() {
           // Build the redirect URL with parameters
           let redirectUrl = effectiveReturnTo;
           if (Object.keys(cleanParams).length > 0) {
-            const searchParams = new URLSearchParams(cleanParams);
-            redirectUrl += `?${searchParams.toString()}`;
+            const queryString = new URLSearchParams(cleanParams);
+            redirectUrl += `?${queryString.toString()}`;
           }
           
           console.log('🔄 [FLOW DEBUG] [AUTH REDIRECT] Redirecting authenticated user to:', redirectUrl);
@@ -350,8 +381,8 @@ function RootLayoutNav() {
         
         let redirectUrl = effectiveReturnTo;
         if (Object.keys(paramsToInclude).length > 0) {
-          const searchParams = new URLSearchParams(paramsToInclude);
-          redirectUrl += `?${searchParams.toString()}`;
+          const queryString = new URLSearchParams(paramsToInclude);
+          redirectUrl += `?${queryString.toString()}`;
         }
         
         console.log('🔄 [FLOW DEBUG] [USER DATA] Redirecting to:', redirectUrl);

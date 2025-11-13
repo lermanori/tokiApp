@@ -182,16 +182,24 @@ export default function TokiDetailsScreen() {
   
   // Fallback to read URL parameters directly (for web deep linking)
   const getUrlParams = () => {
+    // On native, window doesn't exist or doesn't have location
     if (typeof window === 'undefined') return {};
-    if (typeof window.location === 'undefined' || !window.location.href) return {};
+    if (typeof window.location === 'undefined') return {};
+    if (!window.location.href) return {};
     try {
-      const url = new URL(window.location.href);
+      // Double-check href is a valid string before creating URL
+      const href = window.location.href;
+      if (typeof href !== 'string' || !href.startsWith('http')) {
+        return {};
+      }
+      const url = new URL(href);
       const urlParams: Record<string, string> = {};
       url.searchParams.forEach((value, key) => {
         urlParams[key] = value;
       });
       return urlParams;
     } catch (error) {
+      // Silently fail on native
       return {};
     }
   };
@@ -434,7 +442,10 @@ export default function TokiDetailsScreen() {
   // 🔍 LOG: Component mount
   useEffect(() => {
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ===== COMPONENT MOUNTED =====');
-    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] URL:', 
+      typeof window !== 'undefined' && window.location?.href 
+        ? window.location.href 
+        : 'N/A (native)');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams:', effectiveParams);
     
     return () => {
@@ -452,7 +463,10 @@ export default function TokiDetailsScreen() {
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams.tokiId:', effectiveParams.tokiId);
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] params.tokiId:', params.tokiId);
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] urlParams.tokiId:', urlParams.tokiId);
-    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Current URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Current URL:', 
+      typeof window !== 'undefined' && window.location?.href 
+        ? window.location.href 
+        : 'N/A (native)');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] lastProcessedTokiId:', lastProcessedTokiId.current);
 
     if (tokiId && tokiId !== lastProcessedTokiId.current) {
@@ -695,30 +709,55 @@ export default function TokiDetailsScreen() {
   const shareToTwitter = (shareOptions: any) => {
     const text = encodeURIComponent(shareOptions.twitter.message);
     const url = encodeURIComponent(shareOptions.url);
-    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
+    const shareUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+      window.open(shareUrl, '_blank');
+    } else {
+      Linking.openURL(shareUrl).catch(err => console.error('Failed to open Twitter:', err));
+    }
   };
 
   const shareToFacebook = (shareOptions: any) => {
     const url = encodeURIComponent(shareOptions.url);
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+    const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+      window.open(shareUrl, '_blank');
+    } else {
+      Linking.openURL(shareUrl).catch(err => console.error('Failed to open Facebook:', err));
+    }
   };
 
   const shareToLinkedIn = (shareOptions: any) => {
     const url = encodeURIComponent(shareOptions.url);
     const title = encodeURIComponent(shareOptions.title);
     const summary = encodeURIComponent(shareOptions.message);
-    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`, '_blank');
+    const shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+      window.open(shareUrl, '_blank');
+    } else {
+      Linking.openURL(shareUrl).catch(err => console.error('Failed to open LinkedIn:', err));
+    }
   };
 
   const shareToWhatsApp = (shareOptions: any) => {
     const text = encodeURIComponent(shareOptions.whatsapp.message);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    const shareUrl = `https://wa.me/?text=${text}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+      window.open(shareUrl, '_blank');
+    } else {
+      Linking.openURL(shareUrl).catch(err => console.error('Failed to open WhatsApp:', err));
+    }
   };
 
   const shareToTelegram = (shareOptions: any) => {
     const text = encodeURIComponent(shareOptions.message);
     const url = encodeURIComponent(shareOptions.url);
-    window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+    const shareUrl = `https://t.me/share/url?url=${url}&text=${text}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+      window.open(shareUrl, '_blank');
+    } else {
+      Linking.openURL(shareUrl).catch(err => console.error('Failed to open Telegram:', err));
+    }
   };
 
   const copyToClipboard = async (shareOptions: any) => {
@@ -1971,7 +2010,12 @@ export default function TokiDetailsScreen() {
                     onPress={() => {
                       const text = encodeURIComponent(editableMessage);
                       const url = encodeURIComponent(shareUrl);
-                      window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
+                      const shareUrl_full = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                        window.open(shareUrl_full, '_blank');
+                      } else {
+                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Twitter:', err));
+                      }
                       setShowShareModal(false);
                     }}
                   >
@@ -1983,7 +2027,12 @@ export default function TokiDetailsScreen() {
                     style={[styles.shareButton, styles.facebookButton]}
                     onPress={() => {
                       const url = encodeURIComponent(shareUrl);
-                      window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+                      const shareUrl_full = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                        window.open(shareUrl_full, '_blank');
+                      } else {
+                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Facebook:', err));
+                      }
                       setShowShareModal(false);
                     }}
                   >
@@ -1997,7 +2046,12 @@ export default function TokiDetailsScreen() {
                       const url = encodeURIComponent(shareUrl);
                       const title = encodeURIComponent(toki?.title || '');
                       const summary = encodeURIComponent(editableMessage);
-                      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`, '_blank');
+                      const shareUrl_full = `https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                        window.open(shareUrl_full, '_blank');
+                      } else {
+                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open LinkedIn:', err));
+                      }
                       setShowShareModal(false);
                     }}
                   >
@@ -2009,7 +2063,12 @@ export default function TokiDetailsScreen() {
                     style={[styles.shareButton, styles.whatsappButton]}
                     onPress={() => {
                       const text = encodeURIComponent(`${editableMessage}\n\n${shareUrl}`);
-                      window.open(`https://wa.me/?text=${text}`, '_blank');
+                      const shareUrl_full = `https://wa.me/?text=${text}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                        window.open(shareUrl_full, '_blank');
+                      } else {
+                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open WhatsApp:', err));
+                      }
                       setShowShareModal(false);
                     }}
                   >
@@ -2022,7 +2081,12 @@ export default function TokiDetailsScreen() {
                     onPress={() => {
                       const text = encodeURIComponent(editableMessage);
                       const url = encodeURIComponent(shareUrl);
-                      window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank');
+                      const shareUrl_full = `https://t.me/share/url?url=${url}&text=${text}`;
+                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                        window.open(shareUrl_full, '_blank');
+                      } else {
+                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Telegram:', err));
+                      }
                       setShowShareModal(false);
                     }}
                   >

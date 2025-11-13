@@ -62,3 +62,9 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - Auth redirect (login screen)
   - Direct redirect (authenticated users)
   - User data redirect
+- problem: Navigation to toki-details page was failing on native iOS app. The path detection relied on `window.location.pathname` which doesn't exist in React Native, causing the routing logic to fail to detect when users were navigating to toki-details. Additionally, parameter extraction was prioritizing `urlParams` (web-only) over `searchParams` (cross-platform), causing `tokiId` to be lost in native apps.
+- solution: 
+  - Created cross-platform `getCurrentPath()` helper function that uses `window.location.pathname` for web and builds path from `segments` for native
+  - Updated parameter extraction to prioritize `searchParams` (from `useLocalSearchParams()`) which works on both platforms, with `urlParams` as fallback for web
+  - Applied cross-platform parameter extraction to all toki-details navigation paths (unauthenticated redirect, authenticated redirect, fast redirect, user data redirect)
+  - Fixed variable naming conflicts by renaming `URLSearchParams` instances to `queryString` to avoid shadowing the `searchParams` variable from `useLocalSearchParams()`

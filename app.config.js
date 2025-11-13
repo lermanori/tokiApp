@@ -16,7 +16,10 @@ module.exports = {
       config: {},
       infoPlist: {
         UIBackgroundModes: ["remote-notification"]
-      }
+      },
+      associatedDomains: [
+        "applinks:toki-app.com"
+      ]
     },
     web: {
       bundler: "metro",

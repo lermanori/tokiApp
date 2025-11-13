@@ -22,7 +22,7 @@ export const deploymentConfig = {
 };
 
 // Current deployment type
-export const currentDeployment = 'local'; // Using custom domain https://toki-app.com
+export const currentDeployment = 'customDomain'; // Using custom domain https://toki-app.com
 
 // Helper function to get current deployment config
 export const getCurrentDeploymentConfig = () => {

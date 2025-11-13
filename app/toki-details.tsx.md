@@ -68,3 +68,11 @@ This file implements the Toki details screen, displaying comprehensive informati
   - Enhanced error logging to show HTTP status codes
   - Added success log when toki data loads successfully
   - These logs help identify exactly when and why the component fails to load, leading to redirect to explore page
+- problem: App crashes on real iOS device when navigating to toki-details page, but works fine on simulator. No logs appear, suggesting crash happens during component initialization. Root cause: `window.open()` calls and unsafe `window.location.href` access that don't exist in React Native.
+- solution:
+  - Fixed `getUrlParams()` function to safely check for `window.location.href` existence and validate URL format before creating `new URL()` object
+  - Added platform checks to all `window.open()` calls: check `Platform.OS === 'web'` and verify `window.open` exists before calling it
+  - Replaced all `window.open()` calls on native platforms with `Linking.openURL()` which is the React Native way to open URLs
+  - Fixed console.log statements to safely access `window.location?.href` using optional chaining
+  - Applied fixes to all share functions (`shareToTwitter`, `shareToFacebook`, `shareToLinkedIn`, `shareToWhatsApp`, `shareToTelegram`) and all share modal button handlers
+  - Added error handling with `.catch()` for `Linking.openURL()` calls to prevent crashes if URL can't be opened
