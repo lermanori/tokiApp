@@ -33,6 +33,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
     },
     isHostedByUser: toki.isHostedByUser || false,
     joinStatus: toki.joinStatus || 'not_joined',
+    algorithmScore: typeof toki.algorithmScore === 'number' ? toki.algorithmScore : null,
   };
 };
 

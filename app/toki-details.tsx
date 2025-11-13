@@ -213,6 +213,8 @@ export default function TokiDetailsScreen() {
     title: (params.title as string) || urlParams.title,
     location: (params.location as string) || urlParams.location,
     time: (params.time as string) || urlParams.time,
+    fromEdit: (params.fromEdit as string) || urlParams.fromEdit,
+    fromCreate: (params.fromCreate as string) || urlParams.fromCreate,
   };
   
   const [toki, setToki] = useState<TokiDetails | null>(null);
@@ -657,8 +659,8 @@ export default function TokiDetailsScreen() {
         console.log('🔍 [SHARE] Using iOS native share sheet');
         await RNShare.share({
           message: `${shareMessage}\n\n${shareUrl}`,
-          url: shareUrl,
           title: toki.title
+          // Removed 'url' parameter to avoid duplication - message already contains the URL
         });
         return;
       }
@@ -680,8 +682,8 @@ export default function TokiDetailsScreen() {
         const shareUrl = generateTokiShareUrl(toki);
         await RNShare.share({
           message: shareUrl,
-          url: shareUrl,
           title: toki.title
+          // Removed 'url' parameter to avoid duplication - message already contains the URL
         });
       } catch (shareError) {
         console.error('Error with fallback share:', shareError);

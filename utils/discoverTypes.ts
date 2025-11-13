@@ -23,6 +23,7 @@ export interface TokiEvent {
   };
   isHostedByUser?: boolean;
   joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined';
+  algorithmScore?: number | null;
 }
 
 export interface DiscoverFilters {

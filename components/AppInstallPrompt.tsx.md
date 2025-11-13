@@ -8,12 +8,17 @@ Component that attempts to automatically open the Toki iOS app when users visit 
 - **solution**: Replaced `window.location.href = url` with hidden link click method, and added sessionStorage tracking to prevent multiple attempts
 - **problem**: App doesn't open when user clicks "Open in App" button - iOS blocks programmatic universal link triggers
 - **solution**: Removed auto-open attempt (iOS blocks programmatic triggers), show prompt immediately. Use `window.location.href` directly in user-initiated button click handler (iOS allows universal links when triggered by real user interaction)
+- **problem**: On Chrome iOS, clicking "Open in App" just refreshes the page instead of opening app
+- **solution**: Try custom scheme (`tokimap://`) first (more reliable in Chrome), then fallback to universal link via visible link click instead of `window.location.href` (prevents refresh loop)
 
 ### How Fixes Were Implemented
 - Created new component with iOS detection using user agent
 - **iOS Security Restriction**: iOS blocks programmatic universal link triggers for security reasons - they require real user interaction
 - **Auto-open removed**: No longer attempts to auto-open app programmatically (iOS blocks this). Instead, shows prompt immediately on iOS detection
-- **User-initiated action**: When user clicks "Open in App" button, uses `window.location.href` directly - iOS allows universal links when triggered by real user interaction
+- **User-initiated action**: When user clicks "Open in App" button:
+  - First tries custom scheme (`tokimap://`) - more reliable in Chrome on iOS
+  - Falls back to universal link via visible link click (prevents refresh loop in Chrome)
+  - Uses `target="_blank"` to help with universal link handling
 - Uses sessionStorage to track attempts (`toki-app-auto-open-attempted`) to prevent showing prompt multiple times
 - Shows custom modal prompt immediately on iOS (no auto-open attempt)
 - Includes session storage tracking to prevent showing prompt again in same session

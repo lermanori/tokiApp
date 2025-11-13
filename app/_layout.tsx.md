@@ -72,3 +72,18 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - Updated parameter extraction to prioritize `searchParams` (from `useLocalSearchParams()`) which works on both platforms, with `urlParams` as fallback for web
   - Applied cross-platform parameter extraction to all toki-details navigation paths (unauthenticated redirect, authenticated redirect, fast redirect, user data redirect)
   - Fixed variable naming conflicts by renaming `URLSearchParams` instances to `queryString` to avoid shadowing the `searchParams` variable from `useLocalSearchParams()`
+- problem: When app opened fresh from universal link (iOS), it showed "This screen doesn't exist" and lost query parameters. The `effectiveOtherParams` showed `"params": "[object Object]"` (stringified object) instead of actual params like `tokiId`. This happened because navigation was using query string form (`router.replace('/toki-details?tokiId=...')`) which Expo Router doesn't parse correctly. Additionally, the app was navigating immediately from the `notFoundArray` extraction (which had the path but no params) before the async `Linking.getInitialURL()` completed (which had the full URL with params).
+- solution:
+  - Implemented cross-platform initial URL capture: uses `sessionStorage` for web and `Linking.getInitialURL()` for native
+  - Added `isWaitingForInitialUrl` state to track async URL capture on native
+  - Added loading screen on native while waiting for initial URL
+  - Updated URL extraction logic to prioritize `initialUrl` state, handle custom schemes (`tokimap://`), and extract query params from multiple sources
+  - **Changed navigation to use object form**: Instead of `router.replace('/path?param=value')`, now uses `router.replace({ pathname: '/path', params: { param: 'value' } })` which ensures Expo Router properly receives and parses params
+  - **Added wait logic on native**: If extraction finds a path but no params, and `initialUrl` is still `null` on native, the effect returns early without navigating. It waits for `initialUrl` to be set, then re-runs and extracts from the full URL with params. This prevents premature navigation without params, even if `isWaitingForInitialUrl` has already been set to `false` (which happens immediately after the async `Linking.getInitialURL()` completes).
+  - Result: On native, the app shows a loading screen, waits for the full URL to be captured, extracts path and params, then navigates once with all data
+- problem: When app opens fresh from universal link on real device, authenticated users were being redirected to explore page (tabs) instead of staying on the deep link page (e.g., toki-details). This happened because the auth check was running after the initial URL handler navigated to the deep link page, and it didn't recognize that authenticated users should stay on valid deep link pages.
+- solution:
+  - Added a new condition in the auth check to detect when authenticated users are on valid deep link pages (`toki-details`, `user-profile`, `join`)
+  - If user is on a deep link page OR if initial URL handling is still in progress, the auth check returns early without redirecting
+  - Only redirects authenticated users to tabs if they're on an unrecognized page AND initial URL handling is complete
+  - This ensures that when app opens fresh from universal link, authenticated users stay on the target deep link page instead of being redirected to explore

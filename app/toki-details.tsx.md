@@ -87,3 +87,11 @@ This file implements the Toki details screen, displaying comprehensive informati
   - Updated `handleRegenerateInviteLink()` and `handleCreateInviteLink()` to reconstruct the URL when setting the active invite link
   - Imported `generateInviteLinkUrl` from `@/utils/tokiUrls` which uses `config.frontend.baseUrl` (from deployment-config)
   - This ensures invite links use the correct base URL based on the current deployment environment (local development, custom domain, or GitHub Pages)
+- **Problem**: iOS share sheet was showing the URL twice - once in the message and once as a separate attachment. This happened because both `message` (which already contained the URL) and `url` parameters were being passed to `RNShare.share()`.
+- **Solution**: 
+  - Removed the `url` parameter from `RNShare.share()` calls on iOS, keeping only the `message` parameter which already contains the URL
+  - Applied the fix to both the main share function and the fallback share function
+  - Added comments explaining why the `url` parameter was removed to prevent future duplication
+  - This ensures iOS share sheet shows the URL only once, embedded in the message text
+- **Problem**: TypeScript linter errors for `fromEdit` and `fromCreate` properties not existing on `effectiveParams` type
+- **Solution**: Added `fromEdit` and `fromCreate` properties to the `effectiveParams` object definition, reading from both `params` and `urlParams` with the same fallback pattern as other parameters

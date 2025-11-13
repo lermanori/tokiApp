@@ -19,6 +19,11 @@ This file contains the backend API routes for managing Tokis (events/activities)
 - **problem**: Count query didn't account for private tokis visibility rules
 - **solution**: Added visibility filtering logic that respects private tokis (only shows to host/participants/invitees) and defaults to public-only for unauthenticated users
 
+**2025-11-13 - Added weighted relevance scoring for discover feed**
+
+- **problem**: Event listing defaulted to created date ordering and lacked personalized relevance scores.
+- **solution**: Integrated the strategy-based recommendation engine to compute `algorithmScore` for each Toki and make relevance the default sort order.
+
 ### How Fixes Were Implemented
 
 1. **Count Query Filter Alignment**:
@@ -36,6 +41,13 @@ This file contains the backend API routes for managing Tokis (events/activities)
    - Ensured limit parameter (default 20, max 100) is properly parsed and used
    - Frontend sends limit: 50 which is now properly respected
    - Added proper parameter counting to avoid SQL injection and parameter mismatch issues
+4. **Relevance Scoring Integration**:
+   - Imported the algorithm strategy factory to score each Toki with personalized weights fetched from `algorithm_hyperparameters`.
+   - Defaulted `sortBy` to `relevance`, sorting results in-memory by the computed `algorithmScore` while preserving other sort options.
+   - Exposed `algorithmScore` in the API response for front-end consumption.
+5. **Nearby Endpoint Enhancements**:
+   - Reused the recommendation strategy for `/tokis/nearby` when a user token is present, attaching `algorithmScore` to each item.
+   - Fetched user coordinates (with fallbacks) to feed geo weighting, while keeping distance-based ordering intact for anonymous visitors.
 
 ### Technical Details
 

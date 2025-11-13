@@ -88,7 +88,16 @@ export function sortEvents(
         const bt = (b as any).title || '';
         return at.localeCompare(bt);
       }
-      case 'relevance':
+      case 'relevance': {
+        const scoreA = (a as any).algorithmScore ?? 0;
+        const scoreB = (b as any).algorithmScore ?? 0;
+        if (scoreA === scoreB) {
+          const aCreated = toMs((a as any).createdAt);
+          const bCreated = toMs((b as any).createdAt);
+          return bCreated - aCreated;
+        }
+        return scoreB - scoreA;
+      }
       default:
         return 0;
     }

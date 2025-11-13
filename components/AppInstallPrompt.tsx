@@ -67,21 +67,42 @@ export default function AppInstallPrompt({
 
     console.log('🚀 [APP PROMPT] User clicked "Open in App" with URL:', url);
     
-    // Use window.location.href directly - this works because it's a real user action
-    // iOS allows universal links when triggered by user interaction
+    // For Chrome on iOS, try custom scheme first (more reliable)
+    // Then fallback to universal link via visible link click
     try {
-      window.location.href = url;
+      // First, try custom scheme (tokimap://) - works better in Chrome on iOS
+      const customSchemeUrl = url.replace('https://', 'tokimap://').replace('http://', 'tokimap://');
+      console.log('🔄 [APP PROMPT] Trying custom scheme first:', customSchemeUrl);
+      
+      Linking.openURL(customSchemeUrl).catch((schemeError) => {
+        console.log('⚠️ [APP PROMPT] Custom scheme failed, trying universal link:', schemeError);
+        
+        // Fallback: Create a visible link and click it for universal link
+        // This works better in Chrome on iOS than window.location.href
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank'; // Open in new context
+        link.rel = 'noopener noreferrer';
+        
+        // Make it visible briefly (required for some browsers)
+        link.style.position = 'absolute';
+        link.style.left = '-9999px';
+        link.style.top = '0';
+        
+        document.body.appendChild(link);
+        
+        // Trigger click
+        link.click();
+        
+        // Clean up after a delay
+        setTimeout(() => {
+          if (link.parentNode) {
+            document.body.removeChild(link);
+          }
+        }, 100);
+      });
     } catch (error) {
       console.error('❌ [APP PROMPT] Error opening app:', error);
-      
-      // Fallback: Try using custom scheme (from app.config.js: scheme: "myapp")
-      const customSchemeUrl = url.replace('https://', 'myapp://').replace('http://', 'myapp://');
-      console.log('🔄 [APP PROMPT] Trying custom scheme:', customSchemeUrl);
-      
-      Linking.openURL(customSchemeUrl).catch((err) => {
-        console.error('❌ [APP PROMPT] Custom scheme also failed:', err);
-        // If both fail, user doesn't have app installed - they can dismiss
-      });
     }
   };
 

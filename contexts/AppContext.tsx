@@ -33,6 +33,7 @@ interface Toki {
   longitude?: number;
   scheduledTime?: string; // Add scheduled time for better display
   isSaved?: boolean;
+  algorithmScore?: number | null;
 }
 
 interface User {
@@ -995,6 +996,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // ADD MISSING COORDINATES
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+        algorithmScore: (apiToki as any).algorithmScore ?? null,
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1059,6 +1061,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // ADD MISSING COORDINATES
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+        algorithmScore: (apiToki as any).algorithmScore ?? null,
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });

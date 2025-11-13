@@ -201,9 +201,21 @@ export default function LoginScreen() {
               }
               
               console.log('🔍 Setting redirection:', { returnToPath, cleanParams });
-              actions.setRedirection(returnToPath, cleanParams);
-              console.log('🔍 Redirection set, redirecting to main app');
-              router.replace('/(tabs)');
+              
+              // For toki-details, navigate directly instead of going through tabs
+              if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+                let redirectUrl = returnToPath;
+                if (Object.keys(cleanParams).length > 0) {
+                  const queryString = new URLSearchParams(cleanParams);
+                  redirectUrl += `?${queryString.toString()}`;
+                }
+                console.log('✅ [LOGIN] Navigating directly to toki-details:', redirectUrl);
+                router.replace(redirectUrl as any);
+              } else {
+                actions.setRedirection(returnToPath, cleanParams);
+                console.log('🔍 Redirection set, redirecting to main app');
+                router.replace('/(tabs)');
+              }
             } else {
               router.replace('/(tabs)');
             }
@@ -240,9 +252,21 @@ export default function LoginScreen() {
               }
               
               console.log('🔍 Setting redirection (fallback):', { returnToPath, cleanParams });
-              actions.setRedirection(returnToPath, cleanParams);
-              console.log('🔍 Redirection set (fallback), redirecting to main app');
-              router.replace('/(tabs)');
+              
+              // For toki-details, navigate directly instead of going through tabs
+              if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+                let redirectUrl = returnToPath;
+                if (Object.keys(cleanParams).length > 0) {
+                  const queryString = new URLSearchParams(cleanParams);
+                  redirectUrl += `?${queryString.toString()}`;
+                }
+                console.log('✅ [LOGIN] Navigating directly to toki-details (fallback):', redirectUrl);
+                router.replace(redirectUrl as any);
+              } else {
+                actions.setRedirection(returnToPath, cleanParams);
+                console.log('🔍 Redirection set (fallback), redirecting to main app');
+                router.replace('/(tabs)');
+              }
             } else {
               router.replace('/(tabs)');
             }

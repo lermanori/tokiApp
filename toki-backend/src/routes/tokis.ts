@@ -15,6 +15,12 @@ import {
 } from '../utils/inviteLinkUtils';
 import { getCategoriesForAPI, CATEGORY_CONFIG } from '../config/categories';
 import logger from '../utils/logger';
+import {
+  AlgorithmContext,
+  AlgorithmFactory,
+  AlgorithmWeights,
+  EventData,
+} from '../algorithms';
 
 const router = Router();
 
@@ -379,7 +385,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       userLongitude,
       page = '1',
       limit = '20',
-      sortBy = 'created_at',
+      sortBy = 'relevance',
       sortOrder = 'desc'
     } = req.query;
 
@@ -558,7 +564,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       validSortFields.push('distance');
     }
     
-    if (validSortFields.includes(sortBy as string) && validSortOrders.includes(sortOrder as string)) {
+    if ((sortBy as string) === 'relevance') {
+      query += ` ORDER BY t.created_at DESC`;
+    } else if (validSortFields.includes(sortBy as string) && validSortOrders.includes(sortOrder as string)) {
       if (sortBy === 'distance' && userLat && userLng) {
         query += ` ORDER BY distance_km ${(sortOrder as string).toUpperCase()}`;
       } else {
@@ -582,6 +590,114 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     queryParams.push(offset);
 
     const result = await pool.query(query, queryParams);
+
+    let scoreMap = new Map<string, number>();
+
+    if (userId) {
+      // Fetch algorithm weights (hyperparameters)
+      const weightsResult = await pool.query(
+        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen
+         FROM algorithm_hyperparameters
+         ORDER BY updated_at DESC
+         LIMIT 1`
+      );
+
+      const weightsRow = weightsResult.rows[0];
+      const weights: AlgorithmWeights = weightsRow
+        ? {
+            w_hist: Number(weightsRow.w_hist ?? 0.2),
+            w_social: Number(weightsRow.w_social ?? 0.15),
+            w_pop: Number(weightsRow.w_pop ?? 0.2),
+            w_time: Number(weightsRow.w_time ?? 0.15),
+            w_geo: Number(weightsRow.w_geo ?? 0.2),
+            w_novel: Number(weightsRow.w_novel ?? 0.1),
+            w_pen: Number(weightsRow.w_pen ?? 0.05),
+          }
+        : {
+            w_hist: 0.2,
+            w_social: 0.15,
+            w_pop: 0.2,
+            w_time: 0.15,
+            w_geo: 0.2,
+            w_novel: 0.1,
+            w_pen: 0.05,
+          };
+
+      let userLatForAlgo: number | null = null;
+      let userLngForAlgo: number | null = null;
+      try {
+        const { rows } = await pool.query(
+          'SELECT latitude, longitude FROM users WHERE id = $1',
+          [userId]
+        );
+        userLatForAlgo = rows[0]?.latitude ?? null;
+        userLngForAlgo = rows[0]?.longitude ?? null;
+      } catch (coordError) {
+        logger.warn('⚠️ Failed to fetch user coordinates for nearby algorithm scoring', coordError);
+      }
+
+      const eventData: EventData[] = result.rows.map((row) => ({
+        id: row.id,
+        category: row.category,
+        scheduled_time: row.scheduled_time ? new Date(row.scheduled_time) : null,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        max_attendees: row.max_attendees,
+        current_attendees: Number(row.current_attendees ?? 0),
+        distance_km:
+          typeof row.distance_km === 'string'
+            ? parseFloat(row.distance_km)
+            : row.distance_km ?? undefined,
+        host_id: row.host_id,
+      }));
+
+      const algorithm = AlgorithmFactory.getAlgorithm('weighted-recommendation');
+      const fallbackUserLat =
+        userLatForAlgo ??
+        (typeof userLat === 'number'
+          ? userLat
+          : typeof userLat === 'string'
+            ? parseFloat(userLat)
+            : null);
+      const fallbackUserLng =
+        userLngForAlgo ??
+        (typeof userLng === 'number'
+          ? userLng
+          : typeof userLng === 'string'
+            ? parseFloat(userLng)
+            : null);
+
+      const algorithmContext: AlgorithmContext = {
+        userId,
+        userLat: fallbackUserLat,
+        userLng: fallbackUserLng,
+        weights,
+      };
+
+      try {
+        const scoredEvents = await algorithm.scoreEvents(eventData, algorithmContext);
+        scoreMap = new Map<string, number>(
+          scoredEvents.map((event) => [event.id, event.algorithm_score])
+        );
+      } catch (algoError) {
+        logger.warn('⚠️ Failed to score nearby tokis with recommendation algorithm', algoError);
+      }
+    }
+
+    if ((sortBy as string) === 'relevance' && scoreMap.size > 0) {
+      const direction = (sortOrder as string)?.toLowerCase() === 'asc' ? 1 : -1;
+      result.rows.sort((a, b) => {
+        const scoreA = scoreMap.get(a.id) ?? 0;
+        const scoreB = scoreMap.get(b.id) ?? 0;
+        if (scoreA === scoreB) {
+          // Fall back to created_at for stable ordering
+          const aCreated = new Date(a.created_at || 0).getTime();
+          const bCreated = new Date(b.created_at || 0).getTime();
+          return direction * (bCreated - aCreated);
+        }
+        return direction * (scoreB - scoreA);
+      });
+    }
 
     // Get total count for pagination
     let countQuery = `
@@ -677,7 +793,8 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       },
       tags: row.tags || [],
       joinStatus: row.join_status || 'not_joined',
-      is_saved: row.is_saved || false
+      is_saved: row.is_saved || false,
+      algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null,
     }));
 
     return res.status(200).json({
@@ -846,6 +963,83 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
 
     const result = await pool.query(query, queryParams);
 
+    const scoreMap = new Map<string, number>();
+
+    if (userId) {
+      const weightsResult = await pool.query(
+        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen
+         FROM algorithm_hyperparameters
+         ORDER BY updated_at DESC
+         LIMIT 1`
+      );
+
+      const weightsRow = weightsResult.rows[0];
+      const weights: AlgorithmWeights = weightsRow
+        ? {
+            w_hist: Number(weightsRow.w_hist ?? 0.2),
+            w_social: Number(weightsRow.w_social ?? 0.15),
+            w_pop: Number(weightsRow.w_pop ?? 0.2),
+            w_time: Number(weightsRow.w_time ?? 0.15),
+            w_geo: Number(weightsRow.w_geo ?? 0.2),
+            w_novel: Number(weightsRow.w_novel ?? 0.1),
+            w_pen: Number(weightsRow.w_pen ?? 0.05),
+          }
+        : {
+            w_hist: 0.2,
+            w_social: 0.15,
+            w_pop: 0.2,
+            w_time: 0.15,
+            w_geo: 0.2,
+            w_novel: 0.1,
+            w_pen: 0.05,
+          };
+
+      let userLatForAlgo: number | null = null;
+      let userLngForAlgo: number | null = null;
+      try {
+        const { rows } = await pool.query(
+          'SELECT latitude, longitude FROM users WHERE id = $1',
+          [userId]
+        );
+        userLatForAlgo = rows[0]?.latitude ?? null;
+        userLngForAlgo = rows[0]?.longitude ?? null;
+      } catch (coordError) {
+        logger.warn('⚠️ Failed to fetch user coordinates for nearby scoring', coordError);
+      }
+
+      const eventData: EventData[] = result.rows.map((row) => ({
+        id: row.id,
+        category: row.category,
+        scheduled_time: row.scheduled_time ? new Date(row.scheduled_time) : null,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        max_attendees: row.max_attendees,
+        current_attendees: Number(row.current_attendees ?? 0),
+        distance_km:
+          typeof row.distance_km === 'string'
+            ? parseFloat(row.distance_km)
+            : row.distance_km ?? undefined,
+        host_id: row.host_id,
+      }));
+
+      const algorithm = AlgorithmFactory.getAlgorithm('weighted-recommendation');
+      const algorithmContext: AlgorithmContext = {
+        userId,
+        userLat: userLatForAlgo ?? lat,
+        userLng: userLngForAlgo ?? lng,
+        weights,
+      };
+
+      try {
+        const scoredEvents = await algorithm.scoreEvents(eventData, algorithmContext);
+        scoredEvents.forEach((event) => {
+          scoreMap.set(event.id, event.algorithm_score);
+        });
+      } catch (algoError) {
+        logger.warn('⚠️ Failed to score nearby tokis', algoError);
+      }
+    }
+
     // Format response
     const tokis = result.rows.map(row => ({
       id: row.id,
@@ -874,7 +1068,8 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         avatar: row.host_avatar
       },
       tags: row.tags || [],
-      is_saved: row.is_saved || false
+      is_saved: row.is_saved || false,
+      algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null
     }));
 
     const totalPages = Math.ceil(totalCount / limitNum);

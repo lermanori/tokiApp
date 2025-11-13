@@ -30,8 +30,12 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
     });
 
     // Check if we've reached the target page
-    if (currentPath === redirection.returnTo || 
-        currentPath.includes(redirection.returnTo.replace('/', ''))) {
+    // For toki-details, check if we're actually on that page (not just if path includes the string)
+    const isOnTargetPage = redirection.returnTo?.startsWith('/toki-details') 
+      ? (currentPath === '/toki-details' || segments[0] === 'toki-details')
+      : (currentPath === redirection.returnTo || currentPath.includes(redirection.returnTo.replace('/', '')));
+    
+    if (isOnTargetPage) {
       console.log('✅ [FLOW DEBUG] [REDIRECTION GUARD] Reached target page, clearing redirection');
       actions.clearRedirection();
       return;
@@ -40,7 +44,9 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
     // If we're in the main app but not on the target page, redirect immediately
     // Only redirect if user is authenticated (check by user ID in state)
     const hasUserData = !!state.currentUser?.id;
-    if (segments[0] === '(tabs)' && redirection.returnTo && hasUserData) {
+    const isInTabs = segments[0] === '(tabs)' || segments.length === 0; // Also check if segments is empty (initial load)
+    
+    if (isInTabs && redirection.returnTo && hasUserData) {
       console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User is in tabs and has user data, redirecting to target page:', redirection.returnTo);
       console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] returnParams:', redirection.returnParams);
       console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] User ID:', state.currentUser?.id);
@@ -51,6 +57,7 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
         let redirectUrl = redirection.returnTo;
         
         // Special handling for join route: construct /join/[code] path
+        // Handle both 'join' format and '/join/[code]' format
         if (redirection.returnTo === 'join' && redirection.returnParams?.code) {
           redirectUrl = `/join/${redirection.returnParams.code}`;
           // Remove code from params since it's in the path
@@ -60,6 +67,14 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
             redirectUrl += `?${searchParams.toString()}`;
           }
           console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Constructed join URL:', redirectUrl);
+        } else if (redirection.returnTo && redirection.returnTo.startsWith('/join/')) {
+          // Handle full join path like /join/ABC123
+          redirectUrl = redirection.returnTo;
+          if (redirection.returnParams && Object.keys(redirection.returnParams).length > 0) {
+            const searchParams = new URLSearchParams(redirection.returnParams);
+            redirectUrl += `?${searchParams.toString()}`;
+          }
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Using full join path:', redirectUrl);
         } else if (redirection.returnParams && Object.keys(redirection.returnParams).length > 0) {
           const searchParams = new URLSearchParams(redirection.returnParams);
           redirectUrl += `?${searchParams.toString()}`;
@@ -68,11 +83,15 @@ export default function RedirectionGuard({ children }: RedirectionGuardProps) {
         console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Final redirect URL:', redirectUrl);
         router.replace(redirectUrl as any);
       }, 100);
+    } else if (redirection.returnTo && !hasUserData) {
+      // User data not ready yet, wait a bit and retry
+      console.log('⏳ [FLOW DEBUG] [REDIRECTION GUARD] User data not ready yet, will retry...');
     } else {
       console.log('🔄 [FLOW DEBUG] [REDIRECTION GUARD] Not redirecting - conditions not met:', {
-        isInTabs: segments[0] === '(tabs)',
+        isInTabs,
         hasReturnTo: !!redirection.returnTo,
-        hasCurrentUser: !!state.currentUser?.id
+        hasCurrentUser: !!state.currentUser?.id,
+        segments: segments.join('/')
       });
     }
   }, [state.redirection, segments, actions, router, state.currentUser?.id]);
