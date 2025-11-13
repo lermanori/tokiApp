@@ -6,6 +6,7 @@ import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import { getInitials } from '@/utils/tokiUtils';
 import { Link, Users, MapPin, Clock } from 'lucide-react-native';
+import AppInstallPrompt from '@/components/AppInstallPrompt';
 
 export default function JoinByCode() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -325,9 +326,24 @@ export default function JoinByCode() {
     id: tokiDetails?.id ?? toki?.id,
   };
 
+  // Get current URL for app install prompt
+  const getCurrentUrl = () => {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return window.location.href;
+    }
+    // Fallback: construct URL from join code if available
+    if (code) {
+      const baseUrl = 'https://toki-app.com';
+      return `${baseUrl}/join/${code}`;
+    }
+    return undefined;
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <>
+      <AppInstallPrompt currentUrl={getCurrentUrl()} />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.push('/(tabs)')}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
@@ -417,6 +433,7 @@ export default function JoinByCode() {
         </View>
       </View>
     </SafeAreaView>
+    </>
   );
 }
 

@@ -17,6 +17,7 @@ import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOption
 import { formatDistanceDisplay, calculateDistance } from '@/utils/distance';
 import { getInitials, getActivityEmoji, getActivityLabel, formatLocationDisplay, formatTimeDisplay, canUserInvite, canUserManage, getJoinButtonText, getJoinButtonStyle } from '@/utils/tokiUtils';
 import MetaTags from '@/components/MetaTags';
+import AppInstallPrompt from '@/components/AppInstallPrompt';
 import TokiHeader from '@/components/TokiHeader';
 import { Share as RNShare } from 'react-native';
 
@@ -1362,6 +1363,19 @@ export default function TokiDetailsScreen() {
     );
   }
 
+  // Get current URL for app install prompt
+  const getCurrentUrl = () => {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return window.location.href;
+    }
+    // Fallback: construct URL from toki data if available
+    if (toki?.id) {
+      const baseUrl = 'https://toki-app.com';
+      return `${baseUrl}/toki-details?tokiId=${toki.id}`;
+    }
+    return undefined;
+  };
+
   return (
     <>
       <MetaTags 
@@ -1378,6 +1392,7 @@ export default function TokiDetailsScreen() {
           currentAttendees: toki.attendees,
         } : undefined}
       />
+      <AppInstallPrompt currentUrl={getCurrentUrl()} />
       <SafeAreaView style={styles.container}>
         <ScrollView style={{...styles.content,width: '100%', maxWidth: 1000, alignSelf: 'center'}} showsVerticalScrollIndicator={false}>
         <TokiHeader

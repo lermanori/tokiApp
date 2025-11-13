@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import TokiCard from '@/components/TokiCard';
+import AppInstallPrompt from '@/components/AppInstallPrompt';
 
 interface ConnectionStatus {
   status: 'none' | 'pending' | 'accepted' | 'declined';
@@ -343,12 +344,27 @@ export default function UserProfileScreen() {
     );
   }
 
+  // Get current URL for app install prompt
+  const getCurrentUrl = () => {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      return window.location.href;
+    }
+    // Fallback: construct URL from userId if available
+    if (userId) {
+      const baseUrl = 'https://toki-app.com';
+      return `${baseUrl}/user-profile/${userId}`;
+    }
+    return undefined;
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
-        style={styles.header}
-      >
+    <>
+      <AppInstallPrompt currentUrl={getCurrentUrl()} />
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
+          style={styles.header}
+        >
         <View style={styles.headerContent}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <ArrowLeft size={24} color="#1C1C1C" />
@@ -511,6 +527,7 @@ export default function UserProfileScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 

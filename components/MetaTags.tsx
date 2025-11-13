@@ -2,6 +2,9 @@ import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { TokiMetaData, generateTokiMetaTags } from '@/utils/metaTags';
 
+// App Store ID - Update this with your actual App Store ID from App Store Connect
+const APP_STORE_ID = 'YOUR_APP_STORE_ID'; // TODO: Replace with actual App Store ID
+
 interface MetaTagsProps {
   tokiData?: TokiMetaData;
   title?: string;
@@ -83,6 +86,33 @@ export default function MetaTags({
     updateMetaTag('twitter:description', metaTags.description);
     updateMetaTag('twitter:image', metaTags.image);
     updateMetaTag('twitter:image:alt', metaTags.title);
+
+    // Add Smart App Banner for iOS (more prominent than universal link banner)
+    const updateSmartAppBanner = () => {
+      // Only add if App Store ID is configured
+      if (APP_STORE_ID === 'YOUR_APP_STORE_ID') {
+        console.log('⚠️ [META TAGS] App Store ID not configured, skipping Smart App Banner');
+        return;
+      }
+
+      let smartBanner = document.querySelector('meta[name="apple-itunes-app"]') as HTMLMetaElement;
+      if (!smartBanner) {
+        smartBanner = document.createElement('meta');
+        smartBanner.setAttribute('name', 'apple-itunes-app');
+        document.head.appendChild(smartBanner);
+      }
+      
+      // Get current URL for app-argument
+      const currentUrl = typeof window !== 'undefined' && window.location?.href 
+        ? window.location.href 
+        : metaTags.url;
+      
+      // Format: app-id=APP_STORE_ID, app-argument=UNIVERSAL_LINK_URL
+      smartBanner.setAttribute('content', `app-id=${APP_STORE_ID}, app-argument=${currentUrl}`);
+      console.log('✅ [META TAGS] Smart App Banner added:', currentUrl);
+    };
+
+    updateSmartAppBanner();
 
     console.log('✅ [META TAGS] Updated meta tags:', metaTags.title);
   }, [tokiData, title, description, image, url, type]);

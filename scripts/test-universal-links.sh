@@ -95,10 +95,10 @@ echo "$JSON_CONTENT" | jq '.' | sed 's/^/   /'
 echo ""
 echo "6️⃣  Checking path patterns..."
 EXPECTED_PATHS=("/toki-details*" "/join/*" "/user-profile/*")
-CONFIGURED_PATHS=$(echo "$JSON_CONTENT" | jq -r '.applinks.details[0].paths[]')
 
 for expected in "${EXPECTED_PATHS[@]}"; do
-    if echo "$CONFIGURED_PATHS" | grep -q "^${expected}$"; then
+    # Use jq to check if the path exists in the paths array
+    if echo "$JSON_CONTENT" | jq -e --arg path "$expected" '.applinks.details[0].paths[] | select(. == $path)' > /dev/null 2>&1; then
         echo "   ✅ Path configured: ${expected}"
     else
         echo "   ⚠️  Path not found: ${expected}"

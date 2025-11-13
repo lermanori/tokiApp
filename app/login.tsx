@@ -179,6 +179,27 @@ export default function LoginScreen() {
                   .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
               );
               const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+              
+              // Check if fast redirect has already happened (we're already on the target page)
+              const getCurrentPath = () => {
+                if (typeof window !== 'undefined' && window.location?.pathname) {
+                  return window.location.pathname;
+                }
+                return '';
+              };
+              const currentPath = getCurrentPath();
+              const isAlreadyOnTarget = returnToPath && (
+                currentPath === returnToPath || 
+                currentPath.includes(returnToPath.replace('/', ''))
+              );
+              
+              if (isAlreadyOnTarget) {
+                console.log('✅ [LOGIN] Already on target page, skipping redirect to tabs');
+                // Just set redirection state so RedirectionGuard can clear it
+                actions.setRedirection(returnToPath, cleanParams);
+                return;
+              }
+              
               console.log('🔍 Setting redirection:', { returnToPath, cleanParams });
               actions.setRedirection(returnToPath, cleanParams);
               console.log('🔍 Redirection set, redirecting to main app');
@@ -197,6 +218,27 @@ export default function LoginScreen() {
                   .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
               );
               const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+              
+              // Check if fast redirect has already happened (we're already on the target page)
+              const getCurrentPath = () => {
+                if (typeof window !== 'undefined' && window.location?.pathname) {
+                  return window.location.pathname;
+                }
+                return '';
+              };
+              const currentPath = getCurrentPath();
+              const isAlreadyOnTarget = returnToPath && (
+                currentPath === returnToPath || 
+                currentPath.includes(returnToPath.replace('/', ''))
+              );
+              
+              if (isAlreadyOnTarget) {
+                console.log('✅ [LOGIN] Already on target page (fallback), skipping redirect to tabs');
+                // Just set redirection state so RedirectionGuard can clear it
+                actions.setRedirection(returnToPath, cleanParams);
+                return;
+              }
+              
               console.log('🔍 Setting redirection (fallback):', { returnToPath, cleanParams });
               actions.setRedirection(returnToPath, cleanParams);
               console.log('🔍 Redirection set (fallback), redirecting to main app');
