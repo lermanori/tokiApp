@@ -169,8 +169,7 @@ export default function ProfileScreen() {
 
     setIsRefreshing(true);
     try {
-      // Refresh Tokis to update user stats
-      await actions.loadTokis();
+      // User stats are updated via loadCurrentUser() - no need to load all tokis
       // Load connections to update connection count
       await actions.getConnections();
       // Load blocked users

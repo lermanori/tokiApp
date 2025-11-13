@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getBackendUrl } from '../services/config';
 
-export default function SetPassword() {
+export default function ResetPassword() {
   const router = useRouter();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const [password, setPassword] = useState('');
@@ -46,7 +46,7 @@ export default function SetPassword() {
             message: data?.message || 'The reset token has expired or is invalid. Please request a new one.'
           });
         } else {
-          throw new Error(data?.message || 'Failed to set password');
+          throw new Error(data?.message || 'Failed to reset password');
         }
         return;
       }
@@ -84,7 +84,6 @@ export default function SetPassword() {
     }
   };
 
-  // Show error state with email input and resend option if token expired
   if (errorState && errorState.type === 'Reset token expired') {
     return (
       <LinearGradient
@@ -107,7 +106,7 @@ export default function SetPassword() {
                   {resendSuccess ? (
                     <View style={styles.successContainer}>
                       <Text style={styles.successText}>
-                        A new password link has been sent to your email. Please check your inbox.
+                        A new password reset link has been sent to your email. Please check your inbox.
                       </Text>
                       <TouchableOpacity
                         style={styles.button}
@@ -163,7 +162,7 @@ export default function SetPassword() {
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.content}>
               <View style={styles.card}>
-                <Text style={styles.title}>Set your password</Text>
+                <Text style={styles.title}>Reset your password</Text>
                 <Text style={styles.subtitle}>
                   Choose a strong password with at least 6 characters.
                 </Text>
@@ -199,7 +198,7 @@ export default function SetPassword() {
                     {loading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.buttonText}>Set Password</Text>
+                      <Text style={styles.buttonText}>Reset Password</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -322,3 +321,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+

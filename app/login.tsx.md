@@ -34,3 +34,9 @@ This file contains the login and registration screen with enhanced autofill func
 
 - **problem**: After login, unlogged users sharing a toki-details link were redirected to explore page instead of staying on the toki-details page. This was caused by a race condition where the fast redirect in `_layout.tsx` would redirect to `/toki-details`, but then `login.tsx` would redirect to `/(tabs)`, causing the toki-details page to unmount.
 - **solution**: Added a check in `login.tsx` to detect if the fast redirect has already happened (by checking if we're already on the target page). If we're already on the target page, skip the redirect to `/(tabs)` and just set the redirection state so RedirectionGuard can clear it. This prevents the race condition and allows users to stay on the toki-details page after login.
+
+- **problem**: No way for users to recover forgotten passwords from the login screen
+- **solution**: Added "Forgot Password?" link below password field that navigates to forgot-password page, styled with purple (#8B5CF6) to match admin panel design
+
+- **problem**: Login screen was calling `/api/tokis` endpoint after authentication, which is not the centralized route and creates unnecessary API calls.
+- **solution**: Removed `apiService.getTokis()` call from login flow. User stats come from `getCurrentUser()`, and tokis will be loaded by the discover screen using the centralized `/api/tokis/nearby` route via `loadNearbyTokis()` when the user navigates there. This eliminates unnecessary `/api/tokis` calls and ensures all tokis loading uses the centralized route.

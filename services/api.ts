@@ -211,6 +211,12 @@ class ApiService {
   private refreshToken: string | null = null;
   private authCache: { isValid: boolean; timestamp: number } | null = null;
   private readonly AUTH_CACHE_DURATION = 30000; // 30 seconds
+  private userCache: { 
+    data: { user: User; socialLinks: any; stats: any; verified: boolean }; 
+    timestamp: number 
+  } | null = null;
+  private readonly USER_CACHE_DURATION = 60000; // 60 seconds - user data changes less frequently
+  private pendingGetCurrentUser: Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> | null = null;
 
   constructor() {
     // Initialize tokens synchronously - they will be loaded when needed
@@ -249,6 +255,7 @@ class ApiService {
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
       this.authCache = null; // Clear auth cache when tokens change
+      this.userCache = null; // Clear user cache when tokens change (new login = new user data)
       await AsyncStorage.setItem('auth_tokens', JSON.stringify({ accessToken, refreshToken }));
       console.log('💾 Tokens saved successfully');
     } catch (error) {
@@ -262,6 +269,7 @@ class ApiService {
       this.accessToken = null;
       this.refreshToken = null;
       this.authCache = null; // Clear auth cache
+      this.userCache = null; // Clear user cache
       await AsyncStorage.removeItem('auth_tokens');
       
       // Verify tokens are cleared
@@ -270,6 +278,11 @@ class ApiService {
     } catch (error) {
       console.error('Error clearing tokens:', error);
     }
+  }
+
+  private clearUserCache() {
+    this.userCache = null;
+    this.pendingGetCurrentUser = null; // Also clear pending request
   }
 
   private getHeaders(): Record<string, string> {
@@ -409,6 +422,14 @@ class ApiService {
     return response;
   }
 
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.makeRequest<{ success: boolean; message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    return response;
+  }
+
   async logout(): Promise<void> {
     if (this.accessToken) {
       try {
@@ -420,26 +441,58 @@ class ApiService {
     await this.clearTokens();
   }
 
-  async getCurrentUser(): Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: {
-        user: User & {
-          stats: any;
-          socialLinks: any;
+  async getCurrentUser(forceRefresh: boolean = false): Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> {
+    // Check cache first unless force refresh is requested
+    if (!forceRefresh && this.userCache && Date.now() - this.userCache.timestamp < this.USER_CACHE_DURATION) {
+      console.log('👤 [API] Using cached user data');
+      return this.userCache.data;
+    }
+
+    // If there's already a pending request, return that promise instead of making a new call
+    if (this.pendingGetCurrentUser) {
+      console.log('👤 [API] Reusing pending getCurrentUser request');
+      return this.pendingGetCurrentUser;
+    }
+
+    // Create the request promise
+    const requestPromise = (async () => {
+      try {
+        const response = await this.makeRequest<{ 
+          success: boolean; 
+          data: {
+            user: User & {
+              stats: any;
+              socialLinks: any;
+            };
+          }
+        }>('/auth/me');
+        
+        // Extract stats and socialLinks from the user object
+        const { stats, socialLinks, ...user } = response.data.user;
+        
+        const userData = {
+          user,
+          stats,
+          socialLinks,
+          verified: user.verified
         };
+
+        // Cache the user data
+        this.userCache = {
+          data: userData,
+          timestamp: Date.now()
+        };
+
+        return userData;
+      } finally {
+        // Clear the pending request when done
+        this.pendingGetCurrentUser = null;
       }
-    }>('/auth/me');
-    
-    // Extract stats and socialLinks from the user object
-    const { stats, socialLinks, ...user } = response.data.user;
-    
-    return {
-      user,
-      stats,
-      socialLinks,
-      verified: user.verified
-    };
+    })();
+
+    // Store the pending request
+    this.pendingGetCurrentUser = requestPromise;
+    return requestPromise;
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
@@ -447,20 +500,15 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    // Clear user cache after update to force refresh on next getCurrentUser call
+    this.clearUserCache();
     return response.data.user;
   }
 
   async getUserStats(): Promise<UserStats> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: {
-        user: User;
-        socialLinks: any;
-        stats: UserStats;
-        verified: boolean;
-      }
-    }>('/auth/me');
-    return response.data.stats;
+    // Reuse getCurrentUser which has caching, instead of making a separate call
+    const userData = await this.getCurrentUser();
+    return userData.stats;
   }
 
   // Toki Methods
@@ -1226,14 +1274,23 @@ class ApiService {
       return this.authCache.isValid;
     }
 
+    // If we have fresh user cache, we're authenticated
+    if (this.userCache && Date.now() - this.userCache.timestamp < this.USER_CACHE_DURATION) {
+      console.log('🔐 [API] Using user cache to determine authentication status.');
+      this.authCache = { isValid: true, timestamp: Date.now() };
+      return true;
+    }
+
     // Try to validate the token by making a test request with retry logic
+    // We'll use getCurrentUser which has caching, so if auth succeeds we also cache user data
     const maxRetries = 2;
     let lastError: any;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔐 [API] Authentication check attempt ${attempt}/${maxRetries}`);
-        await this.makeRequest<{ success: boolean }>('/auth/me');
+        // Use getCurrentUser instead of a bare /auth/me call - this way we cache user data too
+        await this.getCurrentUser(true); // Force refresh to validate token
         console.log('✅ [API] Authentication check successful');
         this.authCache = { isValid: true, timestamp: Date.now() };
         return true;

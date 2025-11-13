@@ -827,7 +827,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       latitude,
       longitude,
       radius = '500', // Default 500km radius
-      limit = '20',
+      limit = '50',
       page = '1',
       category,
       timeSlot

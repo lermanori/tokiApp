@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { sendEmail, generateVerificationEmail, generateWelcomeEmail, generatePasswordResetEmail } from '../utils/email';
 import crypto from 'crypto';
 import logger from '../utils/logger';
+import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordReset';
 
 const router = Router();
 
@@ -567,7 +568,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
   }
 });
 
-// Request password reset
+// Request password reset or welcome link
 router.post('/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -579,37 +580,98 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       });
     }
     const result = await pool.query(
-      'SELECT id, email, name FROM users WHERE email = $1',
+      'SELECT id, email, name, password_hash FROM users WHERE email = $1',
       [email]
     );
     if (result.rows.length === 0) {
+      // Don't reveal if email exists for security
       return res.json({
         success: true,
-        message: 'If an account with that email exists, a password reset link has been sent'
+        message: 'If an account with that email exists, a password link has been sent'
       });
     }
     const user = result.rows[0];
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await pool.query(
-      'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3',
-      [resetToken, tokenExpiry, user.id]
-    );
-    const emailOptions = generatePasswordResetEmail(user.name, resetToken);
-    emailOptions.to = user.email;
-    const emailSent = await sendEmail(emailOptions);
-    if (emailSent) {
-      return res.json({
-        success: true,
-        message: 'If an account with that email exists, a password reset link has been sent'
-      });
-    } else {
+    
+    // Determine purpose: if no password_hash, it's a welcome link; otherwise reset
+    const purpose: PasswordLinkPurpose = user.password_hash ? 'reset' : 'welcome';
+    
+    // Generate new token and link
+    const { token: newToken, link, expiryHours } = await issuePasswordResetToken(user.id, purpose);
+    
+    // Send email via Resend
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    if (!RESEND_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to send reset email',
+        error: 'Email service not configured',
+        message: 'Email service is not available. Please contact support.'
+      });
+    }
+
+    let subject: string;
+    let text: string;
+    let html: string;
+
+    if (purpose === 'welcome') {
+      // For welcome links, create email with set-password link
+      subject = 'Welcome to Toki – Set your password';
+      text = `Hey ${user.name || ''},\n\nWelcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`;
+      html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Welcome to Toki! 🎉</h2>
+          <p>Hey ${user.name || ''},</p>
+          <p>Welcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${link}" 
+               style="background-color: #111827; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Set Password
+            </a>
+          </div>
+          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${link}</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 12px;">
+            This email was sent by Toki. If you have any questions, please contact our support team.
+          </p>
+        </div>
+      `;
+    } else {
+      // For reset links, use the existing password reset email template
+      const resetEmail = generatePasswordResetEmail(user.name, newToken);
+      subject = resetEmail.subject;
+      text = resetEmail.text || resetEmail.html.replace(/<[^>]*>/g, '');
+      html = resetEmail.html;
+    }
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "onboarding@toki-app.com",
+        to: user.email,
+        subject,
+        text,
+        html,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorText = await resendResponse.text().catch(() => '');
+      logger.error('Resend email failed (forgot-password):', errorText);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send email',
         message: 'Please try again later'
       });
     }
+
+    return res.json({
+      success: true,
+      message: 'If an account with that email exists, a password link has been sent'
+    });
   } catch (error) {
     logger.error('Forgot password error:', error);
     return res.status(500).json({
@@ -672,6 +734,124 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to reset password',
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Resend password reset/set link for expired token
+router.post('/resend-password-link', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token required',
+        message: 'Please provide the reset token'
+      });
+    }
+
+    // Look up user by token (even if expired, token still exists)
+    const result = await pool.query(
+      'SELECT id, email, name, password_hash FROM users WHERE reset_password_token = $1',
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid token',
+        message: 'The reset token is invalid'
+      });
+    }
+
+    const user = result.rows[0];
+    
+    // Determine purpose: if no password_hash, it's a welcome link; otherwise reset
+    const purpose: PasswordLinkPurpose = user.password_hash ? 'reset' : 'welcome';
+    
+    // Generate new token and link
+    const { token: newToken, link, expiryHours } = await issuePasswordResetToken(user.id, purpose);
+    
+    // Send email via Resend
+    const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    if (!RESEND_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'Email service not configured',
+        message: 'Email service is not available. Please contact support.'
+      });
+    }
+
+    let subject: string;
+    let text: string;
+    let html: string;
+
+    if (purpose === 'welcome') {
+      // For welcome links, create email with set-password link
+      subject = 'Welcome to Toki – Set your password';
+      text = `Hey ${user.name || ''},\n\nWelcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):\n\n${link}\n\n—\nToki`;
+      html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Welcome to Toki! 🎉</h2>
+          <p>Hey ${user.name || ''},</p>
+          <p>Welcome to Toki! Set your password using the link below (expires in ${expiryHours} hours):</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${link}" 
+               style="background-color: #111827; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Set Password
+            </a>
+          </div>
+          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${link}</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 12px;">
+            This email was sent by Toki. If you have any questions, please contact our support team.
+          </p>
+        </div>
+      `;
+    } else {
+      // For reset links, use the existing password reset email template
+      const resetEmail = generatePasswordResetEmail(user.name, newToken);
+      subject = resetEmail.subject;
+      text = resetEmail.text || resetEmail.html.replace(/<[^>]*>/g, '');
+      html = resetEmail.html;
+    }
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "onboarding@toki-app.com",
+        to: user.email,
+        subject,
+        text,
+        html,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const errorText = await resendResponse.text().catch(() => '');
+      logger.error('Resend email failed (resend-password-link):', errorText);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send email',
+        message: 'Please try again later'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'A new password link has been sent to your email'
+    });
+  } catch (error) {
+    logger.error('Resend password link error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to process request',
       message: 'Internal server error'
     });
   }

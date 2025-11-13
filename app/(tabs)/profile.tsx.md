@@ -18,3 +18,5 @@ Profile screen displaying user information, stats, and navigation to various sec
 - Removed `loadSavedTokisCount()` call from useFocusEffect.
 - Fixed `refreshUserData()` function: replaced `await loadUnreadNotificationsCount()` with `await actions.loadNotifications()`.
 - Fixed `refreshUserData()` function: replaced `await loadSavedTokisCount()` with `await actions.getSavedTokis()`.
+- problem: `refreshUserData()` was calling `loadTokis()` which makes unnecessary calls to `/api/tokis` endpoint instead of using the centralized `/api/tokis/nearby` route.
+- solution: Removed `loadTokis()` call from `refreshUserData()` since user stats are already updated via `loadCurrentUser()` and don't require loading all tokis.

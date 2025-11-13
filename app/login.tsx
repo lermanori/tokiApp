@@ -125,11 +125,8 @@ export default function LoginScreen() {
           setLoadingData(true); // Show data loading state
           
           try {
-            // Load user data in parallel for speed
-            const [userData, tokisData] = await Promise.all([
-              apiService.getCurrentUser(),
-              apiService.getTokis()
-            ]);
+            // Load user data - tokis will be loaded by discover screen using centralized /nearby route
+            const userData = await apiService.getCurrentUser();
             
             // Update user with real stats
             const updatedUser = {
@@ -141,35 +138,10 @@ export default function LoginScreen() {
             
             dispatch({ type: 'UPDATE_CURRENT_USER', payload: updatedUser });
             
-            // Transform API Tokis to frontend format
-            const transformedTokis = tokisData.tokis.map((apiToki: any) => ({
-              id: apiToki.id,
-              title: apiToki.title,
-              description: apiToki.description,
-              location: apiToki.location,
-              time: apiToki.timeSlot || 'TBD',
-              attendees: apiToki.currentAttendees || 0,
-              maxAttendees: apiToki.maxAttendees || 10,
-              tags: apiToki.tags || [apiToki.category],
-              host: {
-                id: apiToki.host.id,
-                name: apiToki.host.name,
-                avatar: apiToki.host.avatar || '',
-              },
-              image: apiToki.imageUrl || '',
-              distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
-              isHostedByUser: apiToki.host.id === updatedUser.id,
-              joinStatus: apiToki.joinStatus || 'not_joined',
-              visibility: apiToki.visibility,
-              category: apiToki.category,
-              createdAt: apiToki.createdAt,
-              latitude: apiToki.latitude,
-              longitude: apiToki.longitude,
-            }));
+            // Tokis will be loaded by discover screen using loadNearbyTokis() when user navigates there
+            // This avoids unnecessary /api/tokis call and uses centralized /api/tokis/nearby route instead
             
-            dispatch({ type: 'SET_TOKIS', payload: transformedTokis });
-            
-            console.log('✅ Data loaded successfully, redirecting...');
+            console.log('✅ User data loaded successfully, redirecting...');
             // Now redirect with all data loaded
             if (returnTo) {
               // Store redirection info for after login
@@ -361,6 +333,13 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
+                <TouchableOpacity
+                  style={styles.forgotPasswordLink}
+                  onPress={() => router.push('/forgot-password')}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
                 {errorMessage ? (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{errorMessage}</Text>
@@ -531,6 +510,17 @@ const styles = StyleSheet.create({
   },
   passwordToggleText: {
     fontSize: 18,
+  },
+  forgotPasswordLink: {
+    alignSelf: 'flex-end',
+    marginBottom: 8,
+    marginTop: -8,
+  },
+  forgotPasswordText: {
+    color: '#8B5CF6',
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    textDecorationLine: 'underline',
   },
   button: {
     backgroundColor: '#4CAF50',

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
@@ -639,6 +639,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [isFetchingTokis, setIsFetchingTokis] = useState(false);
   const [lastTokisFetchMs, setLastTokisFetchMs] = useState(0);
+  // Ref to track in-flight nearby requests with their parameters to prevent duplicates
+  const nearbyRequestRef = useRef<{ params: string; promise: Promise<any> } | null>(null);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [lastConnectionCheckMs, setLastConnectionCheckMs] = useState(0);
   const [isCheckingAuthStatus, setIsCheckingAuthStatus] = useState(false);
@@ -647,6 +649,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isLoadingSavedTokis, setIsLoadingSavedTokis] = useState(false);
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [isLoadingPendingConnections, setIsLoadingPendingConnections] = useState(false);
+  const pendingLoadCurrentUserRef = useRef<Promise<void> | null>(null);
 
   // Load data from AsyncStorage on mount
   useEffect(() => {
@@ -1110,6 +1113,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+
+      // Update total count from pagination (same logic as loadNearbyTokis)
+      const pagination = response.pagination || (response as any).data?.pagination;
+      const total = pagination?.total;
+      
+      if (total !== undefined && total !== null && total >= 0) {
+        dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
+      }
     } catch (error) {
       console.error('❌ Failed to load Tokis:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load activities' });
@@ -1194,16 +1205,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, 
     append: boolean = false
   ): Promise<{ pagination: any }> => {
-    try {
-      if (isFetchingTokis && !append) {
-        console.log('⏳ Skipping loadNearbyTokis: already in-flight');
-        return { pagination: { hasMore: false } };
-      }
+    // Create a unique key for this request to detect duplicates
+    const requestKey = JSON.stringify({
+      lat: params.latitude,
+      lng: params.longitude,
+      radius: params.radius || 10,
+      page: params.page || 1,
+      category: params.category,
+      timeSlot: params.timeSlot,
+      append
+    });
 
-      if (!append) {
-        setIsFetchingTokis(true);
-        dispatch({ type: 'SET_LOADING', payload: true });
-      }
+    // Check if an identical request is already in-flight
+    if (nearbyRequestRef.current && nearbyRequestRef.current.params === requestKey && !append) {
+      console.log('⏳ [APP CONTEXT] Duplicate loadNearbyTokis request detected, returning existing promise');
+      return nearbyRequestRef.current.promise;
+    }
+
+    // Create the request promise
+    const requestPromise = (async () => {
+      try {
+        if (isFetchingTokis && !append) {
+          console.log('⏳ Skipping loadNearbyTokis: already in-flight');
+          return { pagination: { hasMore: false } };
+        }
+
+        if (!append) {
+          setIsFetchingTokis(true);
+          dispatch({ type: 'SET_LOADING', payload: true });
+        }
 
       const response = await apiService.getNearbyTokis({
         latitude: params.latitude,
@@ -1215,11 +1245,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeSlot: params.timeSlot
       });
 
+      // Safety check: ensure response has tokis array (handle both response.tokis and response.data.tokis)
+      const tokisArray = response?.tokis || (response as any)?.data?.tokis;
+      if (!tokisArray || !Array.isArray(tokisArray)) {
+        console.warn('⚠️ [APP CONTEXT] Invalid response from getNearbyTokis - no tokis array:', response);
+        // Don't clear existing tokis if response is invalid
+        return { pagination: { hasMore: false } };
+      }
+
       // Get current user ID from API service
       const currentUserId = apiService.getAccessToken() ? 
         (await apiService.getCurrentUser()).user.id : null;
 
-      const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
+      const apiTokis: Toki[] = tokisArray.map((apiToki: ApiToki) => ({
         id: apiToki.id,
         title: apiToki.title,
         description: apiToki.description,
@@ -1252,7 +1290,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newTokis = apiTokis.filter(t => !existingIds.has(t.id));
         dispatch({ type: 'SET_TOKIS', payload: [...state.tokis, ...newTokis] });
       } else {
-        dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+        // Only set tokis if we got actual data - don't overwrite with empty array
+        // This prevents clearing tokis if a request returns empty (e.g., due to filters or errors)
+        if (apiTokis.length > 0) {
+          dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+        } else if (state.tokis.length === 0) {
+          // Only set empty if we don't have any tokis yet (initial load)
+          dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+        }
+        // Otherwise, keep existing tokis if new response is empty
       }
 
       // Update total count (only update if we got a valid total from pagination)
@@ -1273,6 +1319,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIsFetchingTokis(false);
       dispatch({ type: 'SET_LOADING', payload: false });
     }
+    })();
+
+    // Store the promise in ref for duplicate detection (only for non-append requests)
+    if (!append) {
+      nearbyRequestRef.current = { params: requestKey, promise: requestPromise };
+      // Clear the ref when the promise resolves or rejects
+      requestPromise.finally(() => {
+        if (nearbyRequestRef.current?.params === requestKey) {
+          nearbyRequestRef.current = null;
+        }
+      });
+    }
+
+    return requestPromise;
   };
 
   const createToki = async (tokiData: any): Promise<string | null> => {
@@ -2066,14 +2126,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // User profile actions
   const loadCurrentUser = async (): Promise<void> => {
+    // If there's already a pending request, return that promise instead
+    if (pendingLoadCurrentUserRef.current) {
+      console.log('🔄 loadCurrentUser: Reusing pending request');
+      return pendingLoadCurrentUserRef.current;
+    }
+
     console.log('🔄 loadCurrentUser called');
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      
-      // Get the full response to access user and stats
-      console.log('🌐 Calling apiService.getCurrentUser()...');
-      const response = await apiService.getCurrentUser();
-      console.log('🌐 API response received:', response);
+    
+    // Create the request promise
+    const requestPromise = (async () => {
+      try {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        
+        // Get the full response to access user and stats
+        console.log('🌐 Calling apiService.getCurrentUser()...');
+        const response = await apiService.getCurrentUser();
+        console.log('🌐 API response received:', response);
       
       // The API service already extracts response.data, so we get: { user: User; socialLinks: any; stats: any; verified: boolean }
       const user = response.user;
@@ -2112,12 +2181,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log('🔄 Forcing stats update...');
         dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
       }, 100);
-    } catch (error) {
-      console.error('❌ Failed to load current user:', error);
-      // Don't show error alert here as it might be expected if user is not logged in
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
+      } catch (error) {
+        console.error('❌ Failed to load current user:', error);
+        // Don't show error alert here as it might be expected if user is not logged in
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        // Clear the pending request when done
+        pendingLoadCurrentUserRef.current = null;
+      }
+    })();
+
+    // Store the pending request
+    pendingLoadCurrentUserRef.current = requestPromise;
+    return requestPromise;
   };
 
   // Connection actions

@@ -118,8 +118,14 @@ export const useDiscoverData = () => {
         page: page
       }, append);
 
-      setCurrentPage(page);
+      // Reset to page 1 if this is a refresh (append: false), otherwise use the requested page
+      setCurrentPage(append ? page : 1);
       setHasMore(response.pagination.hasMore);
+      
+      // Mark initial load as complete when we get the first non-append response
+      if (!append) {
+        hasInitiallyLoadedRef.current = true;
+      }
     } catch (error) {
       console.error('❌ [DISCOVER] Failed to load nearby tokis:', error);
       setHasMore(false);
@@ -128,7 +134,7 @@ export const useDiscoverData = () => {
     }
   }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, isLoadingMore, actions]);
 
-  // Initial load - only run once when connected
+  // Initial load - only run once when connected (using ref to prevent strict mode double calls)
   useEffect(() => {
     if (hasInitiallyLoadedRef.current) return;
     if (!state.isConnected) return;
@@ -137,12 +143,14 @@ export const useDiscoverData = () => {
     const lng = state.currentUser?.longitude || mapRegion.longitude;
     
     if (lat && lng) {
+      // Mark as loading immediately to prevent duplicate calls in React strict mode
+      hasInitiallyLoadedRef.current = true;
+      
       // Use the callback directly but don't include it in deps to avoid circular updates
       // Default to 500km radius for initial load (matches backend default)
-      loadNearbyTokis(1, false, lat, lng, '500').then(() => {
-        hasInitiallyLoadedRef.current = true;
-      }).catch(() => {
-        hasInitiallyLoadedRef.current = true; // Mark as loaded even on error
+      loadNearbyTokis(1, false, lat, lng, '500').catch(() => {
+        // Reset on error so it can retry if needed
+        hasInitiallyLoadedRef.current = false;
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +166,19 @@ export const useDiscoverData = () => {
   }, []);
 
   const handleLoadMore = useCallback((radius?: string) => {
+    // Prevent load more until initial load has completed
+    if (!hasInitiallyLoadedRef.current) {
+      console.log('⏳ [DISCOVER] Skipping load more - initial load not complete');
+      return;
+    }
+    
     if (isLoadingMore || !hasMore) return;
+    
+    // Prevent load more if we don't have any tokis yet (safety check)
+    if (state.tokis.length === 0) {
+      console.log('⏳ [DISCOVER] Skipping load more - no tokis loaded yet');
+      return;
+    }
     
     const lat = state.currentUser?.latitude || mapRegion.latitude;
     const lng = state.currentUser?.longitude || mapRegion.longitude;
@@ -173,11 +193,13 @@ export const useDiscoverData = () => {
       });
       return nextPage;
     });
-  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
+  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
 
   const handleRefresh = useCallback(async (radius?: string) => {
     try {
       setRefreshing(true);
+      // Reset currentPage to 1 when refreshing
+      setCurrentPage(1);
       const lat = state.currentUser?.latitude || mapRegion.latitude;
       const lng = state.currentUser?.longitude || mapRegion.longitude;
       if (lat && lng) {

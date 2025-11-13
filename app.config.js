@@ -2,17 +2,17 @@ module.exports = {
   expo: {
     name: "Toki",
     slug: "toki",
-    version: "1.0.1",
+    version: "1.0.9",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "tokimap",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
-    runtimeVersion: "1.0.0",
+    runtimeVersion: "1.0.1",
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "2",
+      buildNumber: "3",
       config: {},
       infoPlist: {
         UIBackgroundModes: ["remote-notification"]

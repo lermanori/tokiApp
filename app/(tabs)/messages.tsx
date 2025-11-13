@@ -7,6 +7,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
 import { getActivityPhoto } from '@/utils/activityPhotos';
+import { getInitials } from '@/utils/tokiUtils';
 
 
 interface Conversation {
@@ -401,14 +402,19 @@ export default function MessagesScreen() {
               >
                 <View style={styles.conversationAvatar}>
                   {chat.type === 'individual' ? (
-                    <Image
-                      source={{ 
-                        uri: (chat as Conversation).other_user_avatar || 
-                          'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2'
-                      }}
-                      style={styles.avatarImage}
-                      resizeMode="cover"
-                    />
+                    (chat as Conversation).other_user_avatar ? (
+                      <Image
+                        source={{ uri: (chat as Conversation).other_user_avatar }}
+                        style={styles.avatarImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.avatarFallback}>
+                        <Text style={styles.avatarInitials}>
+                          {getInitials((chat as Conversation).other_user_name || 'Unknown')}
+                        </Text>
+                      </View>
+                    )
                   ) : (
                     // Toki group chat - show image circles
                     (() => {
@@ -673,6 +679,21 @@ const styles = StyleSheet.create({
   },
   avatarImageDisabled: {
     opacity: 0.5,
+  },
+  avatarFallback: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 20,
+    fontFamily: 'Inter-SemiBold',
+    color: '#6B7280',
   },
   tokiImageCircles: {
     flexDirection: 'row',
