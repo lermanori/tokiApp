@@ -2891,7 +2891,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Load initial data once when user is authenticated
   useEffect(() => {
     const loadInitialAppData = async () => {
-      if (state.isConnected && state.currentUser?.id) {
+      // Only load if user is authenticated (has tokens) and connected
+      // Don't rely solely on currentUser.id as it might exist from stored data without valid tokens
+      const hasToken = apiService.hasToken();
+      if (state.isConnected && state.currentUser?.id && hasToken) {
         console.log('📦 Loading initial app data (notifications, saved tokis, connections)...');
         try {
           await Promise.all([
@@ -2904,11 +2907,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           console.error('❌ Failed to load initial app data:', error);
         }
+      } else if (state.currentUser?.id && !hasToken) {
+        console.log('⚠️ User data exists but no tokens - skipping authenticated API calls');
       }
     };
     
-    // Load when user becomes available (loading guards will prevent duplicate calls)
-    if (state.currentUser?.id && state.isConnected) {
+    // Load when user becomes available AND has tokens (loading guards will prevent duplicate calls)
+    const hasToken = apiService.hasToken();
+    if (state.currentUser?.id && state.isConnected && hasToken) {
       loadInitialAppData();
     }
   }, [state.currentUser?.id, state.isConnected]);

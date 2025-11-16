@@ -38,3 +38,5 @@ Centralized state management using Context API and useReducer. Handles all app d
   - Store promise in ref before making request
   - Clear ref when promise resolves/rejects using `.finally()`
   - Works in conjunction with API service's `getCurrentUser()` deduplication for double protection
+- problem: App was making authenticated API calls (getSavedTokis, getConnections, getPendingConnections) even when tokens were empty, causing 401 errors. This happened because `loadInitialAppData` only checked `state.currentUser?.id` (which could exist from stored data) but didn't verify if user actually had valid tokens.
+- solution: Updated `loadInitialAppData` to also check `apiService.hasToken()` before making authenticated API calls. Added warning log when user data exists but no tokens are present. This prevents unnecessary 401 errors and API calls when user is not actually authenticated.
