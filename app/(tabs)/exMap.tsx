@@ -103,12 +103,46 @@ export default function ExMapScreen() {
     setSearchQuery,
   } = useDiscoverFilters(events, userConnections);
 
+  // Add error boundary for category changes
+  const handleCategoryToggle = useCallback((categories: string[]) => {
+    try {
+      console.log('🔄 [EXMAP] Category toggle:', { 
+        from: selectedCategories, 
+        to: categories,
+        eventsCount: events.length,
+        filteredCount: filteredEvents.length 
+      });
+      setSelectedCategories(categories);
+    } catch (error) {
+      console.error('❌ [EXMAP] Error in handleCategoryToggle:', error);
+      console.error('❌ [EXMAP] Error stack:', error instanceof Error ? error.stack : 'No stack');
+    }
+  }, [selectedCategories, setSelectedCategories, events.length, filteredEvents.length]);
+
   // Sorting
   const sortedEvents = useMemo(() => {
-    const lat = mapRegion?.latitude ?? state.currentUser?.latitude;
-    const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
-    return sortEvents(filteredEvents as any, sort, lat, lng);
-  }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude]);
+    try {
+      const lat = mapRegion?.latitude ?? state.currentUser?.latitude;
+      const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
+      const result = sortEvents(filteredEvents as any, sort, lat, lng);
+      console.log('🔄 [EXMAP] Sorted events:', { 
+        filteredCount: filteredEvents.length, 
+        sortedCount: result.length,
+        categories: selectedCategories 
+      });
+      return result;
+    } catch (error) {
+      console.error('❌ [EXMAP] Error in sortedEvents useMemo:', error);
+      console.error('❌ [EXMAP] Error details:', {
+        filteredEventsLength: filteredEvents.length,
+        sort,
+        mapRegion,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      return []; // Return empty array on error to prevent crash
+    }
+  }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude, selectedCategories]);
 
   // Reset image loading tracking when data changes
   useEffect(() => {
@@ -363,22 +397,63 @@ export default function ExMapScreen() {
     updateMapRegion(r, true);
   }, [updateMapRegion]);
 
+  // Create a stable key for the map based on events to force remount when events change significantly
+  const mapKey = useMemo(() => {
+    // Use a hash of event IDs and count to create a stable key
+    // This forces remount when events change, preventing native index errors
+    const eventIds = sortedEvents.map(e => e.id).sort().join(',');
+    const hash = eventIds.length > 0 ? `${sortedEvents.length}-${eventIds.substring(0, 50)}` : 'empty';
+    return `map-${hash}`;
+  }, [sortedEvents]);
+
   const renderInteractiveMap = useCallback(() => {
-    return (
-      <View style={styles.mapContainer} key="map-container">
-        <DiscoverMap
-          key="discover-map"
-          region={mapRegion}
-          onRegionChange={handleRegionChange}
-          events={sortedEvents as any}
-          onEventPress={handleEventPress as any}
-          onMarkerPress={handleMapMarkerPress as any}
-          onToggleList={toggleMapView}
+    try {
+      console.log('🔄 [EXMAP] Rendering map with events:', sortedEvents.length, 'mapKey:', mapKey);
+      
+      // Validate events before passing to map
+      const validEvents = sortedEvents.filter(e => {
+        const hasValidCoords = e.coordinate && 
+          Number.isFinite(e.coordinate.latitude) && 
+          Number.isFinite(e.coordinate.longitude);
+        if (!hasValidCoords) {
+          console.warn('⚠️ [EXMAP] Event missing valid coordinates:', e.id);
+        }
+        return hasValidCoords;
+      });
+      
+      console.log('🔄 [EXMAP] Valid events for map:', validEvents.length);
+      
+      return (
+        <View style={styles.mapContainer} key="map-container">
+          <DiscoverMap
+            key={mapKey}
+            region={mapRegion}
+            onRegionChange={handleRegionChange}
+            events={validEvents as any}
+            onEventPress={handleEventPress as any}
+            onMarkerPress={handleMapMarkerPress as any}
+            onToggleList={toggleMapView}
           highlightedTokiId={highlightedTokiId}
           highlightedCoordinates={highlightedTokiCoordinates}
         />
       </View>
-    );
+      );
+    } catch (error) {
+      console.error('❌ [EXMAP] Error rendering map:', error);
+      console.error('❌ [EXMAP] Map render error details:', {
+        sortedEventsLength: sortedEvents.length,
+        mapRegion,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      return (
+        <View style={styles.mapContainer}>
+          <Text style={{ padding: 20, color: 'red' }}>
+            Map rendering error. Check console.
+          </Text>
+        </View>
+      );
+    }
   }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
 
   const getSectionTitle = () => {
@@ -489,7 +564,7 @@ export default function ExMapScreen() {
             <DiscoverCategories
               categories={categories}
               selectedCategories={selectedCategories}
-              onCategoryToggle={setSelectedCategories}
+              onCategoryToggle={handleCategoryToggle}
               showMap={true}
             />
             <View>
@@ -502,7 +577,7 @@ export default function ExMapScreen() {
               </View>
             )}
           </>
-        ), [renderInteractiveMap, categories, selectedCategories, setSelectedCategories, sortedEvents.length, state.loading, state.tokis.length])}
+        ), [renderInteractiveMap, categories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,
