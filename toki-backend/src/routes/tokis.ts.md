@@ -24,6 +24,11 @@ This file contains the backend API routes for managing Tokis (events/activities)
 - **problem**: Event listing defaulted to created date ordering and lacked personalized relevance scores.
 - **solution**: Integrated the strategy-based recommendation engine to compute `algorithmScore` for each Toki and make relevance the default sort order.
 
+**2025-01-XX - Added dedicated /my-tokis endpoint**
+
+- **problem**: "My Tokis" screen showed 0 joined tokis because the main `/api/tokis` endpoint uses pagination (default limit 20) and various filters that could exclude some joined tokis, especially if they were on later pages or filtered out by distance/category.
+- **solution**: Created a new `/api/tokis/my-tokis` endpoint that returns ALL tokis the user is involved with (hosting, joined, or pending) without pagination limits. The query specifically filters for tokis where the user is either the host OR a participant, ensuring all user's tokis are included regardless of other criteria.
+
 ### How Fixes Were Implemented
 
 1. **Count Query Filter Alignment**:
@@ -72,3 +77,11 @@ The count query now:
   - Time slot filter (if provided)
 
 This ensures that if a toki would be filtered out or collapsed by the GROUP BY in the main query, it will also be excluded from the count, making the numbers perfectly consistent.
+
+6. **My Tokis Endpoint**:
+   - Created `/api/tokis/my-tokis` endpoint that returns all tokis where user is host OR participant
+   - Query filters: `t.host_id = userId OR EXISTS (SELECT 1 FROM toki_participants WHERE toki_id = t.id AND user_id = userId)`
+   - Includes 12-hour filter to match main query behavior
+   - Returns all results without pagination limits
+   - Sets `joinStatus` correctly: 'hosting' for user's own tokis, actual participant status for joined tokis
+   - Frontend updated to use `loadMyTokis()` instead of `loadTokis()` in MyTokisScreen

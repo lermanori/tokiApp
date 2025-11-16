@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, RefreshCon
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Calendar, Plus, RefreshCw } from 'lucide-react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import TokiCard from '@/components/TokiCard';
 
@@ -50,29 +50,39 @@ const getMyTokisStatus = (toki: any, currentUserId: string): 'created' | 'joined
 
 export default function MyTokisScreen() {
   const { state, actions } = useApp();
-  const [selectedFilter, setSelectedFilter] = useState<'hosting' | 'joined' | 'pending'>('hosting');
+  const params = useLocalSearchParams();
+  const initialTab = (params.tab as 'hosting' | 'joined' | 'pending') || 'hosting';
+  const [selectedFilter, setSelectedFilter] = useState<'hosting' | 'joined' | 'pending'>(initialTab);
   const [tokis, setTokis] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load Tokis from backend
+  // Load Tokis from backend - always sync from state
   useEffect(() => {
-    if (state.tokis.length > 0) {
-      setTokis(state.tokis);
-    }
+    setTokis(state.tokis);
   }, [state.tokis]);
 
-  // Load Tokis when component mounts
+  // Load My Tokis when component mounts
   useEffect(() => {
     if (state.isConnected) {
-      actions.loadTokis();
+      actions.loadMyTokis();
     }
   }, [state.isConnected]);
 
-  // Reload when screen regains focus (parity with Explore)
+  // Update selected filter when route params change
+  useEffect(() => {
+    if (params.tab) {
+      const tab = params.tab as 'hosting' | 'joined' | 'pending';
+      if (['hosting', 'joined', 'pending'].includes(tab)) {
+        setSelectedFilter(tab);
+      }
+    }
+  }, [params.tab]);
+
+  // Reload when screen regains focus
   useFocusEffect(
     React.useCallback(() => {
       if (state.isConnected) {
-        actions.loadTokis();
+        actions.loadMyTokis();
       }
     }, [state.isConnected])
   );
@@ -80,7 +90,7 @@ export default function MyTokisScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await actions.checkConnection();
-    await actions.loadTokis();
+    await actions.loadMyTokis();
     setRefreshing(false);
   };
 
@@ -88,12 +98,16 @@ export default function MyTokisScreen() {
   const tokisWithStatus = React.useMemo(() => {
     const uid = state.currentUser?.id || '';
     return tokis.map((t) => {
-      const isHostedByUser = (t as any)?.host?.id === uid || (t as any)?.joinStatus === 'hosting';
+      const joinStatus = (t as any)?.joinStatus;
+      const hostId = (t as any)?.host?.id;
+      const isHostedByUser = hostId === uid || joinStatus === 'hosting';
+      
+      // Normalize status: check for both 'approved' and 'joined' statuses
       const normalizedStatus: 'hosting' | 'joined' | 'pending' | 'other' = isHostedByUser
         ? 'hosting'
-        : ((t as any)?.joinStatus === 'approved' || (t as any)?.joinStatus === 'joined')
+        : (joinStatus === 'approved' || joinStatus === 'joined')
           ? 'joined'
-          : (t as any)?.joinStatus === 'pending'
+          : joinStatus === 'pending'
             ? 'pending'
             : 'other';
       return { ...(t as any), isHostedByUser, normalizedStatus } as any;
@@ -154,7 +168,7 @@ export default function MyTokisScreen() {
           <Text style={styles.title}>My Tokis</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity 
-              onPress={() => actions.loadTokis()}
+              onPress={() => actions.loadMyTokis()}
               disabled={state.loading}
             >
               <RefreshCw size={24} color={state.loading ? "#CCCCCC" : "#8B5CF6"} />

@@ -525,6 +525,7 @@ interface AppContextType {
   actions: {
     checkConnection: () => Promise<void>;
     loadTokis: () => Promise<void>;
+    loadMyTokis: () => Promise<void>;
     loadTokisWithFilters: (filters: any) => Promise<void>;
     loadNearbyTokis: (params: { latitude: number; longitude: number; radius?: number; page?: number; category?: string; timeSlot?: string }, append?: boolean) => Promise<{ pagination: any }>;
     createToki: (tokiData: any) => Promise<string | null>;
@@ -1126,6 +1127,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load activities' });
     } finally {
       setIsFetchingTokis(false);
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  const loadMyTokis = async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await apiService.getMyTokis();
+      
+      // Get current user ID from API service instead of state
+      const currentUserId = apiService.getAccessToken() ? 
+        (await apiService.getCurrentUser()).user.id : null;
+      
+      const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
+        id: apiToki.id,
+        title: apiToki.title,
+        description: apiToki.description,
+        location: apiToki.location,
+        time: apiToki.timeSlot || 'Time TBD',
+        attendees: apiToki.currentAttendees,
+        maxAttendees: apiToki.maxAttendees,
+        tags: apiToki.tags,
+        host: {
+          id: apiToki.host.id,
+          name: apiToki.host.name,
+          avatar: apiToki.host.avatar || '',
+        },
+        image: apiToki.imageUrl || '',
+        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
+        joinStatus: apiToki.joinStatus || 'not_joined',
+        visibility: apiToki.visibility,
+        category: apiToki.category,
+        createdAt: apiToki.createdAt,
+        scheduledTime: apiToki.scheduledTime,
+        latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
+        longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+      }));
+      
+      dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+    } catch (error) {
+      console.error('❌ Failed to load My Tokis:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load my tokis' });
+    } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
@@ -2871,6 +2916,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const actions = {
         checkConnection,
         loadTokis,
+        loadMyTokis,
         loadTokisWithFilters,
         loadNearbyTokis,
         createToki,

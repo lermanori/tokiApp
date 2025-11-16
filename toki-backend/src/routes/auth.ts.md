@@ -25,4 +25,11 @@ Authentication routes. Verbose debug prints on `/me` and search endpoints are no
 - Imported `utils/logger` and replaced noisy `console.log` with `logger.debug`.
 - Converted `console.error` to `logger.error` consistently.
 
+- problem: Profile page "My Tokis" counter showed incorrect count (4 instead of 3) because stats queries didn't filter out tokis more than 12 hours past their scheduled time, unlike the main tokis query.
+- solution: Added 12-hour filter `AND (scheduled_time IS NULL OR scheduled_time >= NOW() - INTERVAL '12 hours')` to both `tokisCreated` and `tokisJoined` count queries in `/api/auth/me` endpoint to match the main tokis query behavior.
+
+### How Fixes Were Implemented
+- Updated `tokisCreated` query to include: `AND (scheduled_time IS NULL OR scheduled_time >= NOW() - INTERVAL '12 hours')`
+- Updated `tokisJoined` query to include: `AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')`
+- This ensures profile stats match what users see in the "My Tokis" screen, excluding past events beyond the 12-hour window.
 

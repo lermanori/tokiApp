@@ -144,6 +144,29 @@ export default function ExMapScreen() {
     }
   }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude, selectedCategories]);
 
+  // Sort categories by number of tokis in each category (most first), keeping 'all' first
+  const sortedCategories = useMemo(() => {
+    // Calculate counts per category
+    const categoryCounts = new Map<string, number>();
+    events.forEach(event => {
+      const count = categoryCounts.get(event.category) || 0;
+      categoryCounts.set(event.category, count + 1);
+    });
+
+    // Sort categories by count (descending), then alphabetically for ties
+    const sorted = [...CATEGORIES].sort((a, b) => {
+      const countA = categoryCounts.get(a) || 0;
+      const countB = categoryCounts.get(b) || 0;
+      if (countB !== countA) {
+        return countB - countA; // Descending by count
+      }
+      return a.localeCompare(b); // Alphabetical for ties
+    });
+
+    // Always put 'all' first
+    return ['all', ...sorted];
+  }, [events]);
+
   // Reset image loading tracking when data changes
   useEffect(() => {
     if (!state.loading && state.tokis.length > 0) {
@@ -562,7 +585,7 @@ export default function ExMapScreen() {
           <>
             {renderInteractiveMap()}
             <DiscoverCategories
-              categories={categories}
+              categories={sortedCategories}
               selectedCategories={selectedCategories}
               onCategoryToggle={handleCategoryToggle}
               showMap={true}
@@ -577,7 +600,7 @@ export default function ExMapScreen() {
               </View>
             )}
           </>
-        ), [renderInteractiveMap, categories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length])}
+        ), [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length])}
         renderItem={({ item }) => (
           <View style={[
             styles.cardWrapper,

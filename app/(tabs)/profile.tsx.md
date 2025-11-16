@@ -27,3 +27,6 @@ Profile screen displaying user information, stats, and navigation to various sec
 - Removed unused functions: `calculateProfileCompletion()`, `formatMemberSince()`, `calculateTotalUnreadCount()`, `renderAchievementBadge()`, `getStatCardColor()`, `renderStatCard()`.
 - Removed unused styles: `profileImage`, `enhancedStatsContainer`, `statRow`, `statCard`, `statCardNumber`, `statCardLabel`, `statCardSubtext`, `profileCompletionContainer`, `progressBar`, `progressFill`, `verificationContainer`, `messagingStatsContainer`, `achievementsContainer`, `badgesRow`, `badgeItem`, `badgeIconContainer`, `achievedBadge`, `badgeContent`, `badgeTitle`, `badgeDescription`.
 - Fixed linter error: Added missing `description` property to TokiCard component in My Activity section.
+
+- problem: When pressing the "Tokis Joined" stat counter, it navigated to the My Tokis page but always showed the "Hosting" tab instead of the "Joined" tab.
+- solution: Created separate navigation handlers `handleTokisJoined()` and `handleTokisCreated()` that pass a `tab` parameter to the My Tokis screen. Updated the stat counter buttons to use these specific handlers instead of the generic `handleMyTokis()`.

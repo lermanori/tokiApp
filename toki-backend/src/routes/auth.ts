@@ -156,14 +156,19 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
     const user = result.rows[0];
     
     // Calculate user stats dynamically instead of querying user_stats table
-    // Get Tokis created count
+    // Get Tokis created count (with 12-hour filter to match main query)
     const createdResult = await pool.query(
-      'SELECT COUNT(*) as count FROM tokis WHERE host_id = $1 AND status = $2',
+      `SELECT COUNT(*) as count 
+       FROM tokis 
+       WHERE host_id = $1 
+         AND status = $2
+         AND (scheduled_time IS NULL OR scheduled_time >= NOW() - INTERVAL '12 hours')`,
       [user.id, 'active']
     );
 
     // Get Tokis joined count (as participant)
     // Count only unique Tokis where user is a participant (not the host)
+    // (with 12-hour filter to match main query)
     const joinedResult = await pool.query(
       `SELECT COUNT(DISTINCT tp.toki_id) as count 
        FROM toki_participants tp
@@ -171,7 +176,8 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
        WHERE tp.user_id = $1 
          AND tp.status IN ('approved', 'joined')
          AND t.host_id != $1
-         AND t.status = 'active'`,
+         AND t.status = 'active'
+         AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')`,
       [user.id]
     );
 

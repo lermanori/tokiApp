@@ -193,6 +193,20 @@ export default function ProfileScreen() {
     router.push('/my-tokis');
   };
 
+  const handleTokisJoined = () => {
+    router.push({
+      pathname: '/my-tokis',
+      params: { tab: 'joined' }
+    });
+  };
+
+  const handleTokisCreated = () => {
+    router.push({
+      pathname: '/my-tokis',
+      params: { tab: 'hosting' }
+    });
+  };
+
   const handleSavedTokis = () => {
     router.push('/saved-tokis');
   };
@@ -540,12 +554,12 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.statsContainer}>
-            <TouchableOpacity style={styles.statItem} onPress={handleMyTokis}>
+            <TouchableOpacity style={styles.statItem} onPress={handleTokisJoined}>
               <Text style={styles.statNumber}>{state.currentUser.tokisJoined}</Text>
               <Text style={styles.statLabel}>Tokis Joined</Text>
             </TouchableOpacity>
             <View style={styles.statDivider} />
-            <TouchableOpacity style={styles.statItem} onPress={handleMyTokis}>
+            <TouchableOpacity style={styles.statItem} onPress={handleTokisCreated}>
               <Text style={styles.statNumber}>{state.currentUser.tokisCreated}</Text>
               <Text style={styles.statLabel}>Tokis Created</Text>
             </TouchableOpacity>

@@ -542,6 +542,11 @@ class ApiService {
     return response.data;
   }
 
+  async getMyTokis(): Promise<{ tokis: Toki[]; pagination: any }> {
+    const response = await this.makeRequest<{ success: boolean; tokis: Toki[]; pagination: any }>('/tokis/my-tokis');
+    return { tokis: response.tokis, pagination: response.pagination };
+  }
+
   async getToki(id: string): Promise<Toki> {
     const response = await this.makeRequest<{ success: boolean; data: Toki }>(`/tokis/${id}`);
     return response.data;
