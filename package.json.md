@@ -10,6 +10,8 @@ Project dependencies and scripts configuration file. Defines all npm packages, E
 - solution: Updated packages to match Expo SDK 54 patch versions: expo@54.0.23, expo-camera@~17.0.9, expo-router@~6.0.14, expo-web-browser@~15.0.9.
 - problem: Version bump needed for new release.
 - solution: Bumped version from 1.0.8 to 1.0.9.
+- problem: Version bump needed for new release.
+- solution: Bumped version from 1.0.9 to 1.0.10.
 
 ### How Fixes Were Implemented
 - Removed `eas-cli` from devDependencies section. EAS CLI should be installed globally (`npm install -g eas-cli`) or used via `npx eas-cli`.
