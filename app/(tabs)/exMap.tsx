@@ -525,7 +525,7 @@ export default function ExMapScreen() {
     }, [width]);
 
     return (
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={styles.container} edges={['left', 'right']}>
             {/* Header from Explore with extended controls */}
             <View style={styles.headerWrapper}>
                 <LinearGradient
@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     header: {
         // paddingTop: 20,
         paddingHorizontal: 20,
-        paddingTop: 30,
+        paddingTop: 70,
         paddingBottom: 20,
     },
     headerContent: {
