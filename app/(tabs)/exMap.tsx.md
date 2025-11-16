@@ -8,6 +8,8 @@ This file contains the ExMap screen component that combines the Explore screen's
 - solution: Created new exMap.tsx that merges Explore header with Map extended controls, using useDiscoverData and useDiscoverFilters hooks for data management
 - problem: White space gap between header and map creating visual disconnect
 - solution: Implemented overlap technique using negative margins (-10px) to seamlessly connect header gradient with map container, added shadow for depth
+- problem: Redundant refresh button in header controls when drag-to-refresh already provides the same functionality
+- solution: Removed refresh button (RefreshCw icon) from extended controls and removed unused RefreshCw import, keeping only drag-to-refresh via RefreshControl on FlatList
 
 ### How Fixes Were Implemented
 - problem: Users needed a single screen with both Explore's friendly header and Map's extended controls
@@ -25,4 +27,10 @@ This file contains the ExMap screen component that combines the Explore screen's
   - Added marginTop: -10 to mapContainer to create 10px overlap
   - Added shadow to mapContainer (shadowOpacity: 0.1, shadowRadius: 8, elevation: 5) for visual depth
   - Result: Seamless transition from gradient header to map with no white space
+- problem: Refresh button in header was redundant since drag-to-refresh functionality already exists via RefreshControl
+- solution: 
+  - Removed TouchableOpacity containing RefreshCw icon from extendedControls View (lines 470-476)
+  - Removed RefreshCw from lucide-react-native imports
+  - Kept handleRefreshWithRadius function as it's still used by RefreshControl on FlatList
+  - Result: Cleaner UI with no duplicate refresh functionality, users can still refresh via standard drag-to-refresh gesture
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Check } from 'lucide-react-native';
 
 export type SortKey = 'relevance' | 'date' | 'distance' | 'popularity' | 'created' | 'title';
 
@@ -54,7 +55,11 @@ export default function TokiSortModal({
                 onPress={() => onChange({ sortBy: opt.key, sortOrder: nextOrder })}
               >
                 <Text style={[styles.label, isSelected && styles.labelSelected]}>{opt.label}</Text>
-                {isSelected ? <Text style={styles.check}>•</Text> : null}
+                {isSelected ? (
+                  <View style={styles.checkContainer}>
+                    <Check size={20} color="#FFFFFF" strokeWidth={3} />
+                  </View>
+                ) : null}
               </TouchableOpacity>
             );
           })}
@@ -89,11 +94,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  rowSelected: { backgroundColor: '#EEE9FF' },
+  rowSelected: { 
+    backgroundColor: '#EEE9FF',
+    borderColor: '#5B40F3',
+    borderWidth: 2,
+    shadowColor: '#5B40F3',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   label: { fontSize: 16, color: '#444' },
   labelSelected: { color: '#5B40F3', fontWeight: '600' },
-  check: { color: '#5B40F3', fontWeight: '700' },
+  checkContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#5B40F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   footer: { marginTop: 'auto' },
   apply: {
     backgroundColor: 'black',

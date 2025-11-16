@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, RefreshCw, ArrowUpDown, X } from 'lucide-react-native';
+import { Search, Filter, ArrowUpDown, X } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
@@ -467,13 +467,6 @@ export default function ExMapScreen() {
           
           {/* Extended controls from Map */}
           <View style={styles.extendedControls}>
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={handleRefreshWithRadius}
-              disabled={state.loading}
-            >
-              <RefreshCw size={20} color={state.loading ? "#CCCCCC" : "#666666"} />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.controlButton} onPress={() => setShowSortModal(true)}>
               <ArrowUpDown size={20} color="#666666" />
             </TouchableOpacity>
@@ -628,7 +621,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: 30,
     paddingBottom: 20, // Reduced to allow overlap
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -666,6 +659,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingBottom:20
   },
   searchButton: {
     flex: 1,
@@ -692,7 +686,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 0,
     gap: 8,
     shadowColor: '#000',
     shadowOffset: {
