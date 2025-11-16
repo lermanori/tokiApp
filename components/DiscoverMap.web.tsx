@@ -286,7 +286,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
   }, []);
 
   return (
-    <View style={{ position: 'relative', backgroundColor: '#FFFFFF' }}>
+    <View style={{ position: 'relative', backgroundColor: '#FFFFFF', marginTop: 20 }}>
       <div style={{ position: 'relative', width: '100%', height: 300, borderRadius: 16, overflow: 'hidden' }}>
         <MapContainer
           center={highlightedTokiId && highlightedCoordinates 
@@ -295,6 +295,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
           zoom={highlightedTokiId ? 16 : 13}
           style={{ width: '100%', height: '100%' }}
           key="map-container"
+          zoomControl={false}
         >
           <MapController />
           <TileLayer
@@ -306,7 +307,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
             Number.isFinite(group.lat) && Number.isFinite(group.lng) ? (
               <Marker
                 key={group.key}
-                ref={(ref) => {
+                ref={(ref: any) => {
                   if (ref) {
                     markerRefs.current.set(group.key, ref);
                   } else {
@@ -369,7 +370,7 @@ export default function DiscoverMap({ region, events, onEventPress, onMarkerPres
           ))}
         </MapContainer>
 
-        <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ position: 'absolute', top: 60, right: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', fontSize: 18 }} onClick={onToggleList}>
             📋
           </button>

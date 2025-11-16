@@ -33,3 +33,6 @@ This file contains the web map component using React Leaflet. It displays cluste
 - Added useEffect in MapController to programmatically center map using map.setView() when highlighted coordinates change
 - Added icon cache cleanup logic that clears cache when cluster count changes significantly (prevents memory leaks)
 - Icons are now reused across renders instead of being recreated, eliminating flickering
+
+- problem: Map controls were positioned too high on the map, potentially interfering with other UI elements. Leaflet's default zoom controls were visible.
+- solution: Lowered map controls position from `top: 16` to `top: 60` to provide better spacing and avoid UI conflicts. Disabled Leaflet's default zoom controls using `zoomControl={false}` prop. Fixed TypeScript linting error by adding explicit type annotation to Marker ref parameter.

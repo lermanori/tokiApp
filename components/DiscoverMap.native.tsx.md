@@ -21,3 +21,6 @@ This file contains the native map component (iOS/Android) using react-native-map
 - Fixed iOS map animation: Update region state first, then call animateToRegion after 100ms delay to ensure region prop is applied. Also call setCamera as backup with zoom 18. Call animation immediately on iOS (no requestAnimationFrame delay) for faster response.
 - Removed verbose logging to reduce console clutter - kept only essential error/warning logs.
 
+- problem: Zoom controls were positioned too high on the map, potentially interfering with other UI elements.
+- solution: Lowered zoom controls position from `top: 16` to `top: 60` to provide better spacing and avoid UI conflicts.
+
