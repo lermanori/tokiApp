@@ -40,3 +40,6 @@ This file contains the login and registration screen with enhanced autofill func
 
 - **problem**: Login screen was calling `/api/tokis` endpoint after authentication, which is not the centralized route and creates unnecessary API calls.
 - **solution**: Removed `apiService.getTokis()` call from login flow. User stats come from `getCurrentUser()`, and tokis will be loaded by the discover screen using the centralized `/api/tokis/nearby` route via `loadNearbyTokis()` when the user navigates there. This eliminates unnecessary `/api/tokis` calls and ensures all tokis loading uses the centralized route.
+
+- **problem**: Input placeholder text was white on white background in dark mode, making it invisible and unusable.
+- **solution**: Added `placeholderTextColor="#666"` to both Email and Password TextInput components. This medium gray color (#666) is visible on white backgrounds in both light and dark modes, ensuring the placeholder text is always readable.

@@ -13,6 +13,9 @@ This file contains the API service class that handles all HTTP requests to the b
 - **problem**: Excessive calls to `/auth/me` endpoint causing unnecessary network traffic and server load. Multiple concurrent calls were being made simultaneously (e.g., 6 calls on refresh).
 - **solution**: Implemented user data caching with 60-second TTL and request deduplication. `getCurrentUser()` now checks cache first and prevents concurrent duplicate requests by reusing pending promises. `isAuthenticated()` reuses user cache when available. `getUserStats()` now uses cached `getCurrentUser()` instead of separate API call. Cache is automatically invalidated on token changes and profile updates.
 
+- **problem**: Session expiration issues on native platforms - users were being logged out unnecessarily when network errors occurred during token refresh. The `refreshAccessToken()` method was clearing tokens on any error, including network failures, causing false logouts.
+- **solution**: Updated `refreshAccessToken()` to distinguish between network errors and actual authentication failures. Tokens are now only cleared when the refresh token is confirmed to be expired/invalid (401 status). Network errors (TypeError, fetch failures, timeouts) no longer trigger token clearing, preventing unnecessary logouts on native platforms with unreliable network connectivity.
+
 ### How Fixes Were Implemented
 - Added `page?: number` parameter to `getNearbyTokis()` method signature
 - Updated return type to include `pagination` object: `{ page, limit, total, totalPages, hasMore }`
@@ -28,3 +31,9 @@ This file contains the API service class that handles all HTTP requests to the b
 - Added `clearUserCache()` method that's called automatically on token changes and profile updates, which also clears pending requests
 - Cache is cleared when tokens are saved (login/register) or cleared (logout)
 - Request deduplication ensures only 1 API call is made even when multiple components call `getCurrentUser()` simultaneously
+
+- Modified `refreshAccessToken()` to check response status before clearing tokens
+- Added network error detection using `TypeError` instance check and error message pattern matching
+- Tokens are only cleared on confirmed 401 (Unauthorized) responses, indicating refresh token is expired/invalid
+- Network errors (TypeError, fetch failures, timeouts) preserve tokens to prevent false logouts
+- Other HTTP errors (500, 503, etc.) also preserve tokens as they may indicate server issues rather than auth problems

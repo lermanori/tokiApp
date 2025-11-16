@@ -387,12 +387,41 @@ class ApiService {
         await this.saveTokens(data.data.accessToken, data.data.refreshToken);
         return true;
       }
+      
+      // Only clear tokens if refresh token is actually invalid/expired (401)
+      // This means the refresh token itself is expired or invalid
+      if (response.status === 401) {
+        console.log('🗑️ [API] Refresh token expired or invalid, clearing tokens');
+        await this.clearTokens();
+        return false;
+      }
+      
+      // For other HTTP errors, don't clear tokens - might be server issue
+      console.error('⚠️ [API] Token refresh failed with status:', response.status);
+      return false;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+      // Check if this is a network error (TypeError from fetch, or network-related message)
+      const isNetworkError = error instanceof TypeError || 
+                            (error instanceof Error && (
+                              error.message.includes('Network request failed') ||
+                              error.message.includes('Failed to fetch') ||
+                              error.message.includes('timeout') ||
+                              error.message.includes('network') ||
+                              error.message.includes('NetworkError')
+                            ));
+      
+      if (isNetworkError) {
+        console.error('⚠️ [API] Token refresh failed due to network error, keeping tokens:', error);
+        // Don't clear tokens on network errors - they might still be valid
+        // The user might just have poor connectivity
+        return false;
+      } else {
+        // For other errors (parsing, etc.), also don't clear tokens
+        // Only clear on confirmed auth failures
+        console.error('⚠️ [API] Token refresh failed with unexpected error, keeping tokens:', error);
+        return false;
+      }
     }
-
-    await this.clearTokens();
-    return false;
   }
 
   // Authentication Methods
