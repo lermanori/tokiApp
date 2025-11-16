@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch, Alert, Share, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, Trash2, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
+import { Settings, Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
-import { getBackendUrl } from '@/services/config';
 import { apiService } from '@/services/api';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
 import TokiCard from '@/components/TokiCard';
@@ -17,7 +16,6 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [myActivity, setMyActivity] = useState<any[]>([]);
-  const [previewAsMember, setPreviewAsMember] = useState(false);
 
   const handleProfileImageUpdate = async (newImageUrl: string) => {
     try {
@@ -445,100 +443,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const calculateProfileCompletion = () => {
-    const totalFields = 6; // name, bio, location, avatar, social links, member since
-    let completedFields = 0;
-
-    if (state.currentUser.name && state.currentUser.name.trim() !== '') completedFields++;
-    if (state.currentUser.bio && state.currentUser.bio.trim() !== '') completedFields++;
-    if (state.currentUser.location && state.currentUser.location.trim() !== '') completedFields++;
-    if (state.currentUser.avatar && state.currentUser.avatar !== 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2') completedFields++;
-    if (Object.keys(state.currentUser.socialLinks).length > 0) completedFields++;
-    if (state.currentUser.memberSince) completedFields++;
-
-    return Math.round((completedFields / totalFields) * 100);
-  };
-
-  const formatMemberSince = () => {
-    if (!state.currentUser.memberSince) return 'Recently';
-    return new Date(state.currentUser.memberSince).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short'
-    });
-  };
-
-  const calculateTotalUnreadCount = () => {
-    let count = 0;
-    if (state.conversations) {
-      state.conversations.forEach(conv => {
-        if (conv.unreadCount > 0) {
-          count += conv.unreadCount;
-        }
-      });
-    }
-    return count;
-  };
-
-  const renderAchievementBadge = (id: string, title: string, description: string, isAchieved: boolean) => (
-    <View key={id} style={styles.badgeItem}>
-      <View style={[styles.badgeIconContainer, isAchieved ? styles.achievedBadge : null]}>
-        {isAchieved ? (
-          <Shield size={20} color="#1C1C1C" />
-        ) : (
-          <CircleHelp size={20} color="#666666" />
-        )}
-      </View>
-      <View style={styles.badgeContent}>
-        <Text style={styles.badgeTitle}>{title}</Text>
-        <Text style={styles.badgeDescription}>{description}</Text>
-      </View>
-    </View>
-  );
-
-  const getStatCardColor = (type: string) => {
-    switch (type) {
-      case 'tokis':
-        return { bg: '#F0F9FF', border: '#0EA5E9', text: '#0369A1' };
-      case 'connections':
-        return { bg: '#F0FDF4', border: '#22C55E', text: '#15803D' };
-      case 'rating':
-        return { bg: '#FEF3C7', border: '#F59E0B', text: '#B45309' };
-      case 'profile':
-        return { bg: '#F3E8FF', border: '#8B5CF6', text: '#7C3AED' };
-      case 'messaging':
-        return { bg: '#FEF2F2', border: '#EF4444', text: '#DC2626' };
-      case 'verified':
-        return { bg: '#F0FDF4', border: '#10B981', text: '#047857' };
-      default:
-        return { bg: '#F9FAFB', border: '#D1D5DB', text: '#6B7280' };
-    }
-  };
-
-  const renderStatCard = (type: string, number: string | number, label: string, subtext: string, onPress?: () => void) => {
-    const colors = getStatCardColor(type);
-    const CardComponent = onPress ? TouchableOpacity : View;
-
-    return (
-      <CardComponent
-        style={[
-          styles.statCard,
-          {
-            backgroundColor: colors.bg,
-            borderWidth: 1,
-            borderColor: colors.border
-          }
-        ]}
-        onPress={onPress}
-      >
-        <Text style={[styles.statCardNumber, { color: colors.text }]}>
-          {number}
-        </Text>
-        <Text style={styles.statCardLabel}>{label}</Text>
-        <Text style={styles.statCardSubtext}>{subtext}</Text>
-      </CardComponent>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <LinearGradient
@@ -704,6 +608,7 @@ export default function ProfileScreen() {
                         toki={{
                           id: a.id,
                           title: a.title,
+                          description: a.description || '',
                           image: a.image_url,
                           category: a.category,
                           location: a.location || '',
@@ -870,11 +775,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 16,
   },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
   verifiedBadge: {
     position: 'absolute',
     bottom: 0,
@@ -950,6 +850,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     padding: 10,
+    marginBottom: 20,
   },
   statItem: {
     flex: 1,
@@ -972,74 +873,6 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: '#E5E7EB',
     marginHorizontal: 6,
-  },
-  enhancedStatsContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statCardNumber: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#1C1C1C',
-    marginBottom: 4,
-  },
-  statCardLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#666666',
-    textAlign: 'center',
-  },
-  statCardSubtext: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#888888',
-    textAlign: 'center',
-  },
-  profileCompletionContainer: {
-    alignItems: 'center',
-  },
-  progressBar: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    marginTop: 8,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: '#1C1C1C',
-  },
-  verificationContainer: {
-    alignItems: 'center',
-  },
-  messagingStatsContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
   },
   section: {
     backgroundColor: '#FFFFFF',
@@ -1121,57 +954,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666666',
-  },
-  achievementsContainer: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  badgeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  badgeIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  achievedBadge: {
-    backgroundColor: '#1C1C1C',
-  },
-  badgeContent: {
-    flex: 1,
-  },
-  badgeTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1C1C1C',
-    marginBottom: 4,
-  },
-  badgeDescription: {
-    fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#666666',
   },
