@@ -821,7 +821,36 @@ export default function TokiForm({
                 mode="single"
                 date={customDateTime ? dayjs(customDateTime.split(' ')[0]).toDate() : new Date()}
                 styles={{
+                  // Header and navigation controls
+                  header: { backgroundColor: '#FFFFFF' },
+                  button_next: { 
+                    backgroundColor: 'transparent',
+                    tintColor: '#1C1C1C',
+                  },
+                  button_prev: { 
+                    backgroundColor: 'transparent',
+                    tintColor: '#1C1C1C',
+                  },
+                  button_next_image: { 
+                    tintColor: '#1C1C1C',
+                  },
+                  button_prev_image: { 
+                    tintColor: '#1C1C1C',
+                  },
+                  month_selector_label: { color: '#1C1C1C' },
+                  year_selector_label: { color: '#1C1C1C' },
+                  // Calendar container
+                  days: { backgroundColor: '#FFFFFF' },
+                  // Weekdays
+                  weekdays: { backgroundColor: '#FFFFFF' },
+                  weekday_label: { color: '#666666' },
+                  // Day cells
+                  day: { backgroundColor: '#FFFFFF' },
+                  day_label: { color: '#1C1C1C' },
+                  // Today indicator
                   today: { borderColor: '#8B5CF6', borderWidth: 1 },
+                  today_label: { color: '#8B5CF6' },
+                  // Selected date
                   selected: { backgroundColor: '#B49AFF' },
                   selected_label: { color: '#FFFFFF' },
                 }}
