@@ -892,14 +892,15 @@ export default function TokiForm({
                       const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
                       const minutes = quarterMinutes;
                       return (
-                        <Picker
-                          value={{ hour, minute }}
-                          onChange={(val: any) => {
-                            const h = val.hour ?? hour;
-                            const m = val.minute ?? minute;
-                            setWebTimeTemp(`${h}:${m}`);
-                          }}
-                        >
+                        <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8 }}>
+                          <Picker
+                            value={{ hour, minute }}
+                            onChange={(val: any) => {
+                              const h = val.hour ?? hour;
+                              const m = val.minute ?? minute;
+                              setWebTimeTemp(`${h}:${m}`);
+                            }}
+                          >
                           <Picker.Column name="hour">
                             {hours.map(h => (
                               <Picker.Item key={h} value={h}>
@@ -915,6 +916,7 @@ export default function TokiForm({
                             ))}
                           </Picker.Column>
                         </Picker>
+                        </View>
                       );
                     })()}
                     <TouchableOpacity
@@ -937,6 +939,8 @@ export default function TokiForm({
                       value={customDateTime ? dayjs(customDateTime.replace(' ', 'T')).toDate() : new Date()}
                       display={Platform.OS === 'android' ? 'clock' : 'spinner'}
                       minuteInterval={Platform.OS === 'ios' ? 15 : undefined}
+                      themeVariant="light"
+                      textColor={Platform.OS === 'ios' ? '#1C1C1C' : undefined}
                       onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
                         if (Platform.OS === 'android') {
                           if (event.type === 'set' && selectedDate) {

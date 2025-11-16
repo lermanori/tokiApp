@@ -68,11 +68,13 @@ export const formatTimeDisplay = (time: string | undefined, scheduledTime?: stri
       // The backend sends time in format "YYYY-MM-DD HH:MM" which should be treated as UTC
       const date = new Date(scheduledTime + 'Z'); // Add 'Z' to indicate UTC
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Create today and tomorrow in UTC for consistent comparison
+      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const tomorrowUTC = new Date(todayUTC);
+      tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
 
-      const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      // Create eventDate in UTC to match the UTC date
+      const eventDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
       // Format time as HH:MM
       const timeString = date.toLocaleTimeString('en-US', {
@@ -82,16 +84,16 @@ export const formatTimeDisplay = (time: string | undefined, scheduledTime?: stri
         timeZone: 'UTC' // Display time in UTC to match input
       });
 
-      // Check if it's today, tomorrow, or later
-      if (eventDate.getTime() === today.getTime()) {
+      // Check if it's today, tomorrow, or later (all in UTC for consistent comparison)
+      if (eventDate.getTime() === todayUTC.getTime()) {
         return `today at ${timeString}`;
-      } else if (eventDate.getTime() === tomorrow.getTime()) {
+      } else if (eventDate.getTime() === tomorrowUTC.getTime()) {
         return `tomorrow at ${timeString}`;
       } else {
-        // Format as DD/MM/YY HH:MM
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear().toString().slice(-2);
+        // Format as DD/MM/YY HH:MM using UTC methods
+        const day = date.getUTCDate().toString().padStart(2, '0');
+        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+        const year = date.getUTCFullYear().toString().slice(-2);
         return `${day}/${month}/${year} at ${timeString}`;
       }
     } catch (error) {

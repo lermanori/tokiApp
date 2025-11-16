@@ -30,9 +30,11 @@ This component provides a comprehensive form for creating and editing Tokis. It 
   - Added Content-Type: application/json header to ensure backend correctly identifies request type
   - Improved error handling to catch and log JSON parsing errors
   - This ensures consistent behavior across web and React Native platforms, matching the working edit mode implementation
-- problem: Date and time picker controls (DateTimePicker and RNDateTimePicker) were adapting to system dark mode, causing display and usability issues in dark theme. Month navigation controls (arrows and month/year text) were not visible in dark mode on iOS.
+- problem: Date and time picker controls (DateTimePicker and RNDateTimePicker) were adapting to system dark mode, causing display and usability issues in dark theme. Month navigation controls (arrows and month/year text) were not visible in dark mode on iOS. Hour controls in time picker were also not visible in dark mode.
 - solution:
   - Added `themeVariant="light"` prop to RNDateTimePicker component to force light mode appearance on native platforms
+  - Added `textColor="#1C1C1C"` prop to RNDateTimePicker for iOS spinner display to ensure hour/minute text is visible in dark mode
   - Fixed react-native-ui-datepicker styling by using correct style keys from the library's UI enum: `button_next`, `button_prev`, `button_next_image`, `button_prev_image` for navigation controls, `month_selector_label`, `year_selector_label` for month/year text, `header`, `days`, `weekdays`, `day`, `day_label`, `weekday_label` for calendar elements
   - Applied `tintColor: '#1C1C1C'` to button images to ensure navigation arrows are visible in dark mode
+  - Wrapped web time picker (react-mobile-picker) in a View with explicit white background (#FFFFFF) to ensure consistent appearance
   - All pickers now display with light mode styling regardless of system theme, ensuring consistent user experience
