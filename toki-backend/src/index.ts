@@ -19,7 +19,7 @@ dotenv.config();
 // Import middleware and routes
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
-import { testDatabaseConnection, setDatabaseTimezone } from './config/database';
+import { testDatabaseConnection, setDatabaseTimezone, pool } from './config/database';
 import authRoutes from './routes/auth';
 import tokiRoutes from './routes/tokis';
 import connectionRoutes from './routes/connections';
@@ -169,11 +169,27 @@ app.use(errorHandler);
 // WebSocket event handlers
 io.on('connection', (socket) => {
   logger.info('🔌 User connected:', socket.id);
+  
+  let currentUserId: string | null = null; // Track user for this socket
 
   // Join user to their personal room
-  socket.on('join-user', (userId: string) => {
+  socket.on('join-user', async (userId: string) => {
     const roomName = `user-${userId}`;
     socket.join(roomName);
+    currentUserId = userId; // Store for disconnect tracking
+    
+    // Log connection event
+    try {
+      await pool.query(
+        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+        [userId, 'connect']
+      );
+      logger.debug(`📊 [ACTIVITY] Logged connect event for user ${userId}`);
+    } catch (error) {
+      logger.error('Error logging connect event:', error);
+      // Don't fail the connection if logging fails
+    }
+    
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
     logger.debug(`👤 [BACKEND] User ${userId} (socket: ${socket.id}) joined room: ${roomName}`);
     logger.debug(`👤 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
@@ -205,8 +221,22 @@ io.on('connection', (socket) => {
     logger.debug(`🚪 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     logger.info('🔌 User disconnected:', socket.id);
+    
+    // Log disconnect event if we have a user ID
+    if (currentUserId) {
+      try {
+        await pool.query(
+          'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+          [currentUserId, 'disconnect']
+        );
+        logger.debug(`📊 [ACTIVITY] Logged disconnect event for user ${currentUserId}`);
+      } catch (error) {
+        logger.error('Error logging disconnect event:', error);
+        // Don't fail disconnect if logging fails
+      }
+    }
   });
 });
 

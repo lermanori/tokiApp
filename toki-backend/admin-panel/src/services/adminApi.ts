@@ -278,10 +278,10 @@ export const adminApi = {
   },
 
   // Analytics
-  getAnalytics: async (days?: number) => {
+  getAnalytics: async (hours?: number) => {
     const query = new URLSearchParams();
-    if (days !== undefined) {
-      query.append('days', String(days));
+    if (hours !== undefined) {
+      query.append('hours', String(hours));
     }
     const response = await fetch(`${API_BASE}/analytics?${query}`, {
       headers: getAuthHeaders()

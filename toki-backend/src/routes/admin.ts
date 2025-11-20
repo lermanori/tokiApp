@@ -1530,89 +1530,101 @@ router.delete('/email-templates/:id', authenticateToken, requireAdmin, async (re
 
 router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { days = '30' } = req.query;
-    const daysNum = Math.min(Math.max(parseInt(days as string) || 30, 1), 365); // Limit 1-365 days
+    const { hours = '720' } = req.query; // default 30 days (720 hours)
+    const hoursNum = Math.min(Math.max(parseInt(hours as string) || 720, 1), 2160); // Limit 1-2160 hours (90 days)
 
-    // Generate date range
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysNum);
-    const startDateStr = startDate.toISOString().split('T')[0];
+    // Determine grouping granularity: use hour for <= 72 hours (3 days), day for longer
+    const groupByHour = hoursNum <= 72;
+    // Use created_at from activity logs (not updated_at from users)
+    const dateGroupExpr = groupByHour ? "DATE_TRUNC('hour', created_at)" : "DATE(created_at)";
+    const dateGroupExprCreated = groupByHour ? "DATE_TRUNC('hour', created_at)" : "DATE(created_at)";
 
-    // 1. Active Users per day (users with updated_at in that day)
+    // Generate start time
+    const startTime = new Date();
+    startTime.setHours(startTime.getHours() - hoursNum);
+    const startTimeStr = startTime.toISOString();
+
+    // 1. Active Users (users who connected via WebSocket per hour or day)
     const activeUsersResult = await pool.query(
       `SELECT 
-        DATE(updated_at) as date, 
-        COUNT(DISTINCT id) as count
-      FROM users 
-      WHERE updated_at >= $1
-      GROUP BY DATE(updated_at)
+        ${dateGroupExpr} as date, 
+        COUNT(DISTINCT user_id) as count
+      FROM user_activity_logs 
+      WHERE event_type = 'connect' 
+        AND created_at >= $1
+      GROUP BY ${dateGroupExpr}
       ORDER BY date ASC`,
-      [startDateStr]
+      [startTimeStr]
     );
 
-    // 2. Total Accounts per day (cumulative count from beginning)
-    // First get total before start date
+    // 2. Total Accounts (cumulative count from beginning)
+    // First get total before start time
     const totalBeforeResult = await pool.query(
       `SELECT COUNT(*) as count FROM users WHERE created_at < $1`,
-      [startDateStr]
+      [startTimeStr]
     );
     const totalBefore = parseInt(totalBeforeResult.rows[0]?.count || '0');
     
-    // Then get daily counts and calculate cumulative
+    // Then get counts per period and calculate cumulative
     const totalAccountsResult = await pool.query(
-      `WITH daily_counts AS (
-        SELECT DATE(created_at) as date, COUNT(*) as count
+      `WITH period_counts AS (
+        SELECT ${dateGroupExprCreated} as date, COUNT(*) as count
         FROM users
         WHERE created_at >= $1
-        GROUP BY DATE(created_at)
+        GROUP BY ${dateGroupExprCreated}
       )
       SELECT 
         date,
         $2 + SUM(count) OVER (ORDER BY date) as cumulative_count
-      FROM daily_counts
+      FROM period_counts
       ORDER BY date ASC`,
-      [startDateStr, totalBefore]
+      [startTimeStr, totalBefore]
     );
 
-    // 3. Unique Logins per day (users with updated_at on that day)
+    // 3. Unique Logins (actual login events per hour or day)
     const uniqueLoginsResult = await pool.query(
       `SELECT 
-        DATE(updated_at) as date,
-        COUNT(DISTINCT id) as count
-      FROM users
-      WHERE updated_at >= $1
-      GROUP BY DATE(updated_at)
+        ${dateGroupExpr} as date,
+        COUNT(DISTINCT user_id) as count
+      FROM user_activity_logs
+      WHERE event_type = 'login'
+        AND created_at >= $1
+      GROUP BY ${dateGroupExpr}
       ORDER BY date ASC`,
-      [startDateStr]
+      [startTimeStr]
     );
 
-    // 4. Tokis Created per day
+    // 4. Tokis Created (per hour or day)
     const tokisCreatedResult = await pool.query(
       `SELECT 
-        DATE(created_at) as date,
+        ${dateGroupExprCreated} as date,
         COUNT(*) as count
       FROM tokis
       WHERE created_at >= $1
-      GROUP BY DATE(created_at)
+      GROUP BY ${dateGroupExprCreated}
       ORDER BY date ASC`,
-      [startDateStr]
+      [startTimeStr]
     );
 
     // Get current summary stats
+    // Active Users (last 7 days - users who connected via WebSocket)
     const currentActiveUsersResult = await pool.query(
-      `SELECT COUNT(DISTINCT id) as count
-       FROM users
-       WHERE updated_at >= NOW() - INTERVAL '7 days'`
+      `SELECT COUNT(DISTINCT user_id) as count
+       FROM user_activity_logs
+       WHERE event_type = 'connect'
+         AND created_at >= NOW() - INTERVAL '7 days'`
     );
 
     const totalAccountsResult2 = await pool.query(
       'SELECT COUNT(*) as count FROM users'
     );
 
+    // Unique Logins Today (actual login events)
     const uniqueLoginsTodayResult = await pool.query(
-      `SELECT COUNT(DISTINCT id) as count
-       FROM users
-       WHERE DATE(updated_at) = CURRENT_DATE`
+      `SELECT COUNT(DISTINCT user_id) as count
+       FROM user_activity_logs
+       WHERE event_type = 'login'
+         AND DATE(created_at) = CURRENT_DATE`
     );
 
     const tokisCreatedTodayResult = await pool.query(
@@ -1622,47 +1634,67 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     );
 
     // Build time series data
-    const activeUsersMap = new Map(activeUsersResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
-    const totalAccountsMap = new Map(totalAccountsResult.rows.map((r: any) => [r.date, parseInt(r.cumulative_count)]));
-    const uniqueLoginsMap = new Map(uniqueLoginsResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
-    const tokisCreatedMap = new Map(tokisCreatedResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
+    const activeUsersMap = new Map(activeUsersResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.count)];
+    }));
+    const totalAccountsMap = new Map(totalAccountsResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.cumulative_count)];
+    }));
+    const uniqueLoginsMap = new Map(uniqueLoginsResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.count)];
+    }));
+    const tokisCreatedMap = new Map(tokisCreatedResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.count)];
+    }));
 
-    // Get all unique dates
+    // Get all unique dates/times
     const allDates = new Set<string>();
     [activeUsersResult.rows, totalAccountsResult.rows, uniqueLoginsResult.rows, tokisCreatedResult.rows].forEach(rows => {
-      rows.forEach((r: any) => allDates.add(r.date));
+      rows.forEach((r: any) => {
+        const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+        allDates.add(dateKey);
+      });
     });
 
-    // Fill in missing dates and build time series
+    // Fill in missing periods and build time series
     const timeSeries: any[] = [];
     const sortedDates = Array.from(allDates).sort();
     
-    // If no data, create empty series for the date range
+    // If no data, create empty series for the time range
     if (sortedDates.length === 0) {
-      for (let i = 0; i < daysNum; i++) {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + i);
-        const dateStr = date.toISOString().split('T')[0];
+      const increment = groupByHour ? 1 : 24; // hours
+      for (let i = 0; i < hoursNum; i += increment) {
+        const date = new Date(startTime);
+        if (groupByHour) {
+          date.setHours(date.getHours() + i);
+        } else {
+          date.setHours(date.getHours() + i);
+        }
+        const dateStr = date.toISOString();
         timeSeries.push({
           date: dateStr,
           activeUsers: 0,
-          totalAccounts: 0,
+          totalAccounts: totalBefore,
           uniqueLoginsToday: 0,
           tokisCreatedToday: 0
         });
       }
     } else {
-      // Fill gaps in date range
-      let lastTotalAccounts = 0;
-      for (const date of sortedDates) {
-        const activeUsers = activeUsersMap.get(date) || 0;
-        const totalAccounts = totalAccountsMap.get(date) || lastTotalAccounts;
+      // Fill gaps in time range
+      let lastTotalAccounts = totalBefore;
+      for (const dateStr of sortedDates) {
+        const activeUsers = activeUsersMap.get(dateStr) || 0;
+        const totalAccounts = totalAccountsMap.get(dateStr) || lastTotalAccounts;
         lastTotalAccounts = totalAccounts; // Track cumulative
-        const uniqueLoginsToday = uniqueLoginsMap.get(date) || 0;
-        const tokisCreatedToday = tokisCreatedMap.get(date) || 0;
+        const uniqueLoginsToday = uniqueLoginsMap.get(dateStr) || 0;
+        const tokisCreatedToday = tokisCreatedMap.get(dateStr) || 0;
 
         timeSeries.push({
-          date,
+          date: dateStr,
           activeUsers,
           totalAccounts,
           uniqueLoginsToday,

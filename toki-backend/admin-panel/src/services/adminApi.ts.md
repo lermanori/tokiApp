@@ -5,9 +5,11 @@ This file contains the admin API service that handles all API calls to the backe
 
 ### Fixes Applied log
 - Added: getAnalytics method to fetch analytics dashboard data
+- Enhanced: Updated method to use hours parameter instead of days
 
 ### How Fixes Were Implemented
-- Added getAnalytics method that accepts optional days parameter
-- Calls GET /api/admin/analytics endpoint with query parameter
+- Added getAnalytics method that accepts optional hours parameter
+- Calls GET /api/admin/analytics endpoint with hours query parameter
 - Uses standard authentication headers and response handling
 - Returns analytics data with time-series and summary information
+- Supports hour-based time ranges (1h, 12h, 24h, 3d, 7d, 14d, 30d)

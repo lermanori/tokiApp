@@ -111,6 +111,19 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
     const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+    
+    // Log login event
+    try {
+      await pool.query(
+        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+        [user.id, 'login']
+      );
+      logger.debug(`📊 [ACTIVITY] Logged login event for user ${user.id}`);
+    } catch (error) {
+      logger.error('Error logging login event:', error);
+      // Don't fail login if logging fails
+    }
+    
     return res.json({
       success: true,
       message: 'Login successful',

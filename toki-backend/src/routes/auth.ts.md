@@ -33,3 +33,13 @@ Authentication routes. Verbose debug prints on `/me` and search endpoints are no
 - Updated `tokisJoined` query to include: `AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')`
 - This ensures profile stats match what users see in the "My Tokis" screen, excluding past events beyond the 12-hour window.
 
+### Fixes Applied log (Activity Tracking)
+- Added: Login event logging to user_activity_logs table
+
+### How Fixes Were Implemented (Activity Tracking)
+- After successful password validation and token generation in `/api/auth/login` endpoint
+- Inserts 'login' event into `user_activity_logs` table with user_id and event_type
+- Added error handling to ensure login proceeds even if activity logging fails
+- Activity logging is non-blocking and doesn't affect authentication flow
+- Enables accurate login tracking for analytics dashboard
+

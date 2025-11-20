@@ -128,6 +128,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 8: User activity logs
+    try {
+      console.log('📝 Migration 8: Creating user_activity_logs table...');
+      const activityLogsSql = readFileSync(
+        join(sqlDir, 'create-user-activity-logs.sql'),
+        'utf-8'
+      );
+      await pool.query(activityLogsSql);
+      console.log('✅ User activity logs migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  user_activity_logs table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);
