@@ -453,15 +453,6 @@ export default function UserProfileScreen() {
               <Text style={styles.statNumber}>{userProfile.connections}</Text>
               <Text style={styles.statLabel}>Connections</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {typeof userProfile.rating === 'number' && !isNaN(userProfile.rating)
-                  ? userProfile.rating.toFixed(1)
-                  : '0.0'}
-              </Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
           </View>
           {/* Public Activity */}
           <View style={{ paddingHorizontal: 8, marginTop: 8 }}>

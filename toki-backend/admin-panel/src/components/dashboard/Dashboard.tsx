@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
-import { LogOut, Users, Mail, Sliders } from 'lucide-react';
+import { LogOut, Users, Mail, Sliders, BarChart } from 'lucide-react';
 import WaitlistTab from './WaitlistTab';
 import DatabaseTab from './DatabaseTab';
 import AlgorithmTab from './AlgorithmTab';
 import SettingsTab from './SettingsTab';
+import AnalyticsTab from './AnalyticsTab';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<'waitlist' | 'database' | 'algorithm' | 'settings'>('waitlist');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings'>('analytics');
 
   const handleLogout = () => {
     logout();
@@ -92,6 +93,12 @@ export default function Dashboard() {
           gap: '8px'
         }}>
           <TabButton
+            active={activeTab === 'analytics'}
+            onClick={() => setActiveTab('analytics')}
+            icon={<BarChart size={18} />}
+            label="Analytics"
+          />
+          <TabButton
             active={activeTab === 'waitlist'}
             onClick={() => setActiveTab('waitlist')}
             icon={<Mail size={18} />}
@@ -124,6 +131,7 @@ export default function Dashboard() {
         maxWidth: '1400px',
         margin: '0 auto'
       }}>
+        {activeTab === 'analytics' && <AnalyticsTab />}
         {activeTab === 'waitlist' && <WaitlistTab />}
         {activeTab === 'database' && <DatabaseTab />}
         {activeTab === 'algorithm' && <AlgorithmTab />}

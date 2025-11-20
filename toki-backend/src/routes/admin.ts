@@ -1525,4 +1525,172 @@ router.delete('/email-templates/:id', authenticateToken, requireAdmin, async (re
     return;
   }
 });
+
+// ===== ANALYTICS DASHBOARD =====
+
+router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { days = '30' } = req.query;
+    const daysNum = Math.min(Math.max(parseInt(days as string) || 30, 1), 365); // Limit 1-365 days
+
+    // Generate date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysNum);
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    // 1. Active Users per day (users with updated_at in that day)
+    const activeUsersResult = await pool.query(
+      `SELECT 
+        DATE(updated_at) as date, 
+        COUNT(DISTINCT id) as count
+      FROM users 
+      WHERE updated_at >= $1
+      GROUP BY DATE(updated_at)
+      ORDER BY date ASC`,
+      [startDateStr]
+    );
+
+    // 2. Total Accounts per day (cumulative count from beginning)
+    // First get total before start date
+    const totalBeforeResult = await pool.query(
+      `SELECT COUNT(*) as count FROM users WHERE created_at < $1`,
+      [startDateStr]
+    );
+    const totalBefore = parseInt(totalBeforeResult.rows[0]?.count || '0');
+    
+    // Then get daily counts and calculate cumulative
+    const totalAccountsResult = await pool.query(
+      `WITH daily_counts AS (
+        SELECT DATE(created_at) as date, COUNT(*) as count
+        FROM users
+        WHERE created_at >= $1
+        GROUP BY DATE(created_at)
+      )
+      SELECT 
+        date,
+        $2 + SUM(count) OVER (ORDER BY date) as cumulative_count
+      FROM daily_counts
+      ORDER BY date ASC`,
+      [startDateStr, totalBefore]
+    );
+
+    // 3. Unique Logins per day (users with updated_at on that day)
+    const uniqueLoginsResult = await pool.query(
+      `SELECT 
+        DATE(updated_at) as date,
+        COUNT(DISTINCT id) as count
+      FROM users
+      WHERE updated_at >= $1
+      GROUP BY DATE(updated_at)
+      ORDER BY date ASC`,
+      [startDateStr]
+    );
+
+    // 4. Tokis Created per day
+    const tokisCreatedResult = await pool.query(
+      `SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as count
+      FROM tokis
+      WHERE created_at >= $1
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC`,
+      [startDateStr]
+    );
+
+    // Get current summary stats
+    const currentActiveUsersResult = await pool.query(
+      `SELECT COUNT(DISTINCT id) as count
+       FROM users
+       WHERE updated_at >= NOW() - INTERVAL '7 days'`
+    );
+
+    const totalAccountsResult2 = await pool.query(
+      'SELECT COUNT(*) as count FROM users'
+    );
+
+    const uniqueLoginsTodayResult = await pool.query(
+      `SELECT COUNT(DISTINCT id) as count
+       FROM users
+       WHERE DATE(updated_at) = CURRENT_DATE`
+    );
+
+    const tokisCreatedTodayResult = await pool.query(
+      `SELECT COUNT(*) as count
+       FROM tokis
+       WHERE DATE(created_at) = CURRENT_DATE`
+    );
+
+    // Build time series data
+    const activeUsersMap = new Map(activeUsersResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
+    const totalAccountsMap = new Map(totalAccountsResult.rows.map((r: any) => [r.date, parseInt(r.cumulative_count)]));
+    const uniqueLoginsMap = new Map(uniqueLoginsResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
+    const tokisCreatedMap = new Map(tokisCreatedResult.rows.map((r: any) => [r.date, parseInt(r.count)]));
+
+    // Get all unique dates
+    const allDates = new Set<string>();
+    [activeUsersResult.rows, totalAccountsResult.rows, uniqueLoginsResult.rows, tokisCreatedResult.rows].forEach(rows => {
+      rows.forEach((r: any) => allDates.add(r.date));
+    });
+
+    // Fill in missing dates and build time series
+    const timeSeries: any[] = [];
+    const sortedDates = Array.from(allDates).sort();
+    
+    // If no data, create empty series for the date range
+    if (sortedDates.length === 0) {
+      for (let i = 0; i < daysNum; i++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        timeSeries.push({
+          date: dateStr,
+          activeUsers: 0,
+          totalAccounts: 0,
+          uniqueLoginsToday: 0,
+          tokisCreatedToday: 0
+        });
+      }
+    } else {
+      // Fill gaps in date range
+      let lastTotalAccounts = 0;
+      for (const date of sortedDates) {
+        const activeUsers = activeUsersMap.get(date) || 0;
+        const totalAccounts = totalAccountsMap.get(date) || lastTotalAccounts;
+        lastTotalAccounts = totalAccounts; // Track cumulative
+        const uniqueLoginsToday = uniqueLoginsMap.get(date) || 0;
+        const tokisCreatedToday = tokisCreatedMap.get(date) || 0;
+
+        timeSeries.push({
+          date,
+          activeUsers,
+          totalAccounts,
+          uniqueLoginsToday,
+          tokisCreatedToday
+        });
+      }
+    }
+
+    const summary = {
+      currentActiveUsers: parseInt(currentActiveUsersResult.rows[0].count),
+      totalAccounts: parseInt(totalAccountsResult2.rows[0].count),
+      uniqueLoginsToday: parseInt(uniqueLoginsTodayResult.rows[0].count),
+      tokisCreatedToday: parseInt(tokisCreatedTodayResult.rows[0].count)
+    };
+
+    res.json({
+      success: true,
+      data: {
+        timeSeries,
+        summary
+      }
+    });
+    return;
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+    return;
+  }
+});
+
 export default router;

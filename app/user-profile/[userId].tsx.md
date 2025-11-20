@@ -10,7 +10,7 @@ This file contains the public profile page component that allows users to view o
   - "Request Connection" for users not connected
   - "Request Pending" for pending requests
   - "Send Message" for connected users
-- **Profile Statistics**: Shows Tokis joined, created, connections count, and rating
+- **Profile Statistics**: Shows Tokis joined, created, and connections count
 - **Social Media Links**: Displays user's social media profiles
 - **User Safety Features**: Block user functionality and error handling
 
@@ -66,6 +66,7 @@ All API methods are now integrated and the component uses real backend data inst
  - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
  - **Self-profile guard**: Disables action buttons when viewing your own public profile (shows disabled "Your Profile" button).
 - **Restricted Activity Visibility**: Activity is now only visible to users with accepted connections. Non-connected users see a message prompting them to connect.
+- **Removed Rating stat**: Removed the Rating statistic from the profile stats section to match the main profile screen (now shows 3 stats: Tokis Joined, Tokis Created, Connections).
 
 ### How Fixes Were Implemented
 - Imported `TokiCard`, added `publicActivity` state, `loadPublicActivity()` and invoked it when `userId` changes.

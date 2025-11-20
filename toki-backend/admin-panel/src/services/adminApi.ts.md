@@ -1,26 +1,13 @@
 # File: adminApi.ts
 
 ### Summary
-Admin API client with JWT auth. Added settings methods for password link expiry and an endpoint to issue welcome/reset password links for users.
+This file contains the admin API service that handles all API calls to the backend with JWT authentication. It provides methods for managing waitlist, users, tokis, algorithm hyperparameters, email templates, settings, and analytics.
 
 ### Fixes Applied log
-- Added `getPasswordExpiry()` and `updatePasswordExpiry(hours)` to manage expiry settings.
-- Added `issuePasswordLink(userId, purpose, send)` for generating and optionally emailing password links.
+- Added: getAnalytics method to fetch analytics dashboard data
 
 ### How Fixes Were Implemented
-- New functions that call `/api/admin/settings/password-reset-expiry` and `/api/admin/users/:id/password-link` with appropriate HTTP methods and payloads. 
-
-### Summary
-Extends admin API client with waitlist CRUD methods: create, update, delete entries.
-
-### Fixes Applied log
-- Added `createWaitlistEntry(data)` → POST `/api/admin/waitlist`
-- Added `updateWaitlistEntry(id, data)` → PUT `/api/admin/waitlist/:id`
-- Added `deleteWaitlistEntry(id)` → DELETE `/api/admin/waitlist/:id`
-
-### How Fixes Were Implemented
-- Reused shared `getAuthHeaders` and `handleResponse`.
-- Ensured JSON bodies and Authorization headers are sent.
-- Allowed partial payloads for update; created strongly-typed method signatures.
-
-
+- Added getAnalytics method that accepts optional days parameter
+- Calls GET /api/admin/analytics endpoint with query parameter
+- Uses standard authentication headers and response handling
+- Returns analytics data with time-series and summary information

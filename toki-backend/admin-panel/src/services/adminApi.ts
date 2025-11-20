@@ -276,5 +276,17 @@ export const adminApi = {
     });
     return handleResponse(response);
   },
+
+  // Analytics
+  getAnalytics: async (days?: number) => {
+    const query = new URLSearchParams();
+    if (days !== undefined) {
+      query.append('days', String(days));
+    }
+    const response = await fetch(`${API_BASE}/analytics?${query}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
 };
 
