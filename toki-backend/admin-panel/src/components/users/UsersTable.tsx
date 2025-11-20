@@ -4,6 +4,7 @@ import UserCreateModal from './UserCreateModal';
 import UserEditModal from './UserEditModal';
 import DeleteConfirmDialog from '../shared/DeleteConfirmDialog';
 import PasswordLinkModal from './PasswordLinkModal';
+import InvitationCreditsModal from './InvitationCreditsModal';
 
 interface UserRow {
   id: string;
@@ -13,6 +14,7 @@ interface UserRow {
   verified: boolean;
   location: string | null;
   created_at: string;
+  invitation_credits?: number;
 }
 
 interface Pagination {
@@ -42,6 +44,7 @@ export default function UsersTable() {
   const [deleting, setDeleting] = useState<UserRow | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [passwordLinkModal, setPasswordLinkModal] = useState<{ user: UserRow; purpose: 'welcome' | 'reset' } | null>(null);
+  const [invitationCreditsModal, setInvitationCreditsModal] = useState<UserRow | null>(null);
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -118,14 +121,15 @@ export default function UsersTable() {
               <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => toggleSort('email')}>Email</th>
               <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => toggleSort('role')}>Role</th>
               <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => toggleSort('verified')}>Verified</th>
+              <th style={{ padding: '12px 16px' }}>Invitation Credits</th>
               <th style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => toggleSort('created_at')}>Created</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ padding: 24 }}>Loading...</td></tr>
+              <tr><td colSpan={6} style={{ padding: 24 }}>Loading...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 24, color: '#666' }}>No users</td></tr>
+              <tr><td colSpan={6} style={{ padding: 24, color: '#666' }}>No users</td></tr>
             ) : rows.map(u => (
               <tr key={u.id} style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                 <td style={{ padding: '12px 16px' }}>{u.name}</td>
@@ -140,11 +144,30 @@ export default function UsersTable() {
                   }}>{u.role}</span>
                 </td>
                 <td style={{ padding: '12px 16px' }}>{u.verified ? <span style={{ color: '#10B981' }}>✓</span> : <span style={{ color: '#EF4444' }}>✗</span>}</td>
+                <td style={{ padding: '12px 16px' }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: 9999,
+                    background: 'linear-gradient(135deg, #8B5CF6, #EC4899)',
+                    color: 'white',
+                    fontSize: 12,
+                    fontFamily: 'var(--font-semi)'
+                  }}>
+                    {u.invitation_credits ?? 0}
+                  </span>
+                </td>
                 <td style={{ padding: '12px 16px' }}>{formatDate(u.created_at)}</td>
                 <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                   <button className="btn-primary" onClick={()=>setEditing(u)} style={{ marginRight: 8 }}>Edit</button>
                   <button className="btn-primary" onClick={()=>setDeleting(u)} style={{ background: 'linear-gradient(135deg,#EF4444,#EC4899)' }}>Delete</button>
                   <div style={{ height: 8 }} />
+                  <button
+                    className="btn-primary"
+                    onClick={() => setInvitationCreditsModal(u)}
+                    style={{ marginTop: 8, background: 'linear-gradient(135deg,#8B5CF6,#EC4899)' }}
+                  >
+                    Add Invitation Credits
+                  </button>
                   <button
                     className="btn-primary"
                     onClick={() => setPasswordLinkModal({ user: u, purpose: 'welcome' })}
@@ -205,6 +228,19 @@ export default function UsersTable() {
           purpose={passwordLinkModal.purpose}
           onClose={() => setPasswordLinkModal(null)}
           onSuccess={() => { setPasswordLinkModal(null); loadUsers(); }}
+        />
+      )}
+      {invitationCreditsModal && (
+        <InvitationCreditsModal
+          userId={invitationCreditsModal.id}
+          userName={invitationCreditsModal.name}
+          userEmail={invitationCreditsModal.email}
+          currentCredits={invitationCreditsModal.invitation_credits ?? 0}
+          onClose={() => setInvitationCreditsModal(null)}
+          onSuccess={() => {
+            setInvitationCreditsModal(null);
+            loadUsers();
+          }}
         />
       )}
     </div>

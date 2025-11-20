@@ -165,6 +165,15 @@ export const adminApi = {
     return handleResponse(response);
   },
 
+  addInvitationCredits: async (userId: string, credits: number) => {
+    const response = await fetch(`${API_BASE}/users/${userId}/invitation-credits`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ credits })
+    });
+    return handleResponse(response);
+  },
+
   // Tokis
   getTokis: async (params?: { page?: number; limit?: number; search?: string; category?: string; status?: string }) => {
     const query = new URLSearchParams();

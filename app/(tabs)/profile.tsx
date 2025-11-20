@@ -283,54 +283,8 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleInviteFriends = async () => {
-    try {
-      const shareContent = {
-        message: `Hey! I'm using Toki to discover amazing local activities and meet new people in Tel Aviv. Join me and let's explore together! 🌟\n\nDownload Toki: https://toki.app/invite/${state.currentUser.name.toLowerCase().replace(' ', '-')}`,
-        title: 'Join me on Toki!',
-        url: `https://toki.app/invite/${state.currentUser.name.toLowerCase().replace(' ', '-')}`
-      };
-
-      const result = await Share.share(shareContent);
-
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          Alert.alert('Shared Successfully!', `Invitation sent via ${result.activityType}`);
-        } else {
-          Alert.alert('Shared Successfully!', 'Your invitation has been sent!');
-        }
-      }
-    } catch (error) {
-      Alert.alert(
-        '👥 Invite Friends',
-        'Choose how you want to invite your friends:',
-        [
-          {
-            text: 'Copy Link',
-            onPress: () => {
-              Alert.alert(
-                'Link Copied!',
-                `Share this personalized link:\nhttps://toki.app/invite/${state.currentUser.name.toLowerCase().replace(' ', '-')}\n\nYour friends will get bonus points when they join!`
-              );
-            }
-          },
-          {
-            text: 'WhatsApp',
-            onPress: () => {
-              const message = encodeURIComponent(`Hey! I'm using Toki to discover amazing local activities and meet new people in Tel Aviv. Join me and let's explore together! 🌟\n\nDownload Toki: https://toki.app/invite/${state.currentUser.name.toLowerCase().replace(' ', '-')}`);
-              const whatsappUrl = `whatsapp://send?text=${message}`;
-              Linking.openURL(whatsappUrl).catch(() => {
-                Alert.alert('WhatsApp not installed', 'Please install WhatsApp to share via this method.');
-              });
-            }
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          }
-        ]
-      );
-    }
+  const handleInviteFriends = () => {
+    router.push('/invite');
   };
 
   const handleHelpSupport = () => {

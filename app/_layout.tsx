@@ -618,10 +618,11 @@ function RootLayoutNav() {
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
         const inHealthScreen = segments[0] === 'health';
         const inWaitlistScreen = segments[0] === 'waitlist' || path.startsWith('/waitlist');
+        const inRegisterScreen = segments[0] === 'register' || path.startsWith('/register');
         const inSetPasswordScreen = segments[0] === 'set-password' || path.startsWith('/set-password');
         const inResetPasswordScreen = (segments[0] as string) === 'reset-password' || path.startsWith('/reset-password');
         
-        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen) {
+        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen) {
           // If user has tokens but isAuthenticated is false, it's likely a race condition
           // Don't preserve the path - just redirect to login and let fast redirect handle it
           const hasTokens = apiService.hasToken();
@@ -785,13 +786,14 @@ function RootLayoutNav() {
         } else if (isAuthenticated && inJoinScreen) {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
-        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen) {
+        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inRegisterScreen) {
           // IMPORTANT: Don't redirect authenticated users if they're on a valid page
           // List of valid authenticated routes (both deep links and regular authenticated routes)
           const validAuthenticatedRoutes = [
             'toki-details',
             'user-profile',
             'join',
+            'register',
             'notifications',
             'connections',
             'chat',

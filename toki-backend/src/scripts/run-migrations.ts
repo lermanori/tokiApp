@@ -145,6 +145,40 @@ async function runMigrations() {
       }
     }
 
+    // Migration 9: Add invitation_credits column
+    try {
+      console.log('📝 Migration 9: Adding invitation_credits column to users table...');
+      const invitationCreditsSql = readFileSync(
+        join(sqlDir, 'add-invitation-credits-column.sql'),
+        'utf-8'
+      );
+      await pool.query(invitationCreditsSql);
+      console.log('✅ Invitation credits column migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Invitation credits column already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
+    // Migration 10: Create invitations table
+    try {
+      console.log('📝 Migration 10: Creating invitations table...');
+      const invitationsSql = readFileSync(
+        join(sqlDir, 'create-invitations-table.sql'),
+        'utf-8'
+      );
+      await pool.query(invitationsSql);
+      console.log('✅ Invitations table migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Invitations table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

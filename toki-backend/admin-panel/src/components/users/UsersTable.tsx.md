@@ -1,16 +1,18 @@
 # File: UsersTable.tsx
 
 ### Summary
-Enhanced the Users table with actions to send welcome or reset password links via the new admin endpoint. Now uses a modal for template selection and link inclusion control.
+This file contains the users table component in the admin panel. Displays all users with their details and allows management actions. Updated to show invitation credits and allow adding credits.
 
 ### Fixes Applied log
-- Added buttons "Send Welcome Password Link" and "Send Reset Password Link" per user row.
-- Replaced direct API calls with modal-based flow using `PasswordLinkModal` component.
-- Modal allows selecting email templates and controlling whether to include the password link in the email.
+- Added invitation_credits to UserRow interface
+- Added "Invitation Credits" column to table
+- Added "Add Invitation Credits" button in actions column
+- Integrated InvitationCreditsModal component
+- Updated table to display credits as badge
 
 ### How Fixes Were Implemented
-- Buttons now open `PasswordLinkModal` instead of directly calling the API.
-- Modal handles template selection, link inclusion checkbox, and email sending.
-- On success, the generated link is copied to clipboard and displayed in the modal. 
-
-
+- Updated interface to include invitation_credits field
+- Added new table column header for invitation credits
+- Display credits as gradient badge in table rows
+- Added button to open invitation credits modal
+- Refreshes table after credits are added

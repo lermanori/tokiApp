@@ -467,7 +467,37 @@ class ApiService {
         console.error('Logout request failed:', error);
       }
     }
-    await this.clearTokens();
+  }
+
+  // Invitation Methods
+  async sendInvitation(email: string): Promise<{ success: boolean; data: { invitation: any; remainingCredits: number } }> {
+    return this.makeRequest('/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async getInvitations(status?: string): Promise<{ success: boolean; data: any[] }> {
+    const url = status ? `/invitations?status=${status}` : '/invitations';
+    return this.makeRequest(url);
+  }
+
+  async getInvitationCredits(): Promise<{ success: boolean; data: { credits: number } }> {
+    return this.makeRequest('/invitations/credits');
+  }
+
+  async validateInvitationCode(code: string): Promise<{ success: boolean; data: { email: string; inviterName: string; expiresAt: string } }> {
+    return this.makeRequest(`/invitations/validate/${code}`);
+  }
+
+  async registerWithInvitation(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number; invitationCode: string }): Promise<AuthResponse> {
+    const response = await this.makeRequest<AuthResponse>('/auth/register/invite', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+
+    // Don't save tokens - user will log in separately
+    return response;
   }
 
   async getCurrentUser(forceRefresh: boolean = false): Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> {

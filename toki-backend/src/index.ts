@@ -36,6 +36,7 @@ import healthRoutes from './routes/health';
 import activityRoutes from './routes/activity';
 import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
+import invitationRoutes from './routes/invitations';
 
 const app = express();
 const server = createServer(app);
@@ -145,6 +146,7 @@ app.use('/api/health', corsMiddleware, healthRoutes);
 app.use('/api/activity', corsMiddleware, activityRoutes);
 app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 app.use('/api/push', corsMiddleware, pushRoutes);
+app.use('/api/invitations', corsMiddleware, invitationRoutes);
 
 app.get('/api', (req, res) => {
   res.json({

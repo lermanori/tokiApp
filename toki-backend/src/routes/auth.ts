@@ -78,6 +78,156 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
+// Invitation-based registration (skips waitlist)
+router.post('/register/invite', async (req: Request, res: Response) => {
+  try {
+    const { email, password, name, bio, location, latitude, longitude, invitationCode } = req.body;
+    
+    if (!email || !password || !name || !invitationCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Email, password, name, and invitation code are required'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password too short',
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Validate invitation code
+    const invitationResult = await pool.query(
+      `SELECT id, invitee_email, expires_at, status 
+       FROM invitations 
+       WHERE invitation_code = $1`,
+      [invitationCode]
+    );
+
+    if (invitationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invalid invitation',
+        message: 'Invalid invitation code'
+      });
+    }
+
+    const invitation = invitationResult.rows[0];
+
+    // Check if expired
+    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
+      await pool.query(
+        'UPDATE invitations SET status = $1 WHERE id = $2',
+        ['expired', invitation.id]
+      );
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation expired',
+        message: 'This invitation has expired'
+      });
+    }
+
+    // Check if already used
+    if (invitation.status === 'accepted') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation used',
+        message: 'This invitation has already been used'
+      });
+    }
+
+    // Verify email matches invitation
+    if (invitation.invitee_email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email mismatch',
+        message: 'Email does not match the invitation'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        error: 'User already exists',
+        message: 'A user with this email already exists'
+      });
+    }
+
+    // Create user (auto-verified since they were invited)
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+    
+    // Validate coordinates (require both if either is present)
+    const latProvided = latitude !== undefined && latitude !== null && latitude !== '';
+    const lngProvided = longitude !== undefined && longitude !== null && longitude !== '';
+    let latNumber: number | null = null;
+    let lngNumber: number | null = null;
+    
+    if (latProvided && lngProvided) {
+      const parsedLat = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
+      const parsedLng = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        latNumber = parsedLat;
+        lngNumber = parsedLng;
+      }
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude, verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING id, email, name, bio, location, verified, rating, member_since, created_at`,
+      [email, passwordHash, name, bio || null, location || null, latNumber, lngNumber]
+    );
+
+    const user = result.rows[0];
+    await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
+
+    // Mark invitation as accepted
+    await pool.query(
+      `UPDATE invitations 
+       SET status = 'accepted', accepted_at = NOW(), accepted_user_id = $1 
+       WHERE id = $2`,
+      [user.id, invitation.id]
+    );
+
+    const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully with invitation',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          bio: user.bio,
+          location: user.location,
+          verified: user.verified,
+          rating: user.rating,
+          memberSince: user.member_since
+        },
+        tokens
+      }
+    });
+  } catch (error) {
+    logger.error('Invitation registration error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Registration failed',
+      message: 'Internal server error during registration'
+    });
+  }
+});
+
 // User login
 router.post('/login', async (req: Request, res: Response) => {
   try {

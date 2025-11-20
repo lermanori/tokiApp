@@ -918,7 +918,7 @@ router.get('/users', authenticateToken, requireAdmin, async (req: Request, res: 
     const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     const listQuery = `
-      SELECT id, email, name, role, verified, location, created_at
+      SELECT id, email, name, role, verified, location, created_at, invitation_credits
       FROM users
       ${where}
       ORDER BY ${sortColumn} ${order}
@@ -1193,6 +1193,47 @@ router.delete('/users/:id', authenticateToken, requireAdmin, async (req: Request
     console.error('Error deleting user:', error);
     res.status(500).json({ success: false, message: 'Failed to delete user' });
     return;
+  }
+});
+
+// Add invitation credits to a user
+router.post('/users/:id/invitation-credits', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { credits } = req.body;
+
+    if (!credits || typeof credits !== 'number' || credits <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid credits amount is required'
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET invitation_credits = COALESCE(invitation_credits, 0) + $1 
+       WHERE id = $2 
+       RETURNING id, email, name, invitation_credits`,
+      [credits, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error adding invitation credits:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add invitation credits'
+    });
   }
 });
 
