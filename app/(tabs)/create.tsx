@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Alert, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import TokiForm from '@/components/TokiForm';
 import ErrorModal from '@/components/ErrorModal';
@@ -11,6 +11,7 @@ import { parseApiError } from '@/utils/parseApiError';
 
 export default function CreateScreen() {
   const { actions, state } = useApp();
+  const params = useLocalSearchParams();
   const [isCreating, setIsCreating] = useState(false);
   const [errorState, setErrorState] = useState<{
     visible: boolean;
@@ -67,6 +68,19 @@ export default function CreateScreen() {
     router.back();
   };
 
+  // Parse initial data from route params if provided (for recreate feature)
+  const initialData = useMemo(() => {
+    if (params.initialData) {
+      try {
+        return JSON.parse(params.initialData as string);
+      } catch (error) {
+        console.error('Failed to parse initialData:', error);
+        return {};
+      }
+    }
+    return {};
+  }, [params.initialData]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <LinearGradient
@@ -89,6 +103,7 @@ export default function CreateScreen() {
 
       <TokiForm
         mode="create"
+        initialData={initialData}
         onSubmit={handleCreateToki}
         onCancel={handleCancel}
         isSubmitting={isCreating}

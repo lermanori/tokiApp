@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
-import { MapPin, Users, Heart, Clock, Lock } from 'lucide-react-native';
+import { MapPin, Users, Heart, Clock, Lock, CopyPlus } from 'lucide-react-native';
 import { router } from 'expo-router';
 import TokiIcon from './TokiIcon';
 import { useApp } from '@/contexts/AppContext';
@@ -39,6 +39,8 @@ export interface TokiCardProps {
     onPress: () => void;
     onHostPress?: () => void;
     onImageLoad?: () => void; // Callback when images finish loading
+    onRecreate?: () => void; // Callback for recreate button
+    showRecreateButton?: boolean; // Flag to show/hide recreate button
 }
 
 // Helper functions now imported from centralized categories
@@ -193,7 +195,7 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
     return time;
 };
 
-export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: TokiCardProps) {
+export default function TokiCard({ toki, onPress, onHostPress, onImageLoad, onRecreate, showRecreateButton }: TokiCardProps) {
     const { actions } = useApp();
     const [isSaved, setIsSaved] = useState(toki.isSaved || false);
     const [isSaving, setIsSaving] = useState(false);
@@ -298,6 +300,13 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: To
         }
     };
 
+    const handleRecreate = (e: any) => {
+        e.stopPropagation(); // Prevent card press
+        if (onRecreate) {
+            onRecreate();
+        }
+    };
+
     return (
         <TouchableOpacity
             style={styles.eventCard}
@@ -311,6 +320,15 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad }: To
                     onLoad={handleHeaderImageLoad}
                     onError={handleHeaderImageError}
                 />
+                {/* Recreate Button - Top Left */}
+                {showRecreateButton && onRecreate && (
+                    <TouchableOpacity
+                        style={styles.recreateButton}
+                        onPress={handleRecreate}
+                    >
+                        <CopyPlus size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                )}
                 {/* <View style={styles.headerImageOverlay} /> */}
             </View>
 
@@ -674,5 +692,14 @@ const styles = StyleSheet.create({
     },
     saveButton: {
         padding: 8,
+    },
+    recreateButton: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderRadius: 20,
+        padding: 8,
+        zIndex: 10,
     },
 });

@@ -1,34 +1,16 @@
-# File: components/TokiCard.tsx
+# File: TokiCard.tsx
 
 ### Summary
-This component displays a Toki (event) card with image, title, location, time, host information, and interaction buttons. It supports saving/unsaving tokis and navigation to details or host profile.
+TokiCard component displays toki information in a card format. Now includes a recreate button in the top-left corner of the header image for duplicating tokis.
 
 ### Fixes Applied log
-
-- **problem**: No way to track when images finish loading, causing loading state to clear before images are ready
-- **solution**: Added image loading tracking with `onImageLoad` callback prop. Tracks both header image and host avatar loading states, and notifies parent component when all images are loaded.
-
-- **problem**: Maximum update depth exceeded error caused by infinite loop in image loading handlers. Image `onLoad` and `onError` handlers were recreated on every render, causing React Native's Image component to re-trigger load events infinitely.
-- **solution**: Memoized image sources using `useMemo` and memoized `onLoad`/`onError` handlers using `useCallback` with guards to prevent unnecessary state updates. This ensures stable function references and prevents infinite re-renders.
+- problem: No way to recreate/duplicate a toki from the card view.
+- solution: Added optional `onRecreate` callback and `showRecreateButton` flag props. Added recreate button positioned absolutely in top-left of header image container. Button uses `CopyPlus` icon and only renders when both props are provided.
 
 ### How Fixes Were Implemented
-
-1. **Image Loading State**:
-   - Added `imagesLoaded` state to track header image and host avatar loading
-   - Header image and host avatar both have `onLoad` and `onError` handlers
-   - If host has no avatar, it's considered "loaded" immediately (fallback view)
-
-2. **Callback Prop**:
-   - Added `onImageLoad?: () => void` prop to TokiCardProps interface
-   - When both images are loaded, calls `onImageLoad()` to notify parent
-   - Error handlers also mark images as "loaded" to prevent blocking
-
-3. **State Reset**:
-   - Image loading state resets when toki ID, image URL, or host avatar changes
-   - Ensures accurate tracking when toki data updates
-
-4. **Infinite Loop Prevention**:
-   - Memoized `headerImageSource` and `hostAvatarSource` using `useMemo` to prevent source object recreation on every render
-   - Memoized all image load/error handlers using `useCallback` to maintain stable function references
-   - Added guards in handlers to skip state updates if image is already loaded, preventing unnecessary re-renders
-   - This fixes the "Maximum update depth exceeded" error that occurred when images loaded
+- Added `CopyPlus` icon to imports from `lucide-react-native`.
+- Extended `TokiCardProps` interface with optional `onRecreate?: () => void` and `showRecreateButton?: boolean` props.
+- Added `handleRecreate` function that stops event propagation and calls `onRecreate` callback.
+- Added recreate button JSX in `headerImageContainer` with conditional rendering based on `showRecreateButton && onRecreate`.
+- Styled button with `recreateButton` style: absolute positioning (top: 12, left: 12), semi-transparent dark background, rounded corners, and z-index for proper layering.
+- Button prevents card press event when clicked using `e.stopPropagation()`.

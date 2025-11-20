@@ -46,6 +46,25 @@ const getMyTokisStatus = (toki: any, currentUserId: string): 'created' | 'joined
   }
 };
 
+// Helper function to transform toki data to initialData format for recreate
+const transformTokiToInitialData = (toki: any) => {
+  return {
+    title: toki.title || '',
+    description: toki.description || '',
+    location: toki.location || '',
+    latitude: toki.latitude || null,
+    longitude: toki.longitude || null,
+    activity: toki.category || '',
+    activities: toki.category ? [toki.category] : [],
+    time: toki.time || null,
+    maxAttendees: toki.maxAttendees || 10,
+    tags: toki.tags || [],
+    customDateTime: toki.scheduledTime || '',
+    images: toki.images || (toki.image ? [{ url: toki.image, publicId: '' }] : []),
+    visibility: toki.visibility || 'public',
+  };
+};
+
 
 
 export default function MyTokisScreen() {
@@ -155,6 +174,16 @@ export default function MyTokisScreen() {
     router.push('/(tabs)/create');
   };
 
+  const handleRecreateToki = (toki: any) => {
+    const initialData = transformTokiToInitialData(toki);
+    router.push({
+      pathname: '/(tabs)/create',
+      params: {
+        initialData: JSON.stringify(initialData),
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -225,6 +254,8 @@ export default function MyTokisScreen() {
                 <TokiCard
                   toki={{ ...toki, isHostedByUser: toki.isHostedByUser }}
                   onPress={() => handleTokiPress(toki)}
+                  onRecreate={() => handleRecreateToki(toki)}
+                  showRecreateButton={toki.isHostedByUser || toki.normalizedStatus === 'hosting'}
                 />
               </View>
             ))}

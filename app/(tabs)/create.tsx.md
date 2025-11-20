@@ -1,31 +1,15 @@
 # File: create.tsx
 
 ### Summary
-This screen allows users to create new Tokis. It displays a TokiForm component and handles the submission flow, including error handling with the new ErrorModal component.
+Create Toki screen that allows users to create new tokis. Now supports pre-filling form data from route parameters for the recreate feature.
 
 ### Fixes Applied log
-- problem: Used native Alert.alert for error messages, providing inconsistent UX
-- solution: Integrated ErrorModal component to display backend and validation errors with branded styling
-- problem: Error handling didn't catch errors thrown from AppContext.createToki
-- solution: Simplified error handling to catch thrown errors directly, removing null check logic
-- problem: After creating a toki and viewing details, pressing back would return to create screen instead of home screen
-- solution: Added `fromCreate=true` parameter when navigating to toki-details, so back button redirects to home screen (same behavior as edit mode)
+- problem: Create page did not support pre-filling form data from route parameters, preventing the recreate feature from working.
+- solution: Added `useLocalSearchParams` to read `initialData` from route params, parse it as JSON, and pass it to `TokiForm` component. Added error handling for JSON parsing failures.
 
 ### How Fixes Were Implemented
-- problem: Error handling was basic with Alert.alert calls that didn't show detailed error information
-- solution: 
-  - Added errorState to track modal visibility, title, message, details, and status code
-  - Imported ErrorModal and parseApiError utilities
-  - Simplified handleCreateToki to only use try/catch (removed if/else null check)
-  - AppContext.createToki now throws errors instead of returning null on failure
-  - Used parseApiError to normalize errors from backend with 'create' context
-  - Set errorState when errors occur in catch block
-  - Added onValidationError callback to TokiForm to handle client-side validation errors
-  - Rendered ErrorModal at bottom of component tree with errorState props
-  - Modal shows user-friendly error messages with optional bullet-point details for validation issues
-  - Backend validation errors (e.g., "Max attendees must be between 1 and 100") now display correctly in ErrorModal
-- problem: Navigation after creating a toki would go back to create screen when pressing back button in details
-- solution:
-  - Updated navigation in handleCreateToki to include `fromCreate=true` parameter: `router.push(\`/toki-details?tokiId=${tokiId}&fromCreate=true\`)`
-  - This matches the pattern used in edit mode (`fromEdit=true`) to ensure consistent back navigation behavior
-  - Toki details screen now checks for `fromCreate` and redirects to home `/(tabs)` instead of going back to create form
+- Imported `useLocalSearchParams` from `expo-router` and `useMemo` from React.
+- Added `params` constant using `useLocalSearchParams()`.
+- Created `initialData` memo that parses `params.initialData` as JSON string, with try-catch for error handling.
+- Passed `initialData` prop to `TokiForm` component.
+- When `initialData` is provided via route params, the form will be pre-filled with that data, enabling the recreate feature.
