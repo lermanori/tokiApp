@@ -162,7 +162,7 @@ router.post('/register/invite', async (req: Request, res: Response) => {
       });
     }
 
-    // Create user (auto-verified since they were invited)
+    // Create user (invited users skip waitlist but are not auto-verified)
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     
@@ -183,7 +183,7 @@ router.post('/register/invite', async (req: Request, res: Response) => {
     
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude, verified)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false)
        RETURNING id, email, name, bio, location, verified, rating, member_since, created_at`,
       [email, passwordHash, name, bio || null, location || null, latNumber, lngNumber]
     );

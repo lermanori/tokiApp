@@ -13,4 +13,4 @@ This file handles user authentication including login, registration, and passwor
 - Checks invitation expiration and usage status
 - Verifies email matches the invitation
 - Marks invitation as accepted after successful registration
-- Auto-verifies invited users (sets verified = true)
+- Invited users are not auto-verified (sets verified = false, same as regular registration)
