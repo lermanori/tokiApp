@@ -38,4 +38,6 @@ This file contains the ExMap screen component that combines the Explore screen's
 - Added `mapEvents` from `useDiscoverData()` (falls back to `events`) so `useDiscoverFilters` and category counts always work on the full dataset even though the card list paginates locally.
 - Introduced `CARD_PAGE_SIZE`, `visibleCount`, and `isLocalLoadingMore` states plus a derived `paginatedEvents` array. `handleLoadMoreLocal` increments the visible window when the user nears the bottom, while the map continues to consume the unsliced `sortedEvents`.
 - Updated `FlatList` bindings (`data`, `ListFooterComponent`, scroll handlers) to rely on the local pagination helpers and removed the old backend-driven `handleLoadMoreWithRadius`.
+- problem: Search input container became narrow when typing due to height mismatch between searchButton and searchInputContainer
+- solution: Changed searchInputContainer paddingVertical from 0 to 12 to match searchButton, and removed height: 'auto' from searchInput to let padding control height naturally. Both containers now have consistent height preventing layout recalculation.
 

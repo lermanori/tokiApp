@@ -148,7 +148,7 @@ export default function ExMapScreen() {
             return []; // Return empty array on error to prevent crash
         }
     }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude, selectedCategories]);
-    
+
     // Reset card pagination when the sorted event set changes
     useEffect(() => {
         if (sortedEvents.length === 0) {
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
         paddingHorizontal: 16,
-        paddingVertical: 0,
+        paddingVertical: 12,
         gap: 8,
         shadowColor: '#000',
         shadowOffset: {
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: 16,
         fontFamily: 'Inter-Regular',
-        color: '#1C1C1C'
+        color: '#1C1C1C',
     },
     searchPlaceholder: {
         color: '#999999',

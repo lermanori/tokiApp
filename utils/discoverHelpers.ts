@@ -55,7 +55,9 @@ export const filterEvents = (
       event.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const categoryAnySelected = !selectedCategories.length || selectedCategories.includes('all');
-    const matchesMultiCategory = categoryAnySelected || selectedCategories.includes(event.category);
+    // Check if any selected category matches any tag in the event's tags array
+    const matchesMultiCategory = categoryAnySelected || 
+      selectedCategories.some(selectedCat => event.tags.includes(selectedCat));
 
     // Category chips are the single source of truth; modal category is ignored
     const matchesCategory = matchesMultiCategory;
