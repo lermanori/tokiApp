@@ -11,3 +11,4 @@ Defines shared types for the recommendation algorithm, including weight configur
 -problem: Introduced `AlgorithmWeights`, `EventData`, `ScoredEvent`, and `AlgorithmContext` to standardize data exchanged between strategies and route integrations.
 -solution: Created `types.ts` exporting the interfaces for reuse across algorithm modules and route logic.
 
+

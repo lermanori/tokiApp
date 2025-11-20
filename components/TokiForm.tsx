@@ -17,7 +17,6 @@ import { GeocodingResult, geocodingService } from '@/services/geocoding';
 import TokiImageUpload from './TokiImageUpload';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { getBackendUrl } from '@/services/config';
-import { apiService } from '@/services/api';
 import * as ImageManipulator from 'expo-image-manipulator';
 import DateTimePicker from 'react-native-ui-datepicker';
 import RNDateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -467,6 +466,44 @@ export default function TokiForm({
 
 
 
+  const prepareImagesForSubmission = async (): Promise<Array<{ url?: string; publicId?: string; base64?: string; mimeType?: string }>> => {
+    if (!tokiImages || tokiImages.length === 0) return [];
+
+    const preparedImages: Array<{ url?: string; publicId?: string; base64?: string; mimeType?: string }> = [];
+
+    for (const image of tokiImages) {
+      if (image.publicId && !image.publicId.startsWith('temp_') && image.url && image.url.startsWith('http')) {
+        preparedImages.push({
+          url: image.url,
+          publicId: image.publicId,
+        });
+        continue;
+      }
+
+      if (image.url) {
+        try {
+          const manipResult = await ImageManipulator.manipulateAsync(
+            image.url,
+            [],
+            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+          );
+
+          if (manipResult.base64) {
+            preparedImages.push({
+              base64: `data:image/jpeg;base64,${manipResult.base64}`,
+              mimeType: 'image/jpeg',
+            });
+          }
+        } catch (error) {
+          console.error('📸 [TOKI FORM] Failed to process image for submission:', error);
+          throw new Error('Failed to process one of the images. Please try again.');
+        }
+      }
+    }
+
+    return preparedImages;
+  };
+
   const handleSubmit = async () => {
     // Validate required fields
     const missingFields: string[] = [];
@@ -507,133 +544,44 @@ export default function TokiForm({
       }
     }
 
-    // Check if there are temporary images that need to be uploaded
-    const tempImages = tokiImages.filter(img => img.publicId.startsWith('temp_'));
-    const hasTempImages = tempImages.length > 0;
-
-    if (hasTempImages) {
-      console.log('📸 [TOKI FORM] Creating Toki first, then uploading images...');
-
-      // Create Toki without images first
-      const tokiDataWithoutImages = {
-        title,
-        description: description || `Join us for ${title.toLowerCase()}!`,
-        location,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        placeId: selectedPlaceId || null,
-        activity: selectedActivities[0], // Primary activity (first selected)
-        activities: selectedActivities, // All selected activities
-        time: selectedTime,
-        customDateTime: selectedTime === 'custom' ? customDateTime : null,
-        maxAttendees: parseInt(maxAttendees) || 10,
-        tags: [...selectedActivities, ...customTags],
-        category: selectedActivities[0], // Primary category
-        visibility: isPrivate ? 'private' : 'public',
-        images: [], // No images initially
-        externalLink: externalLink.trim() || null,
-      };
-
-      try {
-        const result = await onSubmit(tokiDataWithoutImages);
-        if (result && typeof result === 'string') {
-          // Now upload the images to the created Toki
-          console.log('📸 [TOKI FORM] Toki created, now uploading images...');
-
-          // Show loading state for image uploads
-          Alert.alert(
-            'Uploading Images',
-            'Your Toki has been created! Now uploading your images...',
-            [{ text: 'OK' }]
-          );
-
-          await uploadImagesToToki(result, tempImages);
-          console.log('📸 [TOKI FORM] All images uploaded successfully');
-
-          // Return the result only after images are uploaded
-          return result;
-        }
-        return result;
-      } catch (error) {
-        console.error('Error in handleSubmit:', error);
-        Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-      }
-    } else {
-      // No temporary images, create Toki normally
-      const tokiData = {
-        title,
-        description: description || `Join us for ${title.toLowerCase()}!`,
-        location,
-        latitude: latitude || null,
-        longitude: longitude || null,
-        placeId: selectedPlaceId || null,
-        activity: selectedActivities[0], // Primary activity (first selected)
-        activities: selectedActivities, // All selected activities
-        time: selectedTime,
-        customDateTime: selectedTime === 'custom' ? customDateTime : null,
-        maxAttendees: parseInt(maxAttendees) || 10,
-        tags: [...selectedActivities, ...customTags],
-        category: selectedActivities[0], // Primary category
-        visibility: isPrivate ? 'private' : 'public',
-        images: [], // No images
-        externalLink: externalLink.trim() || null,
-      };
-
-      try {
-        const result = await onSubmit(tokiData);
-        if (result) {
-          return result;
-        }
-      } catch (error) {
-        console.error('Error in handleSubmit:', error);
-        Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-      }
+    let preparedImages: Array<{ url?: string; publicId?: string; base64?: string; mimeType?: string }> = [];
+    try {
+      preparedImages = await prepareImagesForSubmission();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to process images. Please try again.';
+      Alert.alert('Image Error', message);
+      return;
     }
-  };
 
-  const uploadImagesToToki = async (tokiId: string, tempImages: Array<{ url: string; publicId: string }>) => {
-    for (const image of tempImages) {
-      try {
-        console.log(`📸 [TOKI FORM] Uploading image: ${image.publicId}`);
+    const tokiData = {
+      title,
+      description: description || `Join us for ${title.toLowerCase()}!`,
+      location,
+      latitude: latitude || null,
+      longitude: longitude || null,
+      placeId: selectedPlaceId || null,
+      activity: selectedActivities[0], // Primary activity (first selected)
+      activities: selectedActivities, // All selected activities
+      time: selectedTime,
+      customDateTime: selectedTime === 'custom' ? customDateTime : null,
+      maxAttendees: parseInt(maxAttendees) || 10,
+      tags: [...selectedActivities, ...customTags],
+      category: selectedActivities[0], // Primary category
+      visibility: isPrivate ? 'private' : 'public',
+      images: preparedImages,
+      externalLink: externalLink.trim() || null,
+      userLatitude: state.currentUser?.latitude ?? null,
+      userLongitude: state.currentUser?.longitude ?? null,
+    };
 
-        // Convert image to base64 using ImageManipulator (same approach as edit mode)
-        const manipResult = await ImageManipulator.manipulateAsync(
-          image.url,
-          [],
-          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-        );
-        
-        if (!manipResult.base64) {
-          console.error(`📸 [TOKI FORM] Failed to convert image to base64: ${image.publicId}`);
-          continue;
-        }
-        
-        const imageData = `data:image/jpeg;base64,${manipResult.base64}`;
-
-        // Send as JSON (works for both web and React Native)
-        const uploadResponse = await fetch(`${getBackendUrl()}/api/toki-images/upload/${tokiId}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${await apiService.getAccessToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ image: imageData }),
-        });
-
-        if (uploadResponse.ok) {
-          const result = await uploadResponse.json();
-          if (result.success) {
-            console.log(`📸 [TOKI FORM] Image uploaded successfully: ${result.data.publicId}`);
-          } else {
-            console.error(`📸 [TOKI FORM] Image upload failed: ${result.message}`);
-          }
-        } else {
-          const errorData = await uploadResponse.json().catch(() => ({}));
-          console.error(`📸 [TOKI FORM] Image upload failed with status: ${uploadResponse.status}`, errorData);
-        }
-      } catch (error) {
-        console.error(`📸 [TOKI FORM] Error uploading image ${image.publicId}:`, error);
+    try {
+      const result = await onSubmit(tokiData);
+      if (result) {
+        return result;
       }
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 

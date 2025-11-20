@@ -14,6 +14,7 @@ const DEFAULT_REGION: MapRegion = {
 export const useDiscoverData = () => {
   const { state, actions } = useApp();
   const [events, setEvents] = useState<TokiEvent[]>([]);
+  const [mapEvents, setMapEvents] = useState<TokiEvent[]>([]);
   const [mapRegion, setMapRegion] = useState<MapRegion>(DEFAULT_REGION);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -21,6 +22,7 @@ export const useDiscoverData = () => {
   const [refreshing, setRefreshing] = useState(false);
   
   const previousEventIdsRef = useRef<string>('');
+  const previousMapEventIdsRef = useRef<string>('');
   const mapRegionInitializedRef = useRef(false);
   const hasInitiallyLoadedRef = useRef(false);
   const loadMoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,6 +44,24 @@ export const useDiscoverData = () => {
       }
     }
   }, [state.tokis]);
+
+  // Transform map tokis to events (used for rendering all markers)
+  useEffect(() => {
+    if (state.mapTokis.length > 0) {
+      const transformedMap = state.mapTokis.map(transformTokiToEvent);
+      const newMapIds = transformedMap.map(e => e.id).sort().join(',');
+      
+      if (previousMapEventIdsRef.current !== newMapIds) {
+        setMapEvents(transformedMap);
+        previousMapEventIdsRef.current = newMapIds;
+      }
+    } else if (state.mapTokis.length === 0) {
+      if (previousMapEventIdsRef.current !== '') {
+        setMapEvents([]);
+        previousMapEventIdsRef.current = '';
+      }
+    }
+  }, [state.mapTokis]);
 
   // Initialize map region from user profile location - only once on mount
   useEffect(() => {
@@ -230,6 +250,7 @@ export const useDiscoverData = () => {
 
   return {
     events,
+    mapEvents,
     mapRegion,
     userConnections: state.userConnectionsIds, // Use centralized state
     currentPage,

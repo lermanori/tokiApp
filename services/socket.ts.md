@@ -13,3 +13,4 @@ Socket service for WebSocket connection management. Handles connection, room joi
 - Follows same pattern as `onMessageReceived()` and `onTokiMessageReceived()`.
 - Logs debug information for troubleshooting.
 
+

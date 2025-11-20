@@ -5,6 +5,16 @@ This file contains the backend API routes for managing Tokis (events/activities)
 
 ### Fixes Applied log
 
+**2025-11-20 - Enriched create response for new Tokis**
+
+- **problem**: `POST /tokis` returned only raw DB fields (missing `imageUrl`, `scheduledTime`, formatted tags, distance, join status), forcing the client to render placeholder cards until a refresh.
+- **solution**: After insertion, fetch the newly created Toki with host + tags, normalize images, and respond with the same shape as the listing endpoints (including distance object, join status, timestamps, etc.).
+
+**2025-11-20 - Inline image uploads & creator distance**
+
+- **problem**: Newly created Tokis referenced temporary image URIs and always reported `0 km` because the create endpoint neither uploaded the selected photos nor knew the host’s coordinates.
+- **solution**: The endpoint now accepts inline base64 images, uploads them to Cloudinary while the Toki is created, stores the resulting URLs/public IDs, and calculates the distance between the host and the event (using payload coordinates or the host profile) so the initial response already contains the final media + distance data.
+
 **2025-01-XX - Fixed toki loading bugs in /tokis/nearby endpoint**
 
 - **problem**: Count query was missing critical filters (user blocking, hidden tokis, visibility) causing count mismatch (showing 31 instead of 33)
@@ -30,6 +40,15 @@ This file contains the backend API routes for managing Tokis (events/activities)
 - **solution**: Created a new `/api/tokis/my-tokis` endpoint that returns ALL tokis the user is involved with (hosting, joined, or pending) without pagination limits. The query specifically filters for tokis where the user is either the host OR a participant, ensuring all user's tokis are included regardless of other criteria.
 
 ### How Fixes Were Implemented
+
+1. **Create Response Hydration**:
+   - After committing the insert transaction, query the new Toki with host + tag joins and image arrays.
+   - Normalize `image_urls`/`image_public_ids` into the frontend-friendly `imageUrl` + `images[]` fields, compute the host distance when coordinates are available, and mark `joinStatus` as `hosting`.
+   - Return this enriched payload so the client receives the same structure as `/tokis` and `/tokis/nearby`, avoiding placeholder UI.
+
+2. **Inline Image + Distance Support**:
+   - Added base64 handling that uploads inline images via `ImageService.uploadTokiImage` using the brand-new Toki ID for namespacing.
+   - Accepted optional `userLatitude`/`userLongitude` values (falling back to the host’s saved coordinates) and used `calculateDistance` so the create response includes the true `{ km, miles }` object immediately.
 
 1. **Count Query Filter Alignment**:
    - Added user blocking filters (`user_blocks` table) to exclude tokis where user has blocked the host or vice versa

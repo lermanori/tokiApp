@@ -15,3 +15,4 @@ This file contains utility functions for generating URLs and share messages for 
   - Returns URLs in the format: `${baseUrl}/join/${inviteCode}`
   - This ensures invite links work correctly in all deployment environments (local development, custom domain, GitHub Pages)
 
+

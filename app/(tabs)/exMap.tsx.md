@@ -33,4 +33,9 @@ This file contains the ExMap screen component that combines the Explore screen's
   - Removed RefreshCw from lucide-react-native imports
   - Kept handleRefreshWithRadius function as it's still used by RefreshControl on FlatList
   - Result: Cleaner UI with no duplicate refresh functionality, users can still refresh via standard drag-to-refresh gesture
+- problem: API limited responses to 50 items so the map and header were accurate but the UI still tried to fetch additional pages; cards also rendered all results at once with no true infinite scroll.
+- solution: Switched to client-side pagination by slicing the sorted events list into 20-item pages, added local “load more” state, and wired map/filter logic to the new `mapEvents` dataset so markers still display every result.
+- Added `mapEvents` from `useDiscoverData()` (falls back to `events`) so `useDiscoverFilters` and category counts always work on the full dataset even though the card list paginates locally.
+- Introduced `CARD_PAGE_SIZE`, `visibleCount`, and `isLocalLoadingMore` states plus a derived `paginatedEvents` array. `handleLoadMoreLocal` increments the visible window when the user nears the bottom, while the map continues to consume the unsliced `sortedEvents`.
+- Updated `FlatList` bindings (`data`, `ListFooterComponent`, scroll handlers) to rely on the local pagination helpers and removed the old backend-driven `handleLoadMoreWithRadius`.
 

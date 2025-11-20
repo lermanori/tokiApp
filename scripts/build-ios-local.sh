@@ -84,3 +84,4 @@ echo "  5. Follow the wizard"
 echo ""
 echo -e "${GREEN}✅ Setup complete! Continue in Xcode.${NC}"
 
+

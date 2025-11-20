@@ -4,6 +4,8 @@
 This component provides a comprehensive form for creating and editing Tokis. It handles all input fields including title, description, location, activity types, time scheduling, max attendees, tags, images, and privacy settings. The form supports both create and edit modes with proper validation.
 
 ### Fixes Applied log
+- problem: Newly created Tokis lacked their uploaded images/distance until a refresh because images were uploaded after creation and location data wasn't sent.
+- solution: TokiForm now encodes selected images to base64 before submission, includes them (and the creator's coordinates) in the create payload, and eliminates the post-create upload step so the backend can return the final card immediately.
 - problem: Validation errors used Alert.alert, inconsistent with new error modal approach
 - solution: Added onValidationError callback prop to allow parent screens to handle validation errors via ErrorModal
 - problem: Cloudinary image upload failed during toki creation (500 error) - used blob/FormData approach that doesn't work on web
@@ -12,6 +14,8 @@ This component provides a comprehensive form for creating and editing Tokis. It 
 - solution: Forced light mode styling on all date/time pickers by adding themeVariant="light" to RNDateTimePicker and explicit light theme styles to DateTimePicker components
 
 ### How Fixes Were Implemented
+- Added a `prepareImagesForSubmission` helper that converts any local/temp images into base64 payloads (or reuses existing Cloudinary URLs) before calling `onSubmit`.
+- Extended the submission payload with `images`, `userLatitude`, and `userLongitude`, enabling the backend to upload inline images and calculate distance in the initial response.
 - problem: Form validation errors were displayed via Alert.alert, not matching the new branded error modal UX
 - solution:
   - Added optional onValidationError prop to TokiFormProps interface (callback that receives string array of error details)

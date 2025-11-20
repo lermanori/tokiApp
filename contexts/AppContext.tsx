@@ -120,6 +120,7 @@ interface RedirectionState {
 
 interface AppState {
   tokis: Toki[];
+  mapTokis: Toki[];
   users: User[];
   messages: Message[];
   currentUser: User;
@@ -149,6 +150,7 @@ type AppAction =
   | { type: 'SET_REDIRECTION'; payload: { returnTo: string; returnParams?: Record<string, string> } }
   | { type: 'CLEAR_REDIRECTION' }
   | { type: 'SET_TOKIS'; payload: Toki[] }
+  | { type: 'SET_MAP_TOKIS'; payload: Toki[] }
   | { type: 'ADD_TOKI'; payload: Toki }
   | { type: 'UPDATE_TOKI'; payload: { id: string; updates: Partial<Toki> } }
   | { type: 'DELETE_TOKI'; payload: string }
@@ -279,6 +281,7 @@ const loadStoredData = async () => {
 // Initial state with empty data - will be loaded asynchronously
 const initialState: AppState = {
   tokis: [],
+  mapTokis: [],
   users: [],
   messages: [],
   currentUser: emptyUser,
@@ -303,6 +306,15 @@ const initialState: AppState = {
   connections: [],
   pendingConnections: [],
   userConnectionsIds: [],
+};
+
+const formatDistanceString = (distance?: { km: number; miles: number } | string): string => {
+  if (!distance) return '0.0 km';
+  if (typeof distance === 'string') return distance;
+  if (typeof distance.km === 'number' && Number.isFinite(distance.km)) {
+    return `${distance.km} km`;
+  }
+  return '0.0 km';
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -334,7 +346,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_TOKIS':
       // Store in AsyncStorage (async operation)
       storage.set(STORAGE_KEYS.TOKIS, action.payload);
-      return { ...state, tokis: action.payload };
+      return { ...state, tokis: action.payload, mapTokis: action.payload };
+    case 'SET_MAP_TOKIS':
+      return { ...state, mapTokis: action.payload };
     case 'ADD_TOKI':
       const newTokis = [action.payload, ...state.tokis];
       storage.set(STORAGE_KEYS.TOKIS, newTokis);
@@ -349,6 +363,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { 
         ...state, 
         tokis: newTokis,
+        mapTokis: newTokis,
         currentUser: updatedUserAfterAdd,
       };
     case 'UPDATE_TOKI':
@@ -373,6 +388,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         tokis: updatedTokis,
+        mapTokis: updatedTokis,
         currentUser: updatedUserAfterUpdate,
       };
     case 'DELETE_TOKI':
@@ -393,6 +409,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         tokis: filteredTokis,
+        mapTokis: filteredTokis,
         currentUser: updatedUserAfterDelete,
       };
     case 'SET_USERS':
@@ -1101,7 +1118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || '',
-        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        distance: formatDistanceString(apiToki.distance),
         isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
         joinStatus: apiToki.joinStatus || 'not_joined', // Use backend join status
         visibility: apiToki.visibility,
@@ -1155,7 +1172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || '',
-        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        distance: formatDistanceString(apiToki.distance),
         isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
         joinStatus: apiToki.joinStatus || 'not_joined',
         visibility: apiToki.visibility,
@@ -1217,7 +1234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || '',
-        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        distance: formatDistanceString(apiToki.distance),
         isHostedByUser: apiToki.host.id === state.currentUser.id,
         joinStatus: apiToki.joinStatus || 'not_joined',
         visibility: apiToki.visibility,
@@ -1239,6 +1256,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const NEARBY_FETCH_LIMIT = 1000;
+
   const loadNearbyTokis = async (
     params: { 
       latitude: number; 
@@ -1246,7 +1265,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       radius?: number; 
       page?: number; 
       category?: string; 
-      timeSlot?: string 
+      timeSlot?: string;
+      limit?: number;
     }, 
     append: boolean = false
   ): Promise<{ pagination: any }> => {
@@ -1284,7 +1304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: params.latitude,
         longitude: params.longitude,
         radius: params.radius || 10,
-        limit: 50,
+        limit: params.limit ?? NEARBY_FETCH_LIMIT,
         page: params.page || 1,
         category: params.category,
         timeSlot: params.timeSlot
@@ -1317,7 +1337,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || '',
-        distance: apiToki.distance ? `${apiToki.distance.km} km` : '0.0 km',
+        distance: formatDistanceString(apiToki.distance),
         isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
         joinStatus: apiToki.joinStatus || 'not_joined',
         visibility: apiToki.visibility,
@@ -1446,17 +1466,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         visibility: tokiData.visibility || 'public',
         tags: tokiData.tags || [],
         externalLink: tokiData.externalLink || null,
+        images: tokiData.images || [],
+        userLatitude: tokiData.userLatitude ?? state.currentUser?.latitude ?? null,
+        userLongitude: tokiData.userLongitude ?? state.currentUser?.longitude ?? null,
       };
 
       const apiToki = await apiService.createToki(apiTokiData);
-      
+
       const newToki: Toki = {
         id: apiToki.id,
         title: apiToki.title,
         description: apiToki.description,
         location: apiToki.location,
-        time: apiToki.timeSlot || 'Time TBD', // Add fallback for undefined timeSlot
+        time: apiToki.timeSlot || 'Time TBD',
         attendees: apiToki.currentAttendees,
+        currentAttendees: apiToki.currentAttendees,
         maxAttendees: apiToki.maxAttendees,
         tags: apiToki.tags,
         host: {
@@ -1465,13 +1489,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || getImageForActivity(tokiData.activity),
-        distance: '0.0 km',
+        distance: formatDistanceString(apiToki.distance),
         isHostedByUser: true,
-        joinStatus: 'not_joined', // Host doesn't need to join their own Toki
+        joinStatus: 'not_joined',
         visibility: apiToki.visibility,
         category: apiToki.category,
         createdAt: apiToki.createdAt,
-        scheduledTime: apiToki.scheduledTime, // Add scheduled time for better display
+        latitude: apiToki.latitude ? Number(apiToki.latitude) : undefined,
+        longitude: apiToki.longitude ? Number(apiToki.longitude) : undefined,
+        scheduledTime: apiToki.scheduledTime,
+        isSaved: apiToki.is_saved ?? false,
       };
       
       dispatch({ type: 'ADD_TOKI', payload: newToki });

@@ -76,22 +76,26 @@ export default function ExMapScreen() {
     // Image loading tracking
     const [imageLoadTracking, setImageLoadTracking] = useState<Set<string>>(new Set());
     const imageLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const initialBatchSize = 20;
+    const CARD_PAGE_SIZE = 20;
+    const initialBatchSize = CARD_PAGE_SIZE;
+    const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
+    const [isLocalLoadingMore, setIsLocalLoadingMore] = useState(false);
 
     renderCountRef.current += 1;
 
     // Custom hooks for data and filtering
     const {
         events,
+        mapEvents,
         mapRegion,
         userConnections,
         isLoadingMore,
-        hasMore,
         refreshing,
-        handleLoadMore,
         handleRefresh,
         updateMapRegion,
     } = useDiscoverData();
+
+    const baseEvents = useMemo(() => (mapEvents && mapEvents.length > 0 ? mapEvents : events), [mapEvents, events]);
 
     const {
         selectedCategories,
@@ -102,7 +106,7 @@ export default function ExMapScreen() {
         clearAllFilters,
         searchQuery,
         setSearchQuery,
-    } = useDiscoverFilters(events, userConnections);
+    } = useDiscoverFilters(baseEvents, userConnections);
 
     // Add error boundary for category changes
     const handleCategoryToggle = useCallback((categories: string[]) => {
@@ -110,7 +114,7 @@ export default function ExMapScreen() {
             console.log('🔄 [EXMAP] Category toggle:', {
                 from: selectedCategories,
                 to: categories,
-                eventsCount: events.length,
+                eventsCount: baseEvents.length,
                 filteredCount: filteredEvents.length
             });
             setSelectedCategories(categories);
@@ -118,7 +122,7 @@ export default function ExMapScreen() {
             console.error('❌ [EXMAP] Error in handleCategoryToggle:', error);
             console.error('❌ [EXMAP] Error stack:', error instanceof Error ? error.stack : 'No stack');
         }
-    }, [selectedCategories, setSelectedCategories, events.length, filteredEvents.length]);
+    }, [selectedCategories, setSelectedCategories, baseEvents.length, filteredEvents.length]);
 
     // Sorting
     const sortedEvents = useMemo(() => {
@@ -144,12 +148,44 @@ export default function ExMapScreen() {
             return []; // Return empty array on error to prevent crash
         }
     }, [filteredEvents, sort, mapRegion?.latitude, mapRegion?.longitude, state.currentUser?.latitude, state.currentUser?.longitude, selectedCategories]);
+    
+    // Reset card pagination when the sorted event set changes
+    useEffect(() => {
+        if (sortedEvents.length === 0) {
+            setVisibleCount(0);
+            return;
+        }
+        setVisibleCount(Math.min(sortedEvents.length, CARD_PAGE_SIZE));
+    }, [sortedEvents]);
+
+    const paginatedEvents = useMemo(() => {
+        if (visibleCount === 0) {
+            return [];
+        }
+        return sortedEvents.slice(0, visibleCount);
+    }, [sortedEvents, visibleCount]);
+
+    const hasMoreLocal = visibleCount < sortedEvents.length;
+
+    const handleLoadMoreLocal = useCallback(() => {
+        if (isLocalLoadingMore || !hasMoreLocal) {
+            return;
+        }
+
+        setIsLocalLoadingMore(true);
+        requestAnimationFrame(() => {
+            setVisibleCount(prev => Math.min(sortedEvents.length, prev + CARD_PAGE_SIZE));
+            setTimeout(() => {
+                setIsLocalLoadingMore(false);
+            }, 150);
+        });
+    }, [hasMoreLocal, isLocalLoadingMore, sortedEvents.length]);
 
     // Sort categories by number of tokis in each category (most first), keeping 'all' first
     const sortedCategories = useMemo(() => {
         // Calculate counts per category
         const categoryCounts = new Map<string, number>();
-        events.forEach(event => {
+        baseEvents.forEach(event => {
             const count = categoryCounts.get(event.category) || 0;
             categoryCounts.set(event.category, count + 1);
         });
@@ -166,7 +202,7 @@ export default function ExMapScreen() {
 
         // Always put 'all' first
         return ['all', ...sorted];
-    }, [events]);
+    }, [baseEvents]);
 
     // Reset image loading tracking when data changes
     useEffect(() => {
@@ -508,11 +544,6 @@ export default function ExMapScreen() {
         handleRefresh(selectedFilters.radius);
     }, [handleRefresh, selectedFilters.radius]);
 
-    const handleLoadMoreWithRadius = useCallback(() => {
-        if (isLoadingMore || !hasMore) return;
-        handleLoadMore(selectedFilters.radius);
-    }, [isLoadingMore, hasMore, handleLoadMore, selectedFilters.radius]);
-
     // Calculate number of columns based on screen width
     const numColumns = useMemo(() => {
         if (width >= 3200) return 7;
@@ -580,7 +611,7 @@ export default function ExMapScreen() {
 
             <FlatList
                 key={`flatlist-${numColumns}`}
-                data={Array.isArray(sortedEvents) ? sortedEvents.filter(item => item && typeof item === 'object') : []}
+                data={Array.isArray(paginatedEvents) ? paginatedEvents.filter(item => item && typeof item === 'object') : []}
                 keyExtractor={(item, index) => {
                     if (!item || typeof item !== 'object') {
                         return `toki-fallback-${index}-${Date.now()}`;
@@ -669,7 +700,7 @@ export default function ExMapScreen() {
                 }}
                 ListFooterComponent={() => (
                     <>
-                        {isLoadingMore && (
+                        {(isLocalLoadingMore || isLoadingMore) && (
                             <View style={styles.loadingMoreContainer}>
                                 <ActivityIndicator size="small" color="#B49AFF" />
                                 <Text style={styles.loadingMoreText}>Loading more...</Text>
@@ -690,7 +721,7 @@ export default function ExMapScreen() {
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={handleRefreshWithRadius} />
                 }
-                onEndReached={handleLoadMoreWithRadius}
+                onEndReached={handleLoadMoreLocal}
                 onEndReachedThreshold={0.2}
                 removeClippedSubviews={false}
                 maxToRenderPerBatch={10}
@@ -698,10 +729,10 @@ export default function ExMapScreen() {
                 initialNumToRender={20}
                 onScroll={(event) => {
                     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-                    if (contentSize.height > 0 && !isLoadingMore && hasMore) {
+                    if (contentSize.height > 0 && !isLocalLoadingMore && hasMoreLocal) {
                         const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
                         if (distanceFromBottom <= 1000) {
-                            handleLoadMoreWithRadius();
+                            handleLoadMoreLocal();
                         }
                     }
                 }}

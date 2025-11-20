@@ -593,6 +593,9 @@ class ApiService {
     maxAttendees: number;
     visibility: string;
     tags: string[];
+    images?: Array<{ url?: string; publicId?: string; base64?: string; mimeType?: string }>;
+    userLatitude?: number | null;
+    userLongitude?: number | null;
     externalLink?: string | null;
   }): Promise<Toki> {
     const response = await this.makeRequest<{ success: boolean; data: Toki }>('/tokis', {

@@ -4,12 +4,16 @@
 Centralized state management using Context API and useReducer. Handles all app data including notifications, connections, saved tokis, and real-time WebSocket updates.
 
 ### Fixes Applied log
+- problem: Newly created Tokis showed placeholder image/time/distance until the Discover screen refreshed.
+- solution: Reused the enriched backend payload from `createToki` and normalized it (including distance helper + coordinates) before dispatching `ADD_TOKI`, so cards render with final data immediately.
 - problem: Notifications required manual refresh to see new ones. No real-time updates via WebSocket.
 - solution: Added WebSocket listener for notifications in `setupGlobalMessageListeners()` that automatically updates state when new notifications arrive.
 - problem: `loadTokis()` function didn't update `totalNearbyCount` in central state, causing discover screen to show incorrect count (20 instead of 32) when refreshing from profile.
 - solution: Added pagination total extraction and `SET_TOTAL_NEARBY_COUNT` dispatch in `loadTokis()` to match `loadNearbyTokis()` behavior, ensuring unified state updates across all refresh paths.
 
 ### How Fixes Were Implemented
+- Added a shared `formatDistanceString()` helper to safely convert backend distance objects/strings into the legacy `'<n> km'` string used throughout state.
+- Updated all API mapping code paths (`loadTokis`, `loadMyTokis`, `loadTokisWithFilters`, `loadNearbyTokis`, `createToki`) to call the helper, ensuring consistent formatting for both fetched and newly created Tokis.
 - Added `socketService.offNotificationReceived()` to cleanup in `setupGlobalMessageListeners()`.
 - Added `socketService.onNotificationReceived()` listener that:
   - Transforms backend notification format to frontend format
@@ -40,3 +44,7 @@ Centralized state management using Context API and useReducer. Handles all app d
   - Works in conjunction with API service's `getCurrentUser()` deduplication for double protection
 - problem: App was making authenticated API calls (getSavedTokis, getConnections, getPendingConnections) even when tokens were empty, causing 401 errors. This happened because `loadInitialAppData` only checked `state.currentUser?.id` (which could exist from stored data) but didn't verify if user actually had valid tokens.
 - solution: Updated `loadInitialAppData` to also check `apiService.hasToken()` before making authenticated API calls. Added warning log when user data exists but no tokens are present. This prevents unnecessary 401 errors and API calls when user is not actually authenticated.
+- problem: Nearby map and card views only ever had 50 results because the backend limit was hard coded, making the “Tokis nearby” header and map inaccurate for larger datasets.
+- solution: Added a dedicated `mapTokis` slice in context and bumped `loadNearbyTokis()` to request a much larger limit (1,000 per call). Reducer paths now keep `mapTokis` in sync with `tokis`, so the UI can render all markers while paginating cards on the client.
+- Added `mapTokis` to `AppState`, initialized it alongside `tokis`, and updated reducer cases (`SET_TOKIS`, `ADD_TOKI`, `UPDATE_TOKI`, `DELETE_TOKI`) to keep both arrays synchronized so downstream hooks can target map-specific data.
+- Introduced `NEARBY_FETCH_LIMIT` (1,000) and optional `limit` parameter wired through `loadNearbyTokis()` → `apiService.getNearbyTokis()`, ensuring we fetch the entire dataset once while still capturing pagination totals for the UI header.

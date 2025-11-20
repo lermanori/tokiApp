@@ -15,6 +15,7 @@ import {
 } from '../utils/inviteLinkUtils';
 import { getCategoriesForAPI, CATEGORY_CONFIG } from '../config/categories';
 import logger from '../utils/logger';
+import { ImageService } from '../services/imageService';
 import {
   AlgorithmContext,
   AlgorithmFactory,
@@ -40,8 +41,19 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       visibility,
       tags,
       images,
-      externalLink
+      externalLink,
+      userLatitude,
+      userLongitude
     } = req.body;
+
+    const toNumberOrNull = (value: any): number | null => {
+      if (value === undefined || value === null) return null;
+      const num = typeof value === 'number' ? value : parseFloat(value);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    const creatorLatitudeInput = toNumberOrNull(userLatitude);
+    const creatorLongitudeInput = toNumberOrNull(userLongitude);
 
     // Validate required fields
     if (!title || !location || !timeSlot || !category) {
@@ -122,59 +134,153 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         }
       }
 
+      const imageUrls: string[] = [];
+      const imagePublicIds: string[] = [];
+
       // Handle images if provided
       if (images && Array.isArray(images) && images.length > 0) {
-        const imageUrls: string[] = [];
-        const imagePublicIds: string[] = [];
-
         for (const image of images) {
           try {
-            if (image.publicId && image.publicId.startsWith('temp_')) {
-              logger.debug(`Processing temporary image: ${image.publicId}`);
-              
-              // For temporary images, store the local URI for now
-              // The frontend can handle uploading them to Cloudinary later
+            if (image.url && image.publicId) {
               imageUrls.push(image.url);
               imagePublicIds.push(image.publicId);
-            } else {
-              // For already uploaded images, store as-is
-              imageUrls.push(image.url);
-              imagePublicIds.push(image.publicId);
+              continue;
+            }
+
+            if (image.base64) {
+              const base64String: string = image.base64;
+              const base64Data = base64String.includes(',')
+                ? base64String.split(',')[1]
+                : base64String;
+
+              if (!base64Data) {
+                logger.warn('🚫 [TOKIS] Invalid base64 image payload received');
+                continue;
+              }
+
+              const imageBuffer = Buffer.from(base64Data, 'base64');
+              const uploadResult = await ImageService.uploadTokiImage(String(toki.id), imageBuffer);
+
+              if (uploadResult.success && uploadResult.url && uploadResult.publicId) {
+                imageUrls.push(uploadResult.url);
+                imagePublicIds.push(uploadResult.publicId);
+              } else {
+                logger.warn(`⚠️ [TOKIS] Failed to upload inline image: ${uploadResult.error || 'Unknown error'}`);
+              }
             }
           } catch (error) {
-            logger.warn(`Error processing image: ${error}`);
-            // Continue with other images
+            logger.warn(`⚠️ [TOKIS] Error processing inline image: ${error}`);
           }
         }
+      }
 
-        // Update the Toki with image information
-        if (imageUrls.length > 0) {
-          await client.query(
-            `UPDATE tokis 
-             SET image_urls = $1, image_public_ids = $2, updated_at = NOW()
-             WHERE id = $3`,
-            [imageUrls, imagePublicIds, toki.id]
-          );
-        }
+      if (imageUrls.length > 0) {
+        await client.query(
+          `UPDATE tokis 
+           SET image_urls = $1, image_public_ids = $2, updated_at = NOW()
+           WHERE id = $3`,
+          [imageUrls, imagePublicIds, toki.id]
+        );
       }
 
       await client.query('COMMIT');
 
       // Return the created Toki with host information
+      const createdTokiResult = await pool.query(
+        `SELECT 
+          t.*,
+          u.name as host_name,
+          u.avatar_url as host_avatar,
+          ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+        FROM tokis t
+        LEFT JOIN users u ON t.host_id = u.id
+        LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+        WHERE t.id = $1
+        GROUP BY t.id, u.name, u.avatar_url`,
+        [toki.id]
+      );
+
+      const createdRow = createdTokiResult.rows[0];
+      const storedImageUrls: string[] = createdRow.image_urls || [];
+      const storedImagePublicIds: string[] = createdRow.image_public_ids || [];
+      const normalizedImages = storedImageUrls.map((url: string, index: number) => ({
+        url,
+        publicId: storedImagePublicIds[index] || null
+      }));
+
       const hostResult = await pool.query(
-        'SELECT id, name, avatar_url FROM users WHERE id = $1',
+        'SELECT id, name, avatar_url, latitude AS user_latitude, longitude AS user_longitude FROM users WHERE id = $1',
         [req.user!.id]
       );
 
+      const hostRow = hostResult.rows[0];
+      const eventLatitude = toNumberOrNull(createdRow.latitude);
+      const eventLongitude = toNumberOrNull(createdRow.longitude);
+      let creatorLatitudeValue = creatorLatitudeInput;
+      let creatorLongitudeValue = creatorLongitudeInput;
+
+      if (creatorLatitudeValue === null && hostRow) {
+        creatorLatitudeValue = toNumberOrNull(hostRow.user_latitude);
+      }
+      if (creatorLongitudeValue === null && hostRow) {
+        creatorLongitudeValue = toNumberOrNull(hostRow.user_longitude);
+      }
+
+      let distancePayload = {
+        km: 0,
+        miles: 0
+      };
+
+      if (
+        eventLatitude !== null &&
+        eventLongitude !== null &&
+        creatorLatitudeValue !== null &&
+        creatorLongitudeValue !== null
+      ) {
+        const kms = calculateDistance(
+          eventLatitude,
+          eventLongitude,
+          creatorLatitudeValue,
+          creatorLongitudeValue
+        );
+        const roundedKm = Math.round(kms * 10) / 10;
+        const roundedMiles = Math.round((kms * 0.621371) * 10) / 10;
+        distancePayload = {
+          km: roundedKm,
+          miles: roundedMiles
+        };
+      }
+
       const responseData = {
-        ...toki,
+        id: createdRow.id,
+        title: createdRow.title,
+        description: createdRow.description,
+        location: createdRow.location,
+        latitude: createdRow.latitude,
+        longitude: createdRow.longitude,
+        timeSlot: createdRow.time_slot,
+        scheduledTime: createdRow.scheduled_time
+          ? new Date(createdRow.scheduled_time).toISOString().replace('T', ' ').slice(0, 16)
+          : null,
+        maxAttendees: createdRow.max_attendees,
+        currentAttendees: 1, // host counts as first attendee
+        category: createdRow.category,
+        visibility: createdRow.visibility,
+        imageUrl: storedImageUrls[0] || createdRow.image_url || null,
+        images: normalizedImages,
+        distance: distancePayload,
+        externalLink: createdRow.external_link,
+        status: createdRow.status,
+        createdAt: createdRow.created_at,
+        updatedAt: createdRow.updated_at,
         host: {
-          id: hostResult.rows[0].id,
-          name: hostResult.rows[0].name,
-          avatar: hostResult.rows[0].avatar_url
+          id: createdRow.host_id,
+          name: createdRow.host_name,
+          avatar: createdRow.host_avatar
         },
-        tags: tags || [],
-        images: images || []
+        tags: createdRow.tags || [],
+        joinStatus: 'hosting',
+        is_saved: false
       };
 
       return res.status(201).json({

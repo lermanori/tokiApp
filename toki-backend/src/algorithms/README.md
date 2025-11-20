@@ -35,3 +35,4 @@ The algorithm prefetches user context (history, saved categories, connection par
 - `GET /api/tokis` fetches the latest hyperparameters, scores every event through the factory, and exposes `algorithmScore` in the response.
 - Relevance sorting is the default; results are sorted in-memory by score while other sort options still use SQL ordering.
 
+

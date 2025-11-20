@@ -12,3 +12,4 @@ Horizontal category chips used on Discover screens. Now supports multi-select ca
 - Active state now checks inclusion in `selectedCategories` (or `'all'` presence) instead of equality against a single string.
 
 
+
