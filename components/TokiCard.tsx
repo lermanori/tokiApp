@@ -16,7 +16,7 @@ export interface TokiCardProps {
         location: string;
         time: string;
         attendees: number;
-        maxAttendees: number;
+        maxAttendees: number | null;
         category: string;
         image: string;
         images?: Array<{ url: string; publicId: string }>; // Add support for multiple images
@@ -98,9 +98,10 @@ const getInitials = (name: string): string => {
 
 
 // Helper function to format attendees display
-const formatAttendees = (attendees: number, maxAttendees: number) => {
+const formatAttendees = (attendees: number, maxAttendees: number | null) => {
     if (attendees === 0) return '0';
     if (attendees === 1) return '1';
+    if (maxAttendees === null) return `${attendees}/∞`;
     return `${attendees}/${maxAttendees}`;
 };
 

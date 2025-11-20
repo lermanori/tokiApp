@@ -54,8 +54,9 @@ export default function EditTokiScreen() {
           longitude: toki.longitude || null,
           activity: toki.category || null,
           time: toki.timeSlot || null,
-          maxAttendees: toki.maxAttendees || 10,
+          maxAttendees: toki.maxAttendees !== null && toki.maxAttendees !== undefined ? toki.maxAttendees : null,
           visibility: toki.visibility || 'public',
+          autoApprove: toki.autoApprove || false,
           tags: toki.tags?.filter((tag: string) => tag !== toki.category) || [],
           // Convert scheduledTime to customDateTime format if available
           customDateTime: toki.scheduledTime ? 
@@ -101,6 +102,7 @@ export default function EditTokiScreen() {
         visibility: tokiData.visibility || 'public',
         tags: tokiData.tags,
         externalLink: tokiData.externalLink,
+        autoApprove: tokiData.autoApprove,
       };
 
       await actions.updateTokiBackend(tokiId as string, updatedTokiData);

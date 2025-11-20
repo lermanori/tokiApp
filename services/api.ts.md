@@ -1,16 +1,13 @@
 # File: api.ts
 
 ### Summary
-This file contains the API service class that handles all HTTP requests to the backend. Added invitation-related API methods for the frontend.
+API service for making HTTP requests to the backend, includes type definitions for Toki and related interfaces.
 
 ### Fixes Applied log
-- Added sendInvitation method to send invitations
-- Added getInvitations method to list user's invitations
-- Added getInvitationCredits method to check available credits
-- Added validateInvitationCode method to validate invitation codes
-- Added registerWithInvitation method for invitation-based registration
+- problem: Type definitions don't support unlimited max attendees or autoApprove
+- solution: Updated Toki and SavedToki interfaces to allow maxAttendees as number | null and added autoApprove field
 
 ### How Fixes Were Implemented
-- Added new methods that call the /api/invitations endpoints
-- Integrated invitation validation and registration flow
-- All methods follow the existing API service pattern with proper error handling
+- Updated Toki interface: maxAttendees from number to number | null, added autoApprove?: boolean
+- Updated SavedToki interface: maxAttendees from number to number | null
+- Updated createToki method signature to accept maxAttendees: number | null and autoApprove?: boolean

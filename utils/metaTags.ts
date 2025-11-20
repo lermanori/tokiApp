@@ -9,7 +9,8 @@ export interface TokiMetaData {
   category?: string;
   hostName?: string;
   imageUrl?: string;
-  maxAttendees?: number;
+  maxAttendees?: number | null;
+  autoApprove?: boolean;
   currentAttendees?: number;
 }
 

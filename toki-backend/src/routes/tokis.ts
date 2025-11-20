@@ -43,7 +43,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       images,
       externalLink,
       userLatitude,
-      userLongitude
+      userLongitude,
+      autoApprove
     } = req.body;
 
     const toNumberOrNull = (value: any): number | null => {
@@ -84,13 +85,16 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Validate max attendees
-    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 1000)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid max attendees',
-        message: 'Max attendees must be between 1 and 1000'
-      });
+    // Validate max attendees - allow null for unlimited
+    if (maxAttendees !== null && maxAttendees !== undefined) {
+      const maxAttendeesNum = typeof maxAttendees === 'number' ? maxAttendees : parseInt(maxAttendees);
+      if (isNaN(maxAttendeesNum) || maxAttendeesNum < 1 || maxAttendeesNum > 1000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid max attendees',
+          message: 'Max attendees must be between 1 and 1000, or null for unlimited'
+        });
+      }
     }
 
     // Start a database transaction
@@ -103,8 +107,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       const tokiResult = await client.query(
         `INSERT INTO tokis (
           host_id, title, description, location, latitude, longitude,
-          time_slot, scheduled_time, max_attendees, category, visibility, external_link
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          time_slot, scheduled_time, max_attendees, category, visibility, external_link, auto_approve
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
         [
           req.user!.id,
@@ -115,10 +119,11 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
           longitude || null,
           timeSlot,
           scheduledTime || null,
-          maxAttendees || 10,
+          maxAttendees === null || maxAttendees === undefined ? null : (maxAttendees || 10),
           category,
           visibility || 'public',
-          externalLink || null
+          externalLink || null,
+          autoApprove || false
         ]
       );
 
@@ -266,6 +271,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
         currentAttendees: 1, // host counts as first attendee
         category: createdRow.category,
         visibility: createdRow.visibility,
+        autoApprove: createdRow.auto_approve || false,
         imageUrl: storedImageUrls[0] || createdRow.image_url || null,
         images: normalizedImages,
         distance: distancePayload,
@@ -884,6 +890,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       currentAttendees: row.current_attendees,
       category: row.category,
       visibility: row.visibility,
+      autoApprove: row.auto_approve || false,
       imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
       status: row.status,
       createdAt: row.created_at,
@@ -1160,6 +1167,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       currentAttendees: row.current_attendees,
       category: row.category,
       visibility: row.visibility,
+      autoApprove: row.auto_approve || false,
       imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
       status: row.status,
       createdAt: row.created_at,
@@ -1310,6 +1318,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       currentAttendees: row.current_attendees,
       category: row.category,
       visibility: row.visibility,
+      autoApprove: row.auto_approve || false,
       imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
       status: row.status,
       createdAt: row.created_at,
@@ -1496,6 +1505,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       currentAttendees: currentAttendees, // Fixed: includes host
       category: toki.category,
       visibility: toki.visibility,
+      autoApprove: toki.auto_approve || false,
       imageUrl: toki.image_urls && toki.image_urls.length > 0 ? toki.image_urls[0] : toki.image_url,
       image_urls: toki.image_urls || [],
       image_public_ids: toki.image_public_ids || [],
@@ -1553,7 +1563,8 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       category,
       visibility,
       tags,
-      externalLink
+      externalLink,
+      autoApprove
     } = req.body;
 
     // Check if Toki exists and user is the host
@@ -1602,13 +1613,16 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       }
     }
 
-    // Validate max attendees if provided
-    if (maxAttendees && (maxAttendees < 1 || maxAttendees > 1000)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid max attendees',
-        message: 'Max attendees must be between 1 and 100'
-      });
+    // Validate max attendees if provided - allow null for unlimited
+    if (maxAttendees !== null && maxAttendees !== undefined) {
+      const maxAttendeesNum = typeof maxAttendees === 'number' ? maxAttendees : parseInt(maxAttendees);
+      if (isNaN(maxAttendeesNum) || maxAttendeesNum < 1 || maxAttendeesNum > 1000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid max attendees',
+          message: 'Max attendees must be between 1 and 1000, or null for unlimited'
+        });
+      }
     }
 
     // Start a database transaction
@@ -1667,7 +1681,13 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       if (maxAttendees !== undefined) {
         paramCount++;
         updateFields.push(`max_attendees = $${paramCount}`);
-        updateValues.push(maxAttendees);
+        updateValues.push(maxAttendees === null ? null : maxAttendees);
+      }
+
+      if (autoApprove !== undefined) {
+        paramCount++;
+        updateFields.push(`auto_approve = $${paramCount}`);
+        updateValues.push(autoApprove);
       }
 
       if (category !== undefined) {
@@ -2100,24 +2120,27 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
 
     const hasActiveInvite = inviteResult.rows.length > 0;
 
-    // Check if Toki is full
-    const currentAttendeesResult = await pool.query(
-      'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
-      [id, 'approved', 'joined']
-    );
-    
-    const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count); // Host (1) + participants
-    
-    if (currentAttendees >= toki.max_attendees) {
-      return res.status(400).json({
-        success: false,
-        error: 'Toki is full',
-        message: 'This Toki has reached its maximum number of attendees'
-      });
+    // Check if Toki is full (skip check if max_attendees is NULL/unlimited)
+    if (toki.max_attendees !== null && toki.max_attendees !== undefined) {
+      const currentAttendeesResult = await pool.query(
+        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
+        [id, 'approved', 'joined']
+      );
+      
+      const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count); // Host (1) + participants
+      
+      if (currentAttendees >= toki.max_attendees) {
+        return res.status(400).json({
+          success: false,
+          error: 'Toki is full',
+          message: 'This Toki has reached its maximum number of attendees'
+        });
+      }
     }
 
-    // Determine status based on whether user has an active invite
-    const joinStatus = hasActiveInvite ? 'joined' : 'pending';
+    // Determine status based on auto_approve setting or active invite
+    const autoApprove = toki.auto_approve || false;
+    const joinStatus = (hasActiveInvite || autoApprove) ? 'joined' : 'pending';
     
     // Insert join request or direct join
     const joinResult = await pool.query(
@@ -2131,6 +2154,13 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
         title: 'New Join Request',
         body: `${req.user!.name || 'Someone'} wants to join your ${toki.title} event`,
         data: { type: 'join_request', source: 'host_join_request', tokiId: id, requestId: joinResult.rows[0].id }
+      });
+    } else if (autoApprove && !hasActiveInvite) {
+      // Notify user that they were auto-approved
+      await sendPushToUsers([userId], {
+        title: 'Join Request Approved',
+        body: `You can now join "${toki.title}"`,
+        data: { type: 'join_approved', source: 'user_join_approved', tokiId: id, requestId: joinResult.rows[0].id }
       });
     }
 
@@ -2215,21 +2245,24 @@ router.put('/:id/join/:requestId/approve', authenticateToken, async (req: Reques
       });
     }
 
-    // Check if Toki is full
-    const currentAttendeesResult = await pool.query(
-      'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
-      [id, 'approved', 'joined']
-    );
-    
-    const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count);
+    // Check if Toki is full (skip check if max_attendees is NULL/unlimited)
     const maxAttendees = tokiResult.rows[0].max_attendees;
     
-    if (currentAttendees >= maxAttendees) {
-      return res.status(400).json({
-        success: false,
-        error: 'Toki is full',
-        message: 'This Toki has reached its maximum number of attendees'
-      });
+    if (maxAttendees !== null && maxAttendees !== undefined) {
+      const currentAttendeesResult = await pool.query(
+        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
+        [id, 'approved', 'joined']
+      );
+      
+      const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count);
+      
+      if (currentAttendees >= maxAttendees) {
+        return res.status(400).json({
+          success: false,
+          error: 'Toki is full',
+          message: 'This Toki has reached its maximum number of attendees'
+        });
+      }
     }
 
     // Approve the join request

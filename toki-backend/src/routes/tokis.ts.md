@@ -1,106 +1,19 @@
-# File: toki-backend/src/routes/tokis.ts
+# File: toki.ts
 
 ### Summary
-This file contains the backend API routes for managing Tokis (events/activities), including creation, retrieval, filtering, and nearby search functionality.
+Backend routes for toki management including creation, updates, joining, and approval logic.
 
 ### Fixes Applied log
+- problem: Support unlimited max attendees (NULL value)
+- solution: Updated validation to allow null for maxAttendees, updated capacity checks to skip when max_attendees is NULL
 
-**2025-11-20 - Enriched create response for new Tokis**
-
-- **problem**: `POST /tokis` returned only raw DB fields (missing `imageUrl`, `scheduledTime`, formatted tags, distance, join status), forcing the client to render placeholder cards until a refresh.
-- **solution**: After insertion, fetch the newly created Toki with host + tags, normalize images, and respond with the same shape as the listing endpoints (including distance object, join status, timestamps, etc.).
-
-**2025-11-20 - Inline image uploads & creator distance**
-
-- **problem**: Newly created Tokis referenced temporary image URIs and always reported `0 km` because the create endpoint neither uploaded the selected photos nor knew the host’s coordinates.
-- **solution**: The endpoint now accepts inline base64 images, uploads them to Cloudinary while the Toki is created, stores the resulting URLs/public IDs, and calculates the distance between the host and the event (using payload coordinates or the host profile) so the initial response already contains the final media + distance data.
-
-**2025-01-XX - Fixed toki loading bugs in /tokis/nearby endpoint**
-
-- **problem**: Count query was missing critical filters (user blocking, hidden tokis, visibility) causing count mismatch (showing 31 instead of 33)
-- **solution**: Added user blocking filters, hidden tokis filters, and visibility filters to the count query to match the main query exactly
-
-- **problem**: Count query returned 33 but main query only returned 31 items - inconsistency between count and actual results
-- **solution**: Updated count query to use the same JOINs and GROUP BY logic as the main query, ensuring the count matches exactly what would be returned. Used a subquery with the same GROUP BY columns to match the main query's behavior.
-
-- **problem**: Missing error handling and debugging information for count vs actual results mismatch
-- **solution**: Added comprehensive logging to track count query results, actual query results, and parameter usage for debugging
-
-- **problem**: Count query didn't account for private tokis visibility rules
-- **solution**: Added visibility filtering logic that respects private tokis (only shows to host/participants/invitees) and defaults to public-only for unauthenticated users
-
-**2025-11-13 - Added weighted relevance scoring for discover feed**
-
-- **problem**: Event listing defaulted to created date ordering and lacked personalized relevance scores.
-- **solution**: Integrated the strategy-based recommendation engine to compute `algorithmScore` for each Toki and make relevance the default sort order.
-
-**2025-01-XX - Added dedicated /my-tokis endpoint**
-
-- **problem**: "My Tokis" screen showed 0 joined tokis because the main `/api/tokis` endpoint uses pagination (default limit 20) and various filters that could exclude some joined tokis, especially if they were on later pages or filtered out by distance/category.
-- **solution**: Created a new `/api/tokis/my-tokis` endpoint that returns ALL tokis the user is involved with (hosting, joined, or pending) without pagination limits. The query specifically filters for tokis where the user is either the host OR a participant, ensuring all user's tokis are included regardless of other criteria.
+- problem: Auto-approve join requests feature
+- solution: Added autoApprove to request body, included in database operations, updated join logic to auto-approve when enabled
 
 ### How Fixes Were Implemented
-
-1. **Create Response Hydration**:
-   - After committing the insert transaction, query the new Toki with host + tag joins and image arrays.
-   - Normalize `image_urls`/`image_public_ids` into the frontend-friendly `imageUrl` + `images[]` fields, compute the host distance when coordinates are available, and mark `joinStatus` as `hosting`.
-   - Return this enriched payload so the client receives the same structure as `/tokis` and `/tokis/nearby`, avoiding placeholder UI.
-
-2. **Inline Image + Distance Support**:
-   - Added base64 handling that uploads inline images via `ImageService.uploadTokiImage` using the brand-new Toki ID for namespacing.
-   - Accepted optional `userLatitude`/`userLongitude` values (falling back to the host’s saved coordinates) and used `calculateDistance` so the create response includes the true `{ km, miles }` object immediately.
-
-1. **Count Query Filter Alignment**:
-   - Added user blocking filters (`user_blocks` table) to exclude tokis where user has blocked the host or vice versa
-   - Added hidden tokis filter (`toki_hidden_users` table) to exclude tokis the user has hidden
-   - Added visibility filters to handle private tokis correctly (only show to host/participants/invitees)
-   - For unauthenticated users, only show public tokis
-
-2. **Logging and Debugging**:
-   - Added debug logging for count query results including total count, user ID, and search parameters
-   - Added logging for main query results comparing requested limit vs actual results, total count, and pagination info
-   - This helps identify discrepancies between expected and actual counts
-
-3. **Parameter Handling**:
-   - Ensured limit parameter (default 20, max 100) is properly parsed and used
-   - Frontend sends limit: 50 which is now properly respected
-   - Added proper parameter counting to avoid SQL injection and parameter mismatch issues
-4. **Relevance Scoring Integration**:
-   - Imported the algorithm strategy factory to score each Toki with personalized weights fetched from `algorithm_hyperparameters`.
-   - Defaulted `sortBy` to `relevance`, sorting results in-memory by the computed `algorithmScore` while preserving other sort options.
-   - Exposed `algorithmScore` in the API response for front-end consumption.
-5. **Nearby Endpoint Enhancements**:
-   - Reused the recommendation strategy for `/tokis/nearby` when a user token is present, attaching `algorithmScore` to each item.
-   - Fetched user coordinates (with fallbacks) to feed geo weighting, while keeping distance-based ordering intact for anonymous visitors.
-
-### Technical Details
-
-The `/tokis/nearby` endpoint now uses the same WHERE conditions, JOINs, and GROUP BY logic for both the count query and the main SELECT query, ensuring:
-- Consistent filtering between count and results
-- Accurate pagination information
-- Proper handling of user-specific filters (blocking, hidden, visibility)
-- Exact match between count and actual returned items
-
-The count query now:
-- Uses the same LEFT JOIN to users table as the main query
-- Uses the same GROUP BY columns (t.id, u.name, u.avatar_url, t.latitude, t.longitude, t.image_urls)
-- Includes all the same WHERE conditions:
-  - Status = 'active'
-  - Latitude/longitude checks
-  - Scheduled time filtering (12 hour window)
-  - Distance calculation (radius-based)
-  - User blocking filters (if authenticated)
-  - Hidden tokis filters (if authenticated)
-  - Visibility filters (private tokis handling)
-  - Category filter (if provided)
-  - Time slot filter (if provided)
-
-This ensures that if a toki would be filtered out or collapsed by the GROUP BY in the main query, it will also be excluded from the count, making the numbers perfectly consistent.
-
-6. **My Tokis Endpoint**:
-   - Created `/api/tokis/my-tokis` endpoint that returns all tokis where user is host OR participant
-   - Query filters: `t.host_id = userId OR EXISTS (SELECT 1 FROM toki_participants WHERE toki_id = t.id AND user_id = userId)`
-   - Includes 12-hour filter to match main query behavior
-   - Returns all results without pagination limits
-   - Sets `joinStatus` correctly: 'hosting' for user's own tokis, actual participant status for joined tokis
-   - Frontend updated to use `loadMyTokis()` instead of `loadTokis()` in MyTokisScreen
+- Updated max attendees validation to allow null (unlimited)
+- Added autoApprove field to create and update endpoints
+- Updated join endpoint to check auto_approve flag and automatically set status to 'joined' when enabled
+- Updated capacity checks in join and approve endpoints to skip when max_attendees is NULL
+- Added autoApprove to all response mappings
+- Added notification for auto-approved users

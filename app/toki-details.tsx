@@ -36,7 +36,8 @@ interface TokiDetails {
   timeSlot?: string; // Add timeSlot for compatibility
   scheduledTime?: string; // Add scheduled time for smart display
   attendees: number;
-  maxAttendees: number;
+  maxAttendees: number | null;
+  autoApprove?: boolean;
   category: string; // Add category for activity photos
   tags: string[];
   host: {
@@ -341,7 +342,7 @@ export default function TokiDetailsScreen() {
           time: tokiData.timeSlot,
           scheduledTime: tokiData.scheduledTime, // Ensure scheduledTime is loaded
           attendees: tokiData.currentAttendees || 0,        // Ensure it's not undefined
-          maxAttendees: tokiData.maxAttendees || 0,        // Ensure it's not undefined
+          maxAttendees: tokiData.maxAttendees ?? null,        // Preserve null for unlimited
           category: tokiData.category || 'social', // Add category from backend
           tags: tokiData.tags || [],
           host: {
@@ -1511,7 +1512,7 @@ export default function TokiDetailsScreen() {
             <View style={styles.eventInfoItem}>
               <Users size={18} color="#B49AFF" />
               <Text style={styles.eventInfoText}>
-                {toki.attendees}/{toki.maxAttendees} people
+                {toki.attendees}/{toki.maxAttendees === null ? '∞' : toki.maxAttendees} people
               </Text>
             </View>
             {toki.link && (

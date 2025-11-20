@@ -15,7 +15,8 @@ interface Toki {
   time: string;
   attendees: number;
   currentAttendees?: number;
-  maxAttendees: number;
+  maxAttendees: number | null;
+  autoApprove?: boolean;
   tags: string[];
   host: {
     id: string;

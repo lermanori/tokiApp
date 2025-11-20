@@ -6,7 +6,8 @@ export interface TokiEvent {
   time: string;
   scheduledTime?: string;
   attendees: number;
-  maxAttendees: number;
+  maxAttendees: number | null;
+  autoApprove?: boolean;
   category: string;
   distance: string;
   visibility?: 'public' | 'connections' | 'friends';

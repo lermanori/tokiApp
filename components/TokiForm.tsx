@@ -52,12 +52,13 @@ interface TokiFormProps {
     activity?: string;
     activities?: string[]; // Add support for multiple activities
     time?: string;
-    maxAttendees?: number;
+    maxAttendees?: number | null;
     tags?: string[];
     customDateTime?: string; // Added missing field
     images?: Array<{ url: string; publicId: string }>; // Add images to initial data
     visibility?: 'public' | 'private' | 'connections' | 'friends';
     externalLink?: string;
+    autoApprove?: boolean;
   };
   onSubmit: (data: any) => Promise<string | boolean | null>;
   onCancel: () => void;
@@ -89,6 +90,8 @@ export default function TokiForm({
   );
   const [selectedTime, setSelectedTime] = useState<string | null>(initialData.time || null);
   const [maxAttendees, setMaxAttendees] = useState(initialData.maxAttendees?.toString() || '10');
+  const [isUnlimited, setIsUnlimited] = useState(initialData.maxAttendees === null || initialData.maxAttendees === undefined);
+  const [autoApprove, setAutoApprove] = useState(initialData.autoApprove || false);
   const [customTags, setCustomTags] = useState<string[]>(initialData.tags || []);
   const [currentTag, setCurrentTag] = useState('');
   const [geocodingResults, setGeocodingResults] = useState<GeocodingResult[]>([]);
@@ -176,7 +179,13 @@ export default function TokiForm({
         setSelectedActivities([initialData.activity]);
       }
       if (initialData.time) setSelectedTime(initialData.time);
-      if (initialData.maxAttendees) setMaxAttendees(initialData.maxAttendees.toString());
+      if (initialData.maxAttendees !== null && initialData.maxAttendees !== undefined) {
+        setMaxAttendees(initialData.maxAttendees.toString());
+        setIsUnlimited(false);
+      } else {
+        setIsUnlimited(true);
+      }
+      if (initialData.autoApprove !== undefined) setAutoApprove(initialData.autoApprove);
       if (initialData.tags) setCustomTags(initialData.tags);
       if (initialData.customDateTime) setCustomDateTime(initialData.customDateTime);
       if (initialData.externalLink) setExternalLink(initialData.externalLink);
@@ -564,12 +573,13 @@ export default function TokiForm({
       activities: selectedActivities, // All selected activities
       time: selectedTime,
       customDateTime: selectedTime === 'custom' ? customDateTime : null,
-      maxAttendees: parseInt(maxAttendees) || 10,
+      maxAttendees: isUnlimited ? null : (parseInt(maxAttendees) || 10),
       tags: [...selectedActivities, ...customTags],
       category: selectedActivities[0], // Primary category
       visibility: isPrivate ? 'private' : 'public',
       images: preparedImages,
       externalLink: externalLink.trim() || null,
+      autoApprove: autoApprove,
       userLatitude: state.currentUser?.latitude ?? null,
       userLongitude: state.currentUser?.longitude ?? null,
     };
@@ -946,19 +956,56 @@ export default function TokiForm({
           </TouchableOpacity>
         </View>
 
+        {/* Auto Approve toggle */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Auto Approve Join Requests</Text>
+          <TouchableOpacity
+            style={[styles.autoApproveToggle, autoApprove && styles.autoApproveToggleOn]}
+            onPress={() => setAutoApprove(!autoApprove)}
+          >
+            <Text style={[styles.autoApproveToggleText, autoApprove && styles.autoApproveToggleTextOn]}>
+              {autoApprove ? '✓ Auto-approve enabled' : 'Auto-approve disabled'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.autoApproveHint}>
+            When enabled, users who join will be automatically approved without requiring your confirmation
+          </Text>
+        </View>
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Max Attendees</Text>
-          <View style={styles.attendeesInputContainer}>
-            <Users size={20} color="#B49AFF" style={styles.attendeesIcon} />
-            <TextInput
-              style={{ outline: 'none', ...styles.attendeesInput }}
-              placeholder="10"
-              value={maxAttendees}
-              onChangeText={setMaxAttendees}
-              keyboardType="numeric"
-              placeholderTextColor="#999999"
-            />
-          </View>
+          <TouchableOpacity
+            style={[styles.unlimitedToggle, isUnlimited && styles.unlimitedToggleOn]}
+            onPress={() => {
+              setIsUnlimited(!isUnlimited);
+              if (!isUnlimited) {
+                setMaxAttendees('10'); // Reset to default when disabling
+              }
+            }}
+          >
+            <Text style={[styles.unlimitedToggleText, isUnlimited && styles.unlimitedToggleTextOn]}>
+              {isUnlimited ? '✓ Unlimited' : 'Set limit'}
+            </Text>
+          </TouchableOpacity>
+          {!isUnlimited && (
+            <View style={styles.attendeesInputContainer}>
+              <Users size={20} color="#B49AFF" style={styles.attendeesIcon} />
+              <TextInput
+                style={{ outline: 'none', ...styles.attendeesInput }}
+                placeholder="10"
+                value={maxAttendees}
+                onChangeText={setMaxAttendees}
+                keyboardType="numeric"
+                placeholderTextColor="#999999"
+              />
+            </View>
+          )}
+          {isUnlimited && (
+            <View style={styles.unlimitedIndicator}>
+              <Text style={styles.unlimitedSymbol}>∞</Text>
+              <Text style={styles.unlimitedText}>Unlimited participants</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -1467,5 +1514,79 @@ const styles = StyleSheet.create({
   },
   privacyToggleTextOn: {
     color: '#FFFFFF',
+  },
+  autoApproveToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  autoApproveToggleOn: {
+    backgroundColor: '#B49AFF',
+    borderColor: '#B49AFF',
+  },
+  autoApproveToggleText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#666666',
+  },
+  autoApproveToggleTextOn: {
+    color: '#FFFFFF',
+  },
+  autoApproveHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  unlimitedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    marginBottom: 12,
+  },
+  unlimitedToggleOn: {
+    backgroundColor: '#B49AFF',
+    borderColor: '#B49AFF',
+  },
+  unlimitedToggleText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#666666',
+  },
+  unlimitedToggleTextOn: {
+    color: '#FFFFFF',
+  },
+  unlimitedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  unlimitedSymbol: {
+    fontSize: 24,
+    color: '#B49AFF',
+    fontFamily: 'Inter-SemiBold',
+  },
+  unlimitedText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1C1C1C',
   },
 });

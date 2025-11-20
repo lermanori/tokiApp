@@ -357,6 +357,18 @@ export default function LoginScreen() {
                   <Text style={styles.buttonText}>{loading ? 'Logging in...' : loadingData ? 'Loading your data...' : 'Login'}</Text>
                 </TouchableOpacity>
                 
+                <View style={styles.termsContainer}>
+                  <Text style={styles.termsText}>
+                    By logging in, I agree to be bound by the{' '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => router.push('/terms-of-use')}
+                    >
+                      Terms of Use
+                    </Text>
+                  </Text>
+                </View>
+                
                 {loadingData && (
                   <Text style={styles.loadingMessage}>
                     🚀 Loading your Tokis, connections, and profile data...
@@ -652,6 +664,22 @@ const styles = StyleSheet.create({
   showDevModeText: {
     color: '#666',
     fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  termsContainer: {
+    marginTop: 16,
+    paddingHorizontal: 8,
+  },
+  termsText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: '#8B5CF6',
+    fontFamily: 'Inter-Medium',
     textDecorationLine: 'underline',
   },
 }); 

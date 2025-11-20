@@ -43,3 +43,6 @@ This file contains the login and registration screen with enhanced autofill func
 
 - **problem**: Input placeholder text was white on white background in dark mode, making it invisible and unusable.
 - **solution**: Added `placeholderTextColor="#666"` to both Email and Password TextInput components. This medium gray color (#666) is visible on white backgrounds in both light and dark modes, ensuring the placeholder text is always readable.
+
+- **problem**: No terms of use agreement displayed on login screen, which is required for legal compliance.
+- **solution**: Added a terms of use link below the login button with text "By logging in, I agree to be bound by the Terms of Use" that navigates to the terms-of-use page. Styled with purple link color (#8B5CF6) to match app design.

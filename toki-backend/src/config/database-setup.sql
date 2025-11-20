@@ -56,12 +56,13 @@ CREATE TABLE IF NOT EXISTS tokis (
   longitude DECIMAL(11, 8),
   time_slot VARCHAR(50) NOT NULL, -- 'now', '30min', '1hour', '2hours', '3hours', 'tonight', 'tomorrow'
   scheduled_time TIMESTAMP,
-  max_attendees INTEGER DEFAULT 10,
+  max_attendees INTEGER DEFAULT 10, -- NULL means unlimited
   current_attendees INTEGER DEFAULT 0,
   category VARCHAR(50) NOT NULL, -- 'sports', 'coffee', 'music', 'food', 'work', 'art', 'nature', 'drinks'
   visibility VARCHAR(20) DEFAULT 'public', -- 'public', 'connections', 'friends'
   image_url VARCHAR(500),
   status VARCHAR(20) DEFAULT 'active', -- 'active', 'cancelled', 'completed'
+  auto_approve BOOLEAN DEFAULT FALSE, -- If true, join requests are automatically approved
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

@@ -121,3 +121,5 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - Solution: Added all valid authenticated routes to the check: `notifications`, `connections`, `chat`, `edit-profile`, `my-tokis`, `saved-tokis`
   - Now authenticated users can stay on these valid pages instead of being redirected to tabs
   - This fixes the "Maximum update depth exceeded" error that was caused by redirect loops
+- **problem**: Terms of use page was being protected by authentication guard, preventing public access to legal terms.
+- **solution**: Added `inTermsOfUseScreen` check to allow public access to `/terms-of-use` route without authentication, similar to login, waitlist, and other public pages. Added the route to the Stack navigator and excluded it from authentication redirects.

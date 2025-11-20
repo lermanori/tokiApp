@@ -13,10 +13,11 @@ export interface Toki {
   longitude?: number;
   timeSlot: string;
   scheduledTime?: string;
-  maxAttendees: number;
+  maxAttendees: number | null;
   currentAttendees: number;
   category: string;
   visibility: 'public' | 'connections' | 'friends';
+  autoApprove?: boolean;
   imageUrl?: string;
   status: string;
   createdAt: string;
@@ -127,7 +128,7 @@ export interface SavedToki {
   timeSlot: string;
   scheduledTime: string;
   currentAttendees: number;
-  maxAttendees: number;
+  maxAttendees: number | null;
   category: string;
   imageUrl: string;
   savedAt: string;
@@ -620,13 +621,14 @@ class ApiService {
     placeId?: string | null;
     timeSlot: string;
     category: string;
-    maxAttendees: number;
+    maxAttendees: number | null;
     visibility: string;
     tags: string[];
     images?: Array<{ url?: string; publicId?: string; base64?: string; mimeType?: string }>;
     userLatitude?: number | null;
     userLongitude?: number | null;
     externalLink?: string | null;
+    autoApprove?: boolean;
   }): Promise<Toki> {
     const response = await this.makeRequest<{ success: boolean; data: Toki }>('/tokis', {
       method: 'POST',

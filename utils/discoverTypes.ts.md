@@ -1,13 +1,11 @@
-# File: utils/discoverTypes.ts
+# File: discoverTypes.ts
 
 ### Summary
-Type definitions for Discover screens: TokiEvent interface and related types for filtering and map regions.
+TypeScript type definitions for discover screen and toki events.
 
 ### Fixes Applied log
-- problem: `createdAt` field was missing from `TokiEvent` interface, preventing creation date sorting from working.
-- solution: Added `createdAt?: string;` to the `TokiEvent` interface to match the API response structure.
+- problem: TokiEvent interface doesn't support unlimited max attendees or autoApprove
+- solution: Updated TokiEvent interface to allow maxAttendees as number | null and added autoApprove field
 
 ### How Fixes Were Implemented
-- Added optional `createdAt` field to `TokiEvent` interface to support sorting by creation date.
-- This field is populated from the API response and used by the sorting utility in `sortTokis.ts`.
-
+- Updated TokiEvent interface: maxAttendees from number to number | null, added autoApprove?: boolean field

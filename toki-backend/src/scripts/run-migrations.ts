@@ -179,6 +179,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 11: Add unlimited max attendees and auto-approve
+    try {
+      console.log('📝 Migration 11: Adding unlimited max attendees and auto-approve features...');
+      const unlimitedAutoApproveSql = readFileSync(
+        join(sqlDir, 'add-unlimited-and-autoapprove.sql'),
+        'utf-8'
+      );
+      await pool.query(unlimitedAutoApproveSql);
+      console.log('✅ Unlimited and auto-approve migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.code === '42703' || error.message?.includes('already exists') || error.message?.includes('does not exist')) {
+        console.log('ℹ️  Unlimited/auto-approve migration already applied or column exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

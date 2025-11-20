@@ -1,19 +1,15 @@
-# File: toki-backend/src/config/database-setup.sql
+# File: database-setup.sql
 
 ### Summary
-Database schema initialization script. Creates tables for users, tokis, participants, connections, notifications, saved tokis, and indexes.
+Database schema setup file for the Toki backend. Defines all tables, indexes, triggers, and functions needed for the application.
 
 ### Fixes Applied log
-- problem: No table to store push notification tokens for devices.
-- solution: Added `push_tokens` table with user_id, token, platform, updated_at, and unique constraint on token. Added index on user_id for fast lookups.
+- problem: Added support for unlimited max attendees (NULL value)
+- solution: Updated max_attendees column comment to indicate NULL means unlimited
+
+- problem: Added auto-approve feature for join requests
+- solution: Added auto_approve BOOLEAN column with DEFAULT FALSE to tokis table
 
 ### How Fixes Were Implemented
-- Created `push_tokens` table with:
-  - `id SERIAL PRIMARY KEY`
-  - `user_id UUID REFERENCES users(id) ON DELETE CASCADE`
-  - `token VARCHAR(255) NOT NULL` with `UNIQUE(token)` constraint
-  - `platform VARCHAR(16) NOT NULL` (ios/android/web/unknown)
-  - `updated_at TIMESTAMP NOT NULL DEFAULT NOW()`
-- Created index `idx_push_tokens_user_id` for efficient queries by user_id.
-- Table supports multiple tokens per user (different devices) but unique token constraint prevents duplicates.
-
+- Updated max_attendees column comment to clarify NULL = unlimited
+- Added auto_approve BOOLEAN DEFAULT FALSE column to tokis table to enable automatic approval of join requests when enabled by the host

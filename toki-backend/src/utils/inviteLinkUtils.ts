@@ -138,7 +138,8 @@ export async function addUserToToki(tokiId: string, userId: string): Promise<boo
 
     const { max_attendees, current_count } = tokiResult.rows[0];
     
-    if (max_attendees && current_count >= max_attendees) {
+    // Skip capacity check if max_attendees is NULL (unlimited)
+    if (max_attendees !== null && max_attendees !== undefined && current_count >= max_attendees) {
       return false; // Toki is full
     }
 

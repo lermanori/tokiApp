@@ -621,8 +621,9 @@ function RootLayoutNav() {
         const inRegisterScreen = segments[0] === 'register' || path.startsWith('/register');
         const inSetPasswordScreen = segments[0] === 'set-password' || path.startsWith('/set-password');
         const inResetPasswordScreen = (segments[0] as string) === 'reset-password' || path.startsWith('/reset-password');
+        const inTermsOfUseScreen = segments[0] === 'terms-of-use' || path.startsWith('/terms-of-use');
         
-        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen) {
+        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen) {
           // If user has tokens but isAuthenticated is false, it's likely a race condition
           // Don't preserve the path - just redirect to login and let fast redirect handle it
           const hasTokens = apiService.hasToken();
@@ -786,7 +787,7 @@ function RootLayoutNav() {
         } else if (isAuthenticated && inJoinScreen) {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
-        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inRegisterScreen) {
+        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inRegisterScreen && !inTermsOfUseScreen) {
           // IMPORTANT: Don't redirect authenticated users if they're on a valid page
           // List of valid authenticated routes (both deep links and regular authenticated routes)
           const validAuthenticatedRoutes = [
@@ -939,8 +940,8 @@ function RootLayoutNav() {
       } catch (error) {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
-        // Only redirect if we're not on the login, join, health, waitlist, set-password, or reset-password screen and have no current user
-        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (!state.currentUser || !state.currentUser.id)) {
+        // Only redirect if we're not on the login, join, health, waitlist, set-password, reset-password, or terms-of-use screen and have no current user
+        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (segments[0] as string) !== 'terms-of-use' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -1052,6 +1053,7 @@ function RootLayoutNav() {
         <Stack.Screen name="health" options={{ headerShown: false }} />
         <Stack.Screen name="set-password" options={{ headerShown: false }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+        <Stack.Screen name="terms-of-use" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
     </RedirectionGuard>
