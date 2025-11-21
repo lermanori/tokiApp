@@ -12,6 +12,8 @@ Expo app configuration file. Defines app metadata, build settings, plugins, and 
 - solution: Bumped app version from 1.0.1 to 1.0.9, runtimeVersion from 1.0.0 to 1.0.1, and iOS buildNumber from 2 to 3.
 - problem: Version bump needed for new release.
 - solution: Bumped app version from 1.0.9 to 1.0.10.
+- problem: Version bump needed for new release.
+- solution: Bumped app version from 1.0.10 to 1.0.11.
 
 ### How Fixes Were Implemented
 - Added `"expo-notifications"` to plugins array to enable native push notification support.
