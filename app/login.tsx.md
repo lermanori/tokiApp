@@ -46,3 +46,5 @@ This file contains the login and registration screen with enhanced autofill func
 
 - **problem**: No terms of use agreement displayed on login screen, which is required for legal compliance.
 - **solution**: Added a terms of use link below the login button with text "By logging in, I agree to be bound by the Terms of Use" that navigates to the terms-of-use page. Styled with purple link color (#8B5CF6) to match app design.
+- **problem**: Privacy policy acknowledgment link was missing, so users could not easily access the policy before logging in.
+- **solution**: Updated the legal copy to “By logging in, I agree to the Terms of Use and Privacy Policy,” adding a second link that routes to the new privacy policy screen while keeping the existing terms link.

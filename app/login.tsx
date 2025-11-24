@@ -359,12 +359,19 @@ export default function LoginScreen() {
                 
                 <View style={styles.termsContainer}>
                   <Text style={styles.termsText}>
-                    By logging in, I agree to be bound by the{' '}
+                    By logging in, I agree to the{' '}
                     <Text
                       style={styles.termsLink}
                       onPress={() => router.push('/terms-of-use')}
                     >
                       Terms of Use
+                    </Text>
+                    {' '}and{' '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => router.push('/privacy-policy')}
+                    >
+                      Privacy Policy
                     </Text>
                   </Text>
                 </View>

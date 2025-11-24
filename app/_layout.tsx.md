@@ -123,3 +123,5 @@ Root layout that initializes app providers and navigation. Now also initializes 
   - This fixes the "Maximum update depth exceeded" error that was caused by redirect loops
 - **problem**: Terms of use page was being protected by authentication guard, preventing public access to legal terms.
 - **solution**: Added `inTermsOfUseScreen` check to allow public access to `/terms-of-use` route without authentication, similar to login, waitlist, and other public pages. Added the route to the Stack navigator and excluded it from authentication redirects.
+- **problem**: Privacy policy route needed to be publicly accessible just like the terms page so users can reach it without logging in.
+- **solution**: Added `inPrivacyPolicyScreen` checks to the auth guard, updated the unauthenticated error handling to skip redirects on `/privacy-policy`, and registered the screen in the stack navigator.
