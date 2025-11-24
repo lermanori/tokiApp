@@ -20,3 +20,4 @@ FROM information_schema.columns
 WHERE table_name = 'tokis' 
   AND column_name IN ('max_attendees', 'auto_approve');
 
+

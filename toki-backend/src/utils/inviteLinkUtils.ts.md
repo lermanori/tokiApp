@@ -11,3 +11,4 @@ Utility functions for handling toki invite links and participant management.
 - Modified addUserToToki function to check if max_attendees is NULL before performing capacity validation
 - Allows unlimited participants when max_attendees is NULL
 
+

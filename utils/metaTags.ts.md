@@ -10,3 +10,4 @@ TypeScript interfaces for meta tag data used in SEO and social sharing.
 ### How Fixes Were Implemented
 - Updated TokiMetaData interface: maxAttendees from number | undefined to number | null | undefined, added autoApprove?: boolean field
 
+

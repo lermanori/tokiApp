@@ -18,3 +18,4 @@ This file contains the Terms of Use page displaying the complete legal terms and
 - **Navigation**: Added back button in header using ArrowLeft icon from lucide-react-native, allowing users to return to previous screen
 - **Content Formatting**: Stored terms content as a constant string with proper formatting including bullet points, sections, and subsections
 
+

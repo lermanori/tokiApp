@@ -16,3 +16,4 @@ SQL migration script to add support for unlimited max attendees and auto-approve
 - Step 3: UPDATE tokis SET auto_approve = FALSE WHERE auto_approve IS NULL - ensures all existing rows have a value
 - Includes verification query to check column definitions
 
+
