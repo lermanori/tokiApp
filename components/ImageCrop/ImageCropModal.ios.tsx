@@ -169,13 +169,31 @@ export default function ImageCropModalIOS({
         break;
     }
     
-    // Clamp size to image bounds while keeping top-left at newX/newY
-    newWidth = Math.min(newWidth, imageWidth - Math.max(0, newX));
-    newHeight = Math.min(newHeight, imageHeight - Math.max(0, newY));
-
-    // Recompute position to stay inside bounds
+    // Clamp position first to ensure we're within bounds
     newX = Math.max(0, Math.min(newX, imageWidth - newWidth));
     newY = Math.max(0, Math.min(newY, imageHeight - newHeight));
+    
+    // Calculate maximum available size while maintaining aspect ratio
+    const maxWidthFromX = imageWidth - newX;
+    const maxHeightFromY = imageHeight - newY;
+    
+    // Calculate the maximum size that fits both constraints while maintaining aspect ratio
+    const maxWidthFromHeight = maxHeightFromY * aspectRatioValue;
+    const maxHeightFromWidth = maxWidthFromX / aspectRatioValue;
+    
+    // Use the smaller constraint to maintain aspect ratio
+    const maxWidth = Math.min(maxWidthFromX, maxWidthFromHeight);
+    const maxHeight = Math.min(maxHeightFromY, maxHeightFromWidth);
+    
+    // Clamp size while maintaining aspect ratio
+    if (newWidth > maxWidth) {
+      newWidth = maxWidth;
+      newHeight = newWidth / aspectRatioValue;
+    }
+    if (newHeight > maxHeight) {
+      newHeight = maxHeight;
+      newWidth = newHeight * aspectRatioValue;
+    }
     
     // Ensure minimum size
     if (newWidth >= MIN_CROP_SIZE && newHeight >= MIN_CROP_SIZE) {
@@ -325,8 +343,8 @@ export default function ImageCropModalIOS({
       
       console.log('ImageCropModal iOS: Starting crop process for image:', imageUri);
       
-      // Get image dimensions first - use Image.getSize to avoid unnecessary processing
-      const imageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      // Get actual image dimensions first - use Image.getSize to avoid unnecessary processing
+      const actualImageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
         Image.getSize(
           imageUri,
           (width, height) => resolve({ width, height }),
@@ -335,10 +353,12 @@ export default function ImageCropModalIOS({
       });
       
       // Calculate crop dimensions based on aspect ratio and image size
-      const { width: imageWidth, height: imageHeight } = imageDimensions;
-      console.log('ImageCropModal iOS: Image dimensions:', { imageWidth, imageHeight });
+      const { width: imageWidth, height: imageHeight } = actualImageDimensions;
+      console.log('ImageCropModal iOS: Actual image dimensions:', { imageWidth, imageHeight });
+      console.log('ImageCropModal iOS: Drawn image dimensions:', imageDimensions);
       
-      // Calculate scale factors from preview to actual image
+      // Calculate scale factors from drawn preview dimensions to actual image
+      // imageDimensions is the state variable containing the drawn/preview size
       const scaleX = imageWidth / imageDimensions.width;
       const scaleY = imageHeight / imageDimensions.height;
       
