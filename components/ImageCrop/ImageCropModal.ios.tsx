@@ -243,10 +243,18 @@ export default function ImageCropModalIOS({
     try {
       console.log('Updating preview with:', { cropPosition, cropSize, imageDimensions });
       
-      // Get the actual image dimensions
-      const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { compress: 1 });
-      const actualImageWidth = imageInfo.width;
-      const actualImageHeight = imageInfo.height;
+      // Get the actual image dimensions - use Image.getSize instead of manipulateAsync
+      // This avoids re-processing the image which can cause pixelation
+      const actualImageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        Image.getSize(
+          imageUri,
+          (width, height) => resolve({ width, height }),
+          (error) => reject(error)
+        );
+      });
+      
+      const actualImageWidth = actualImageDimensions.width;
+      const actualImageHeight = actualImageDimensions.height;
       
       console.log('Actual image dimensions:', { actualImageWidth, actualImageHeight });
       
@@ -317,11 +325,17 @@ export default function ImageCropModalIOS({
       
       console.log('ImageCropModal iOS: Starting crop process for image:', imageUri);
       
-      // Get image dimensions first
-      const imageInfo = await ImageManipulator.manipulateAsync(imageUri, [], { format: ImageManipulator.SaveFormat.JPEG });
+      // Get image dimensions first - use Image.getSize to avoid unnecessary processing
+      const imageDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        Image.getSize(
+          imageUri,
+          (width, height) => resolve({ width, height }),
+          (error) => reject(error)
+        );
+      });
       
       // Calculate crop dimensions based on aspect ratio and image size
-      const { width: imageWidth, height: imageHeight } = imageInfo;
+      const { width: imageWidth, height: imageHeight } = imageDimensions;
       console.log('ImageCropModal iOS: Image dimensions:', { imageWidth, imageHeight });
       
       // Calculate scale factors from preview to actual image
@@ -454,11 +468,24 @@ export default function ImageCropModalIOS({
               <View 
                 style={styles.imageWrapper}
                 onLayout={async () => {
-                // Measure drawn image size for contain-fit inside 300x200 container
+                // Measure drawn image size for contain-fit inside container
+                // Only do this once to avoid re-processing the image
+                if (imageDimensions.width > 0) {
+                  return; // Already measured
+                }
+                
                 try {
-                  const info = await ImageManipulator.manipulateAsync(previewUri!, [], { compress: 1 });
-                  const imgW = info.width;
-                  const imgH = info.height;
+                  // Use Image.getSize instead of manipulateAsync to avoid re-processing
+                  const imgDimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+                    Image.getSize(
+                      previewUri!,
+                      (width, height) => resolve({ width, height }),
+                      (error) => reject(error)
+                    );
+                  });
+                  
+                  const imgW = imgDimensions.width;
+                  const imgH = imgDimensions.height;
                   const containerW = CONTAINER_W;
                   const containerH = CONTAINER_H;
                   const scale = Math.min(containerW / imgW, containerH / imgH);
@@ -473,6 +500,7 @@ export default function ImageCropModalIOS({
                     y: Math.max(0, (drawnH - cropSize.height) / 2),
                   });
                 } catch (e) {
+                  console.error('Error measuring image:', e);
                   // fallback to container size
                   setImageDimensions({ width: CONTAINER_W, height: CONTAINER_H });
                 }
