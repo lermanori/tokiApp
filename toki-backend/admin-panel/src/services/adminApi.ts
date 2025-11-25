@@ -297,5 +297,74 @@ export const adminApi = {
     });
     return handleResponse(response);
   },
+
+  // Notification Schedule
+  getNotificationSchedule: async (params?: { page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    const response = await fetch(`${API_BASE}/notification-schedule?${query}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  getNotificationScheduleEntry: async (id: string) => {
+    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  createNotificationSchedule: async (data: {
+    title: string;
+    message: string;
+    day_of_week: number;
+    hour: number;
+    minute: number;
+    enabled?: boolean;
+  }) => {
+    const response = await fetch(`${API_BASE}/notification-schedule`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  updateNotificationSchedule: async (id: string, data: {
+    title?: string;
+    message?: string;
+    day_of_week?: number;
+    hour?: number;
+    minute?: number;
+    enabled?: boolean;
+  }) => {
+    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  deleteNotificationSchedule: async (id: string) => {
+    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  testNotificationSchedule: async (id: string) => {
+    const response = await fetch(`${API_BASE}/notification-schedule/${id}/test`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
 };
 

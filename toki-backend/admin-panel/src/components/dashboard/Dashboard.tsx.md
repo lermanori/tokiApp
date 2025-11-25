@@ -1,15 +1,16 @@
-# File: Dashboard.tsx
+# File: toki-backend/admin-panel/src/components/dashboard/Dashboard.tsx
 
 ### Summary
-This file contains the main Dashboard component for the admin panel. It provides tab navigation between different admin sections: Analytics, Waitlist, Database, Algorithm, and Settings.
+Main dashboard component for admin panel that includes tabs for different admin functions, now including Notification Schedule tab.
 
 ### Fixes Applied log
-- Added: Analytics tab to dashboard navigation
-- Changed: Default active tab from 'waitlist' to 'analytics'
+- problem: No Notification Schedule tab in admin dashboard.
+- solution: Added Notification Schedule tab with Bell icon, imported component, and added to activeTab type and rendering.
 
 ### How Fixes Were Implemented
-- Added AnalyticsTab import and BarChart icon from lucide-react
-- Added 'analytics' to activeTab state type
-- Added Analytics tab button to navigation with BarChart icon
-- Added AnalyticsTab rendering in content area
-- Set analytics as default tab when dashboard loads
+- Added Bell icon import from lucide-react.
+- Imported NotificationScheduleTab component.
+- Added 'notification-schedule' to activeTab type union.
+- Added TabButton for Notification Schedule with Bell icon.
+- Added conditional rendering for NotificationScheduleTab when activeTab is 'notification-schedule'.
+- Follows same pattern as other tabs (Analytics, Waitlist, Database, etc.).

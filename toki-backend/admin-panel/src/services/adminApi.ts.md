@@ -1,15 +1,18 @@
-# File: adminApi.ts
+# File: toki-backend/admin-panel/src/services/adminApi.ts
 
 ### Summary
-This file contains the admin API service that handles all API calls to the backend with JWT authentication. It provides methods for managing waitlist, users, tokis, algorithm hyperparameters, email templates, settings, and analytics.
+Frontend API service for admin panel that includes new methods for managing scheduled notifications.
 
 ### Fixes Applied log
-- Added: getAnalytics method to fetch analytics dashboard data
-- Enhanced: Updated method to use hours parameter instead of days
+- problem: No frontend API methods for scheduled notifications.
+- solution: Added 6 new methods to adminApi object for notification schedule CRUD operations and testing.
 
 ### How Fixes Were Implemented
-- Added getAnalytics method that accepts optional hours parameter
-- Calls GET /api/admin/analytics endpoint with hours query parameter
-- Uses standard authentication headers and response handling
-- Returns analytics data with time-series and summary information
-- Supports hour-based time ranges (1h, 12h, 24h, 3d, 7d, 14d, 30d)
+- getNotificationSchedule() - Fetches list of scheduled notifications with optional pagination.
+- getNotificationScheduleEntry(id) - Fetches single notification by ID.
+- createNotificationSchedule(data) - Creates new notification with title, message, day_of_week, hour, minute, enabled.
+- updateNotificationSchedule(id, data) - Updates notification with partial data.
+- deleteNotificationSchedule(id) - Deletes notification.
+- testNotificationSchedule(id) - Sends test notification immediately.
+- All methods use existing getAuthHeaders() and handleResponse() utilities.
+- Follows same pattern as other admin API methods.

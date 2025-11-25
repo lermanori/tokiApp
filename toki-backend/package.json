@@ -12,7 +12,8 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "migrate": "ts-node src/scripts/run-migrations.ts"
+    "migrate": "ts-node src/scripts/run-migrations.ts",
+    "seed:notifications": "ts-node src/scripts/seed-notifications.ts"
   },
   "keywords": [
     "toki",
@@ -38,6 +39,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
     "nodemailer": "^7.0.5",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1"
@@ -49,6 +51,7 @@
     "@types/jsonwebtoken": "^9.0.4",
     "@types/multer": "^1.4.13",
     "@types/node": "^20.8.0",
+    "@types/node-cron": "^3.0.11",
     "nodemon": "^3.0.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2"

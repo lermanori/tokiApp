@@ -37,6 +37,7 @@ import activityRoutes from './routes/activity';
 import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
 import invitationRoutes from './routes/invitations';
+import { startNotificationScheduler } from './services/notificationScheduler';
 
 const app = express();
 const server = createServer(app);
@@ -253,6 +254,9 @@ server.listen(PORT, async () => {
   // Test database connection and set timezone
   await testDatabaseConnection();
   await setDatabaseTimezone();
+
+  // Start notification scheduler
+  startNotificationScheduler();
 });
 
 export default app; 
