@@ -123,7 +123,7 @@ app.get('/health', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    version: '1.0.0'
+    version: '1.0.12'
   });
 });
 
@@ -152,7 +152,7 @@ app.use('/api/invitations', corsMiddleware, invitationRoutes);
 app.get('/api', (req, res) => {
   res.json({
     message: 'Toki API is running!',
-    version: '1.0.0',
+    version: '1.0.12',
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
