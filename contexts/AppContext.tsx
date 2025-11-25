@@ -1467,7 +1467,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeSlot: tokiData.time,
         scheduledTime: tokiData.customDateTime || getScheduledTimeFromSlot(tokiData.time), // Use custom date/time if provided
         category: tokiData.activity,
-        maxAttendees: tokiData.maxAttendees || 10,
+        maxAttendees: tokiData.maxAttendees !== undefined ? tokiData.maxAttendees : 10,
         visibility: tokiData.visibility || 'public',
         tags: tokiData.tags || [],
         externalLink: tokiData.externalLink || null,
