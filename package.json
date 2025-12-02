@@ -7,6 +7,7 @@
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
     "build:web": "expo export --platform web",
     "build:web:github": "expo export --platform web --output-dir docs",
+    "start:device": "expo run:ios --device --configuration Release",
     "start": "npx serve -s dist -l $PORT",
     "lint": "expo lint",
     "predeploy": "expo export -p web",
