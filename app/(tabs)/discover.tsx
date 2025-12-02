@@ -395,7 +395,7 @@ export default function DiscoverScreen() {
         />
       </View>
     );
-  }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
+  }, [sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
   
 
   const getSectionTitle = () => {

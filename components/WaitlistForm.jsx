@@ -377,7 +377,7 @@ export default function WaitlistForm() {
 
                   {/* Subtext */}
                   <Text style={styles.subtext}>
-                    * We're currently in private beta. If you're invited by someone from the community, let us know.
+                    * Toki is invite-only. Leave your details and we’ll notify you
                   </Text>
                 </View>
 

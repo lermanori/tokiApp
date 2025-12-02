@@ -54,7 +54,7 @@ export default function WaitlistScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.subtitle}>We’re in private beta. Leave your details and we’ll invite you soon.</Text>
+        <Text style={styles.subtitle}>Toki is invite-only. Leave your details and we’ll notify you</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Email *</Text>
