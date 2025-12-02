@@ -1,38 +1,54 @@
 # File: DiscoverMap.web.tsx
 
 ### Summary
-This file contains the web map component using React Leaflet. It displays clustered event markers on a map and supports programmatically opening popups when navigating from the Toki details page.
+This file contains the web-only interactive map component using React Leaflet. It displays Toki events as clustered markers on a map, handles user interactions, and implements radius-based movement constraints around the user's profile location.
 
 ### Fixes Applied log
-- problem: Popup was not opening programmatically on web when navigating from Toki details page.
-- solution: Added MapController component using useMap hook to access Leaflet map instance. Updated popup opening logic to properly access marker's leafletElement and call openPopup(). Added multiple access methods (direct leafletElement, getLeafletElement(), map layers) with comprehensive logging and retry logic.
+- **Problem**: Map position was resetting after API responses due to controlled props in React Leaflet.
+- **Solution**: Implemented module-level state persistence and uncontrolled initial props to maintain map position across re-renders.
 
-- problem: Map instance was not accessible for programmatic popup control.
-- solution: Created MapController component that uses useMap() hook (must be inside MapContainer) to get the map instance and store it in mapInstanceRef. This allows the popup opening logic to access the map's internal layers structure if needed.
+- **Problem**: User could pan the map beyond their profile radius, breaking the spatial constraint.
+- **Solution**: Added radius-based pan constraint using haversine distance calculation and point clamping. When the user tries to move beyond the allowed radius, the map center is automatically clamped back to the boundary.
 
-- problem: Map icons were flickering on every render due to icon recreation and MapContainer remounting.
-- solution: Fixed icon flickering by: 1) Memoizing icon creation with useCallback and caching icons in a ref-based Map to prevent recreation on every render, 2) Changed MapContainer key from dynamic (based on highlightedTokiId) to stable "map-container" to prevent unnecessary remounts, 3) Added programmatic map centering via map.setView() in MapController when highlighted coordinates change, eliminating the need for remounting, 4) Added icon cache cleanup logic to prevent memory leaks when cluster count changes significantly.
+- **Problem**: Event listener closure captured stale values of `profileCenter` and `maxRadiusMeters` props.
+- **Solution**: Used refs (`profileCenterRef`, `maxRadiusMetersRef`) to always access current prop values without recreating the event listener.
+
+- **Problem**: No visual indication of the allowed movement radius.
+- **Solution**: Added a semi-transparent Circle overlay showing the allowed movement area around the profile location.
+
+- **Problem**: Map was not centering on user's profile location on initial load - it would only jump to the correct location after the user moved the map slightly.
+- **Solution**: Updated initialization logic to check for `profileCenter` via refs during first mount, and added a separate effect that watches for `profileCenter` to become available (handles async geocoding) and centers the map once if it's far from the profile location (>1km).
+
+- **Problem**: Infinite loop causing "Maximum call stack size exceeded" error when clamping map movement. Calling `map.setView()` to clamp the center triggered another `moveend` event, which called the handler again, creating an infinite recursion.
+- **Solution**: Added `isClampingRef` flag to track when we're programmatically setting the view. The handler checks this flag at the start and returns early if set, preventing recursive calls. The flag is set before `setView()` and reset after a 100ms timeout to allow the triggered `moveend` event to be ignored. Also added distance check with 10m tolerance before clamping to avoid unnecessary calculations.
 
 ### How Fixes Were Implemented
-- Added MapController component that uses useMap() hook to access the Leaflet map instance
-- MapController sets mapInstanceRef.current = map so it's available to the popup opening logic
-- Updated openPopup function to try multiple methods to access leafletElement:
-  1. Direct access via marker.leafletElement
-  2. Via getLeafletElement() method if available
-  3. Via map._layers using marker's _leaflet_id
-- Added comprehensive logging to debug marker ref and leafletElement availability
-- Implemented multiple retry attempts with optimized timing (200ms, 500ms, 1000ms, 2000ms) for faster popup opening while accounting for map remounting and marker initialization
-- Each retry attempt logs detailed information about marker ref state for debugging
-- Optimized timing: Reduced initial delay from 1000ms to 200ms for faster popup opening after map centers
 
-**Icon Flickering Fix:**
-- Created iconCache ref using Map<string, any> to store created Leaflet icons
-- Implemented getMarkerIcon callback that checks cache before creating new icons
-- Cache key includes cluster key, category, and item count to ensure uniqueness
-- Changed MapContainer key from dynamic `map-${highlightedTokiId}` to stable `"map-container"` to prevent remounts
-- Added useEffect in MapController to programmatically center map using map.setView() when highlighted coordinates change
-- Added icon cache cleanup logic that clears cache when cluster count changes significantly (prevents memory leaks)
-- Icons are now reused across renders instead of being recreated, eliminating flickering
+**Module-Level State Persistence**:
+- Added module-level variables (`lastKnownMapCenter`, `lastKnownMapZoom`, `mapHasBeenInitialized`) that persist across component remounts
+- Map position is tracked via Leaflet's `moveend` event, not React props
+- Initial map center/zoom are set once and never updated via props after mount
 
-- problem: Map controls were positioned too high on the map, potentially interfering with other UI elements. Leaflet's default zoom controls were visible.
-- solution: Lowered map controls position from `top: 16` to `top: 60` to provide better spacing and avoid UI conflicts. Disabled Leaflet's default zoom controls using `zoomControl={false}` prop. Fixed TypeScript linting error by adding explicit type annotation to Marker ref parameter.
+**Radius Constraint Implementation**:
+- Added haversine distance calculation function (`haversineDistanceMeters`) for accurate distance measurement
+- Implemented `clampPointToRadius` function that projects points outside the radius back onto the circle boundary
+- In `MapController`'s `handleMoveEnd` event handler, check if the new center exceeds the radius and clamp it if necessary
+- Used refs to access current `profileCenter` and `maxRadiusMeters` values without recreating the event listener
+- Added `isClampingRef` flag to prevent infinite loop: when programmatically calling `map.setView()` to clamp the center, the flag is set to skip the next `moveend` event handler call, preventing recursion
+- Added distance check with 10m tolerance before clamping to avoid unnecessary calculations and improve performance
+
+**Visual Feedback**:
+- Added `Circle` component import from react-leaflet
+- Rendered a semi-transparent purple circle overlay when `profileCenter` and `maxRadiusMeters` are provided
+- Circle uses brand color (#B49AFF) with 10% fill opacity and 40% border opacity for subtle visibility
+
+**Props Interface**:
+- Extended `Props` interface with optional `profileCenter` and `maxRadiusMeters` props
+- These props are passed from the parent component (`exMap.tsx`) which computes them from user profile and filter settings
+
+**Profile Center Initialization**:
+- Modified initialization logic to check `profileCenterRef.current` during first mount, prioritizing profile center over default initial props
+- Added a `useEffect` that watches for `profileCenter` to become available after initial mount (handles async geocoding)
+- The effect only centers the map if the current position is more than 1km away from profile center, preventing disruption if user has already moved the map
+- Uses `hasAppliedProfileCenterRef` to ensure the centering only happens once
+- Respects priority: highlighted coordinates > last known position > profile center > initial props
