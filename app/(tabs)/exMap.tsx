@@ -72,6 +72,7 @@ export default function ExMapScreen() {
     const hasRefreshedOnFocusRef = useRef(false);
     const renderCountRef = useRef(0);
     const justSetHighlightRef = useRef(false);
+    const hasReloadedForProfileCenterRef = useRef<string | null>(null);
 
     // Image loading tracking
     const [imageLoadTracking, setImageLoadTracking] = useState<Set<string>>(new Set());
@@ -91,6 +92,7 @@ export default function ExMapScreen() {
         userConnections,
         isLoadingMore,
         refreshing,
+        isWaitingForUserLocation,
         handleRefresh,
         updateMapRegion,
     } = useDiscoverData();
@@ -107,6 +109,39 @@ export default function ExMapScreen() {
         searchQuery,
         setSearchQuery,
     } = useDiscoverFilters(baseEvents, userConnections);
+
+    // Profile-based center and radius (in meters) used to constrain map movement
+    const profileCenter = useMemo(() => {
+        const lat = state.currentUser?.latitude ?? mapRegion?.latitude;
+        const lng = state.currentUser?.longitude ?? mapRegion?.longitude;
+        // Ensure they're numbers, not strings
+        const latNum = typeof lat === 'number' ? lat : parseFloat(String(lat || 0));
+        const lngNum = typeof lng === 'number' ? lng : parseFloat(String(lng || 0));
+        
+        // Only return if valid numbers
+        if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+            console.log('🏄 [MAP-FLOW] Profile center computed:', { lat: latNum, lng: lngNum, source: state.currentUser?.latitude ? 'userProfile' : 'mapRegion' });
+            return {
+                latitude: latNum,
+                longitude: lngNum,
+            };
+        }
+        console.log('🏄 [MAP-FLOW] Profile center invalid, returning null');
+        return null; // Return null if invalid
+    }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion?.latitude, mapRegion?.longitude]);
+
+    const maxRadiusMeters = useMemo(() => {
+        const rawRadius = selectedFilters.radius as any;
+        const radiusValue =
+            typeof rawRadius === 'number'
+                ? rawRadius
+                : parseFloat(String(rawRadius || '500'));
+        const radiusKm = Number.isFinite(radiusValue) && radiusValue > 0 ? radiusValue : 500;
+        // Backend radius is in kilometers; convert to meters for map constraint
+        const radiusMeters = radiusKm * 1000;
+        console.log('🏄 [MAP-FLOW] Max radius computed:', { radiusKm, radiusMeters, rawRadius });
+        return radiusMeters;
+    }, [selectedFilters.radius]);
 
     // Add error boundary for category changes
     const handleCategoryToggle = useCallback((categories: string[]) => {
@@ -265,18 +300,108 @@ export default function ExMapScreen() {
         }, [])
     );
 
-    // Refresh on focus if no data
+    // Load user location early on focus (before initial load)
+    useFocusEffect(
+        React.useCallback(() => {
+            if (state.isConnected && !state.currentUser?.latitude) {
+                console.log('🏄 [MAP-FLOW] Loading user location early...');
+                actions.loadCurrentUser().catch(err => {
+                    console.error('🏄 [MAP-FLOW] Failed to load user location:', err);
+                });
+            }
+        }, [state.isConnected, state.currentUser?.latitude, actions])
+    );
+
+    // Refresh on focus if no data (only after user location is available)
+    // NOTE: Initial nearby load is owned by useDiscoverData; this effect only syncs mapRegion.
     useFocusEffect(
         React.useCallback(() => {
             if (hasRefreshedOnFocusRef.current) return;
-            if (state.isConnected && state.tokis.length === 0 && (state.currentUser?.latitude && state.currentUser?.longitude || mapRegion.latitude && mapRegion.longitude)) {
-                const lat = state.currentUser?.latitude || mapRegion.latitude;
-                const lng = state.currentUser?.longitude || mapRegion.longitude;
-                handleRefresh(selectedFilters.radius);
+            // Wait for user location - don't use default Tel Aviv
+            if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
+                return; // Wait for user location
+            }
+
+            // Use profileCenter coordinates if available, otherwise fall back to user location
+            const lat = profileCenter?.latitude || state.currentUser?.latitude;
+            const lng = profileCenter?.longitude || state.currentUser?.longitude;
+
+            if (state.isConnected && lat && lng) {
+                console.log('🏄 [MAP-FLOW] useFocusEffect: Syncing mapRegion to focus location', {
+                    lat,
+                    lng,
+                    source: profileCenter ? 'profileCenter' : 'userProfile',
+                });
+
+                // Update mapRegion to profile center (or user location) so the map centers correctly,
+                // but DO NOT load tokis here – that is handled by useDiscoverData.
+                updateMapRegion(
+                    {
+                        latitude: lat,
+                        longitude: lng,
+                        latitudeDelta: 0.0922,
+                        longitudeDelta: 0.0421,
+                    },
+                    false
+                );
+
                 hasRefreshedOnFocusRef.current = true;
             }
-        }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion, handleRefresh, selectedFilters.radius])
+        }, [
+            state.isConnected,
+            profileCenter,
+            state.currentUser?.latitude,
+            state.currentUser?.longitude,
+            updateMapRegion,
+        ])
     );
+
+    // Sync mapRegion when profileCenter changes to a different location (handles async profile loading)
+    // NOTE: We no longer reload tokis here; initial load is handled by useDiscoverData.
+    useEffect(() => {
+        if (!profileCenter || !profileCenter.latitude || !profileCenter.longitude) return;
+        if (!state.isConnected) return;
+        
+        // Create unique key for this profile center location
+        const profileCenterKey = `${profileCenter.latitude},${profileCenter.longitude}`;
+        
+        // Skip if we've already reloaded for this exact location (prevents infinite loop)
+        if (hasReloadedForProfileCenterRef.current === profileCenterKey) {
+            console.log('🏄 [MAP-FLOW] Already reloaded for this profile center, skipping', { profileCenterKey });
+            return;
+        }
+        
+        // Update mapRegion to match profileCenter FIRST (fixes stale closure issue)
+        // This ensures mapRegion is current before we check distance
+        updateMapRegion({
+            latitude: profileCenter.latitude,
+            longitude: profileCenter.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+        }, false);
+        
+        // Check if current mapRegion is far from profileCenter (more than 1km)
+        // After update, this should be small, but we check in case mapRegion was way off
+        const distance = profileCenter.latitude && profileCenter.longitude && mapRegion?.latitude && mapRegion?.longitude
+            ? Math.sqrt(
+                Math.pow((profileCenter.latitude - mapRegion!.latitude) * 111320, 2) +
+                Math.pow((profileCenter.longitude - mapRegion!.longitude) * 111320 * Math.cos(profileCenter.latitude * Math.PI / 180), 2)
+            )
+            : Infinity;
+        
+        // If profileCenter is significantly different from mapRegion, just mark as handled.
+        // Tokis are not reloaded here to avoid duplicate nearby loads.
+        if (distance > 1000) {
+            console.log('🏄 [MAP-FLOW] Profile center changed significantly, marking as handled (no reload)', {
+                profileCenter: [profileCenter.latitude, profileCenter.longitude],
+                mapRegion: mapRegion ? [mapRegion.latitude, mapRegion.longitude] : null,
+                distance
+            });
+            
+            // Mark as reloaded BEFORE making the call (prevents race conditions)
+            hasReloadedForProfileCenterRef.current = profileCenterKey;
+        }
+    }, [profileCenter?.latitude, profileCenter?.longitude, state.isConnected, selectedFilters.radius, updateMapRegion]);
 
     // Handle highlightTokiId from navigation params
     useEffect(() => {
@@ -389,13 +514,18 @@ export default function ExMapScreen() {
         if (selectedFilters.dateTo) queryParams.dateTo = selectedFilters.dateTo;
         queryParams.radius = selectedFilters.radius;
 
-        if (mapRegion?.latitude && mapRegion?.longitude) {
-            queryParams.userLatitude = mapRegion.latitude.toString();
-            queryParams.userLongitude = mapRegion.longitude.toString();
+        // Use profileCenter first, then fall back to mapRegion
+        const lat = profileCenter?.latitude || mapRegion?.latitude;
+        const lng = profileCenter?.longitude || mapRegion?.longitude;
+        
+        if (lat && lng) {
+            console.log('🏄 [MAP-FLOW] ApplyFilters: Using coordinates', { lat, lng, source: profileCenter ? 'profileCenter' : 'mapRegion' });
+            queryParams.userLatitude = lat.toString();
+            queryParams.userLongitude = lng.toString();
         }
 
         actions.loadTokisWithFilters(queryParams);
-    }, [selectedFilters, mapRegion, actions]);
+    }, [selectedFilters, profileCenter, mapRegion, actions]);
 
     // Event handlers
     const handleEventPress = useCallback((event: TokiEvent) => {
@@ -470,6 +600,18 @@ export default function ExMapScreen() {
         try {
             console.log('🔄 [EXMAP] Rendering map with events:', sortedEvents.length, 'mapKey:', mapKey);
 
+            // Don't render map until mapRegion is available (user location loaded)
+            if (!mapRegion || isWaitingForUserLocation) {
+                return (
+                    <View style={styles.mapContainer} key="map-container">
+                        <View style={styles.mapLoadingOverlay}>
+                            <ActivityIndicator size="large" color="#B49AFF" />
+                            <Text style={styles.mapLoadingText}>Loading your location...</Text>
+                        </View>
+                    </View>
+                );
+            }
+
             // Validate events before passing to map
             const validEvents = sortedEvents.filter(e => {
                 const hasValidCoords = e.coordinate &&
@@ -495,6 +637,8 @@ export default function ExMapScreen() {
                         onToggleList={toggleMapView}
                         highlightedTokiId={highlightedTokiId}
                         highlightedCoordinates={highlightedTokiCoordinates}
+                        profileCenter={profileCenter}
+                        maxRadiusMeters={maxRadiusMeters}
                     />
                 </View>
             );
@@ -514,7 +658,7 @@ export default function ExMapScreen() {
                 </View>
             );
         }
-    }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates]);
+    }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates, profileCenter, maxRadiusMeters, mapKey]);
 
     const getSectionTitle = () => {
         if (state.loading && state.tokis.length === 0) {
@@ -645,10 +789,12 @@ export default function ExMapScreen() {
                                 <View>
                                     <Text style={styles.sectionTitle}>{String(sectionTitle || '')}</Text>
                                 </View>
-                                {state.loading && state.tokis.length === 0 ? (
+                                {(isWaitingForUserLocation || (state.loading && state.tokis.length === 0)) ? (
                                     <View style={styles.loadingContainer}>
                                         <ActivityIndicator size="large" color="#B49AFF" />
-                                        <Text style={styles.loadingText}>Loading Tokis...</Text>
+                                        <Text style={styles.loadingText}>
+                                            {isWaitingForUserLocation ? 'Loading your location...' : 'Loading Tokis...'}
+                                        </Text>
                                     </View>
                                 ) : null}
                             </>
@@ -661,7 +807,7 @@ export default function ExMapScreen() {
                             </View>
                         );
                     }
-                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount])}
+                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
                 renderItem={({ item, index }) => {
                     if (!item || typeof item !== 'object') {
                         return null;
@@ -697,6 +843,25 @@ export default function ExMapScreen() {
                             />
                         </View>
                     );
+                }}
+                ListEmptyComponent={() => {
+                    if (isWaitingForUserLocation) {
+                        return (
+                            <View style={styles.skeletonContainer}>
+                                {[1, 2, 3, 4].map((i) => (
+                                    <View key={i} style={styles.skeletonCard}>
+                                        <View style={styles.skeletonImage} />
+                                        <View style={styles.skeletonContent}>
+                                            <View style={styles.skeletonTitle} />
+                                            <View style={styles.skeletonText} />
+                                            <View style={styles.skeletonTextShort} />
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        );
+                    }
+                    return null;
                 }}
                 ListFooterComponent={() => (
                     <>
@@ -949,6 +1114,67 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontFamily: 'Inter-Regular',
         color: '#666666',
+    },
+    mapLoadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+    },
+    mapLoadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        fontFamily: 'Inter-Medium',
+        color: '#666666',
+    },
+    skeletonContainer: {
+        padding: 16,
+        gap: 16,
+    },
+    skeletonCard: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    skeletonImage: {
+        width: 80,
+        height: 80,
+        borderRadius: 12,
+        backgroundColor: '#E5E7EB',
+    },
+    skeletonContent: {
+        flex: 1,
+        marginLeft: 12,
+        gap: 8,
+    },
+    skeletonTitle: {
+        height: 20,
+        width: '70%',
+        borderRadius: 4,
+        backgroundColor: '#E5E7EB',
+    },
+    skeletonText: {
+        height: 16,
+        width: '100%',
+        borderRadius: 4,
+        backgroundColor: '#F3F4F6',
+    },
+    skeletonTextShort: {
+        height: 16,
+        width: '60%',
+        borderRadius: 4,
+        backgroundColor: '#F3F4F6',
     },
 });
 

@@ -15,11 +15,12 @@ export const useDiscoverData = () => {
   const { state, actions } = useApp();
   const [events, setEvents] = useState<TokiEvent[]>([]);
   const [mapEvents, setMapEvents] = useState<TokiEvent[]>([]);
-  const [mapRegion, setMapRegion] = useState<MapRegion>(DEFAULT_REGION);
+  const [mapRegion, setMapRegion] = useState<MapRegion | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isWaitingForUserLocation, setIsWaitingForUserLocation] = useState(true);
   
   const previousEventIdsRef = useRef<string>('');
   const previousMapEventIdsRef = useRef<string>('');
@@ -63,46 +64,55 @@ export const useDiscoverData = () => {
     }
   }, [state.mapTokis]);
 
-  // Initialize map region from user profile location - only once on mount
+  // Initialize map region from user location - wait for user location before setting
   useEffect(() => {
     if (mapRegionInitializedRef.current) return;
     
-    const setFromProfile = async () => {
+    // Wait for user location (latitude/longitude) - don't use default Tel Aviv
+    if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
+      return; // Wait for user location
+    }
+    
+    const setFromUserLocation = async () => {
       try {
+        // Use user's latitude/longitude directly if available
+        if (state.currentUser.latitude && state.currentUser.longitude) {
+          setMapRegion({
+            latitude: state.currentUser.latitude,
+            longitude: state.currentUser.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
+          mapRegionInitializedRef.current = true;
+          return;
+        }
+        
+        // Fallback: try to geocode location string if coordinates not available
         const profileLoc = state.currentUser?.location?.trim();
         if (profileLoc) {
           const results = await geocodingService.geocodeAddress(profileLoc, 0);
           if (results && results[0]) {
             const { latitude, longitude } = results[0];
-            // Only update if significantly different from default to avoid unnecessary updates
-            const currentLat = mapRegion.latitude;
-            const currentLng = mapRegion.longitude;
-            const latDiff = Math.abs(latitude - currentLat);
-            const lngDiff = Math.abs(longitude - currentLng);
-            
-            // Only update if difference is significant (> 0.01 degrees ~ 1km)
-            if (latDiff > 0.01 || lngDiff > 0.01) {
-              setMapRegion({
-                latitude,
-                longitude,
-                latitudeDelta: 0.0922,
-                longitudeDelta: 0.0421,
-              });
-            }
+            setMapRegion({
+              latitude,
+              longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            });
             mapRegionInitializedRef.current = true;
             return;
           }
         }
-        // Fallback to default - mark as initialized
+        // If no location available, mark as initialized but don't set mapRegion (stay null)
         mapRegionInitializedRef.current = true;
       } catch (error) {
         // Mark as initialized even on error to prevent retries
         mapRegionInitializedRef.current = true;
       }
     };
-    setFromProfile();
+    setFromUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.currentUser?.location]); // Only depend on location, not mapRegion to avoid loops
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, state.currentUser?.location]);
 
   // Load nearby tokis
   const loadNearbyTokis = useCallback(async (
@@ -113,8 +123,9 @@ export const useDiscoverData = () => {
     radius?: string
   ) => {
     // Use current values from state/refs to avoid stale closures
-    const currentLat = latitude || state.currentUser?.latitude || mapRegion.latitude;
-    const currentLng = longitude || state.currentUser?.longitude || mapRegion.longitude;
+    // Prefer user location, fallback to mapRegion if available
+    const currentLat = latitude || state.currentUser?.latitude || mapRegion?.latitude;
+    const currentLng = longitude || state.currentUser?.longitude || mapRegion?.longitude;
     
     if (!currentLat || !currentLng) {
       console.log('⚠️ [DISCOVER] No location available');
@@ -152,27 +163,52 @@ export const useDiscoverData = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, isLoadingMore, actions]);
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion?.latitude, mapRegion?.longitude, isLoadingMore, actions]);
 
   // Initial load - only run once when connected (using ref to prevent strict mode double calls)
+  // Wait for user location before loading (don't use default Tel Aviv)
   useEffect(() => {
-    if (hasInitiallyLoadedRef.current) return;
-    if (!state.isConnected) return;
-    
-    const lat = state.currentUser?.latitude || mapRegion.latitude;
-    const lng = state.currentUser?.longitude || mapRegion.longitude;
-    
-    if (lat && lng) {
-      // Mark as loading immediately to prevent duplicate calls in React strict mode
-      hasInitiallyLoadedRef.current = true;
-      
-      // Use the callback directly but don't include it in deps to avoid circular updates
-      // Default to 500km radius for initial load (matches backend default)
-      loadNearbyTokis(1, false, lat, lng, '500').catch(() => {
-        // Reset on error so it can retry if needed
-        hasInitiallyLoadedRef.current = false;
-      });
+    if (hasInitiallyLoadedRef.current) {
+      setIsWaitingForUserLocation(false);
+      return;
     }
+    if (!state.isConnected) {
+      setIsWaitingForUserLocation(true);
+      return;
+    }
+    
+    // Wait for user location - don't use default Tel Aviv coordinates
+    if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
+      console.log('🏄 [MAP-FLOW] useDiscoverData: Waiting for user location...', {
+        hasUser: !!state.currentUser,
+        hasLatitude: !!state.currentUser?.latitude,
+        hasLongitude: !!state.currentUser?.longitude
+      });
+      setIsWaitingForUserLocation(true);
+      return; // Wait for user location to be available
+    }
+    
+    // User location is available, proceed with load
+    const lat = state.currentUser.latitude;
+    const lng = state.currentUser.longitude;
+    
+    console.log('🏄 [MAP-FLOW] useDiscoverData initial load:', { 
+      lat, 
+      lng, 
+      source: 'userProfile'
+    });
+    
+    // Mark as loading immediately to prevent duplicate calls in React strict mode
+    hasInitiallyLoadedRef.current = true;
+    setIsWaitingForUserLocation(false);
+    
+    // Use the callback directly but don't include it in deps to avoid circular updates
+    // Default to 500km radius for initial load (matches backend default)
+    loadNearbyTokis(1, false, lat, lng, '500').catch(() => {
+      // Reset on error so it can retry if needed
+      hasInitiallyLoadedRef.current = false;
+      setIsWaitingForUserLocation(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude]);
 
@@ -200,8 +236,8 @@ export const useDiscoverData = () => {
       return;
     }
     
-    const lat = state.currentUser?.latitude || mapRegion.latitude;
-    const lng = state.currentUser?.longitude || mapRegion.longitude;
+    const lat = state.currentUser?.latitude || mapRegion?.latitude;
+    const lng = state.currentUser?.longitude || mapRegion?.longitude;
     
     if (!lat || !lng) return;
     
@@ -213,15 +249,15 @@ export const useDiscoverData = () => {
       });
       return nextPage;
     });
-  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis]);
+  }, [isLoadingMore, hasMore, state.currentUser?.latitude, state.currentUser?.longitude, state.tokis.length, mapRegion?.latitude, mapRegion?.longitude, loadNearbyTokis]);
 
   const handleRefresh = useCallback(async (radius?: string) => {
     try {
       setRefreshing(true);
       // Reset currentPage to 1 when refreshing
       setCurrentPage(1);
-      const lat = state.currentUser?.latitude || mapRegion.latitude;
-      const lng = state.currentUser?.longitude || mapRegion.longitude;
+      const lat = state.currentUser?.latitude || mapRegion?.latitude;
+      const lng = state.currentUser?.longitude || mapRegion?.longitude;
       if (lat && lng) {
         // Refresh both tokis and notifications in parallel
         await Promise.all([
@@ -234,7 +270,7 @@ export const useDiscoverData = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion.latitude, mapRegion.longitude, loadNearbyTokis, actions]);
+  }, [state.currentUser?.latitude, state.currentUser?.longitude, mapRegion?.latitude, mapRegion?.longitude, loadNearbyTokis, actions]);
 
   const updateMapRegion = useCallback((region: MapRegion, userInitiated: boolean = false) => {
     // Validate region has valid coordinates before setting
@@ -257,6 +293,7 @@ export const useDiscoverData = () => {
     isLoadingMore,
     hasMore,
     refreshing,
+    isWaitingForUserLocation,
     loadNearbyTokis,
     handleLoadMore,
     handleRefresh,
