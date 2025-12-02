@@ -213,6 +213,40 @@ async function runMigrations() {
       }
     }
 
+    // Migration 13: MCP API keys
+    try {
+      console.log('📝 Migration 13: Creating mcp_api_keys table...');
+      const mcpKeysSql = readFileSync(
+        join(sqlDir, 'create-mcp-api-keys.sql'),
+        'utf-8'
+      );
+      await pool.query(mcpKeysSql);
+      console.log('✅ MCP API keys migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  mcp_api_keys table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
+    // Migration 14: Add user_id to mcp_api_keys
+    try {
+      console.log('📝 Migration 14: Adding user_id column to mcp_api_keys table...');
+      const addUserIdSql = readFileSync(
+        join(sqlDir, 'add-user-id-to-mcp-api-keys.sql'),
+        'utf-8'
+      );
+      await pool.query(addUserIdSql);
+      console.log('✅ user_id column migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  user_id column already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

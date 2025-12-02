@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "toki_http": {
+      "command": "node",
+      "args": ["/Users/orilerman/Desktop/tokiApp/toki-backend/dist/mcp-bridge.js"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:3002/api/mcp/toki",
+        "MCP_API_KEY": ""
+      }
+    }
+  }
+}
+
+

@@ -228,6 +228,31 @@ export const adminApi = {
     return handleResponse(response);
   },
 
+  // MCP API Keys
+  getMcpKeys: async () => {
+    const response = await fetch(`${API_BASE}/mcp-keys`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  createMcpKey: async (data: { name: string; scopes?: string[]; user_id: string }) => {
+    const response = await fetch(`${API_BASE}/mcp-keys`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  },
+
+  revokeMcpKey: async (id: string) => {
+    const response = await fetch(`${API_BASE}/mcp-keys/${id}/revoke`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   // Algorithm Hyperparameters
   getAlgorithm: async () => {
     const response = await fetch(`${API_BASE}/algorithm`, {

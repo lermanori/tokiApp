@@ -38,6 +38,8 @@ import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
 import invitationRoutes from './routes/invitations';
 import { startNotificationScheduler } from './services/notificationScheduler';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { createMCPServer } from './mcp/server';
 
 const app = express();
 const server = createServer(app);
@@ -49,6 +51,16 @@ const io = new Server(server, {
   }
 });
 const PORT = process.env.PORT || 3002;
+
+// MCP server over HTTP (Streamable HTTP transport)
+const mcpServer = createMCPServer();
+const mcpTransport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: undefined, // stateless mode
+  enableJsonResponse: true,
+});
+
+// Connect MCP server to transport (no await needed)
+void mcpServer.connect(mcpTransport);
 
 // Security middleware
 app.use(helmet({
@@ -148,6 +160,16 @@ app.use('/api/activity', corsMiddleware, activityRoutes);
 app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 app.use('/api/push', corsMiddleware, pushRoutes);
 app.use('/api/invitations', corsMiddleware, invitationRoutes);
+
+// MCP HTTP endpoint (Streamable HTTP transport)
+// Route base: /api/mcp/toki and /api/mcp/toki/*
+app.all('/api/mcp/toki', corsMiddleware, (req, res) => {
+  void mcpTransport.handleRequest(req as any, res as any, (req as any).body);
+});
+
+app.all('/api/mcp/toki/*', corsMiddleware, (req, res) => {
+  void mcpTransport.handleRequest(req as any, res as any, (req as any).body);
+});
 
 app.get('/api', (req, res) => {
   res.json({
