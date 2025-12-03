@@ -6,8 +6,8 @@ Global app state management with actions for loading tokis, managing connections
 ### Fixes Applied log
 - **problem**: Friends attending data from backend wasn't being mapped to internal state for TokiCard components.
 - **solution**: Added friendsGoing field to internal Toki interface and mapped friendsAttending from API responses to friendsGoing in all load functions.
-- **problem**: Need to trace location change flow from profile update to exMap reload for debugging
-- **solution**: Added 🔄 [FLOW-2] logs in updateProfile (when called with location and when calling loadCurrentUser) and 🔄 [FLOW-3] logs in loadCurrentUser (when receiving new location and when dispatching UPDATE_CURRENT_USER) to track state propagation
+- **problem**: Location changes didn't clear old tokis when new location had no tokis, causing map to show wrong location's tokis
+- **solution**: Changed loadNearbyTokis to always dispatch SET_TOKIS on refresh (append: false), even if empty. This ensures location changes properly clear old tokis and show correct state for new location
 
 ### How Fixes Were Implemented
 - **problem**: Backend returns friendsAttending but frontend TokiCard expects friendsGoing prop.

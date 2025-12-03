@@ -120,14 +120,6 @@ export default function ExMapScreen() {
         
         // Only return if valid numbers
         if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-            const source = state.currentUser?.latitude ? 'userProfile' : 'mapRegion';
-            const trigger = state.currentUser?.latitude ? 'state.currentUser changed' : 'mapRegion changed';
-            console.log('🔄 [FLOW-4] exMap: profileCenter recomputed', { 
-                lat: latNum, 
-                lng: lngNum, 
-                source,
-                trigger
-            });
             return {
                 latitude: latNum,
                 longitude: lngNum,
@@ -370,28 +362,13 @@ export default function ExMapScreen() {
         
         // Skip if we've already reloaded for this exact location (prevents infinite loop)
         if (hasReloadedForProfileCenterRef.current === profileCenterKey) {
-            console.log('🔄 [FLOW-5] exMap: Reload effect triggered but guard blocks (already reloaded)', { 
-                profileCenterKey,
-                guardValue: hasReloadedForProfileCenterRef.current
-            });
             return;
         }
         
-        console.log('🔄 [FLOW-5] exMap: Reload effect triggered - location changed', {
-            newLocation: [profileCenter.latitude, profileCenter.longitude],
-            previousLocation: hasReloadedForProfileCenterRef.current,
-            guardValue: hasReloadedForProfileCenterRef.current
-        });
-        
         // Mark as reloaded for this location BEFORE making the call (prevents race conditions)
         hasReloadedForProfileCenterRef.current = profileCenterKey;
-        console.log('🔄 [FLOW-5] exMap: Guard set to new location', { profileCenterKey });
         
         // Update mapRegion to match profileCenter
-        console.log('🔄 [FLOW-5] exMap: Calling updateMapRegion', {
-            latitude: profileCenter.latitude,
-            longitude: profileCenter.longitude
-        });
         updateMapRegion({
             latitude: profileCenter.latitude,
             longitude: profileCenter.longitude,
@@ -401,11 +378,6 @@ export default function ExMapScreen() {
         
         // Reload tokis with new location - call directly with new coordinates to ensure we use the correct location
         const radius = parseFloat(String(selectedFilters.radius || '500')) || 500;
-        console.log('🔄 [FLOW-5] exMap: Calling loadNearbyTokis with new location', {
-            latitude: profileCenter.latitude,
-            longitude: profileCenter.longitude,
-            radius
-        });
         Promise.all([
             actions.loadNearbyTokis({
                 latitude: profileCenter.latitude,
@@ -414,9 +386,7 @@ export default function ExMapScreen() {
                 page: 1
             }, false),
             actions.loadNotifications() // Also refresh notifications
-        ]).then(() => {
-            console.log('🔄 [FLOW-5] exMap: Reload complete - map and tokis updated');
-        }).catch(error => {
+        ]).catch(error => {
             console.error('❌ [MAP-FLOW] Failed to reload tokis after location change:', error);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps

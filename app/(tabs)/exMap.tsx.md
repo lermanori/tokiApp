@@ -52,8 +52,6 @@ This file contains the ExMap screen component that combines the Explore screen's
 - solution: Changed reload effect to call actions.loadNearbyTokis directly with profileCenter coordinates instead of using handleRefresh, ensuring we always use the correct new location
 - problem: First location change works but second location change doesn't reload - effect dependencies causing re-runs that block subsequent reloads
 - solution: Removed updateMapRegion and actions from effect dependencies (they're stable callbacks) and added ESLint disable comment. This prevents effect from re-running when updateMapRegion updates mapRegion (which causes profileCenter to recompute and trigger effect again with guard already set)
-- problem: Need to trace location change flow from profile update to exMap reload for debugging
-- solution: Added 🔄 [FLOW-4] logs in profileCenter useMemo (when recomputed with trigger source) and 🔄 [FLOW-5] logs in reload effect (when triggered, guard checks, updateMapRegion call, loadNearbyTokis call, and completion) to track the complete flow
 - problem: First location change works perfectly but second location change doesn't reload - effect re-runs due to updateMapRegion/actions in dependencies, causing guard to block subsequent reloads
 - solution: Removed updateMapRegion and actions from effect dependencies (they're stable callbacks) and added ESLint disable comment. This prevents effect from re-running when updateMapRegion updates mapRegion (which causes profileCenter to recompute and trigger effect again with guard already set)
 

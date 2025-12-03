@@ -1319,13 +1319,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeSlot: params.timeSlot
       });
 
-      console.log('🔄 [FLOW-6] AppContext: getNearbyTokis API response', {
-        tokisCount: response?.tokis?.length || (response as any)?.data?.tokis?.length || 0,
-        latitude: params.latitude,
-        longitude: params.longitude,
-        radius: params.radius
-      });
-
       // Safety check: ensure response has tokis array (handle both response.tokis and response.data.tokis)
       const tokisArray = response?.tokis || (response as any)?.data?.tokis;
       if (!tokisArray || !Array.isArray(tokisArray)) {
@@ -1367,13 +1360,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         friendsGoing: (apiToki as any).friendsAttending || [],
       }));
 
-      console.log('🔄 [FLOW-6] AppContext: Mapped tokis, about to dispatch', {
-        apiTokisCount: apiTokis.length,
-        willDispatch: true, // Always dispatch - refresh always updates, append always appends
-        currentTokisCount: state.tokis.length,
-        append
-      });
-
       if (append) {
         // Append to existing tokis, avoiding duplicates
         const existingIds = new Set(state.tokis.map(t => t.id));
@@ -1383,11 +1369,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // For refresh (append: false), always update state with new results
         // This ensures location changes clear old tokis even if new location has no tokis
         dispatch({ type: 'SET_TOKIS', payload: apiTokis });
-        console.log('🔄 [FLOW-6] AppContext: Dispatched SET_TOKIS (refresh)', {
-          tokisCount: apiTokis.length,
-          wasEmpty: apiTokis.length === 0,
-          previousCount: state.tokis.length
-        });
       }
 
       // Update total count (only update if we got a valid total from pagination)
@@ -1990,20 +1971,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      if (updates.latitude !== undefined || updates.longitude !== undefined) {
-        console.log('🔄 [FLOW-2] AppContext: updateProfile called with location', {
-          latitude: updates.latitude,
-          longitude: updates.longitude,
-          location: updates.location
-        });
-      }
-      
       const apiUser = await apiService.updateProfile(updates);
       
       // Reload the full user data to get updated stats and social links
-      if (updates.latitude !== undefined || updates.longitude !== undefined) {
-        console.log('🔄 [FLOW-2] AppContext: Profile updated, calling loadCurrentUser');
-      }
       await loadCurrentUser();
       
       console.log('✅ Profile updated successfully');
@@ -2277,25 +2247,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         longitude: user.longitude,
       };
 
-      if (transformedUser.latitude && transformedUser.longitude) {
-        console.log('🔄 [FLOW-3] AppContext: loadCurrentUser received new location', {
-          latitude: transformedUser.latitude,
-          longitude: transformedUser.longitude,
-          location: transformedUser.location
-        });
-      }
-
       console.log('🔄 Dispatching UPDATE_CURRENT_USER with:', transformedUser);
       dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
       storage.set(STORAGE_KEYS.CURRENT_USER, transformedUser);
-      
-      if (transformedUser.latitude && transformedUser.longitude) {
-        console.log('🔄 [FLOW-3] AppContext: UPDATE_CURRENT_USER dispatched, state.currentUser will update', {
-          latitude: transformedUser.latitude,
-          longitude: transformedUser.longitude
-        });
-      }
-      
       console.log('✅ Current user loaded successfully:', transformedUser.name);
       console.log('📊 User stats:', { tokisCreated: transformedUser.tokisCreated, tokisJoined: transformedUser.tokisJoined, connections: transformedUser.connections });
       

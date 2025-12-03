@@ -20,6 +20,7 @@ interface SocialLinks {
 export default function EditProfileScreen() {
   const { state, actions } = useApp();
   const [profile, setProfile] = useState(state.currentUser);
+  const [originalProfile, setOriginalProfile] = useState(state.currentUser); // Store original for comparison
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -27,10 +28,64 @@ export default function EditProfileScreen() {
   const [placesPredictions, setPlacesPredictions] = useState<Array<{ description: string; place_id: string; types?: string[]; structured?: { mainText?: string; secondaryText?: string } }>>([]);
   const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
 
+  // Helper function to check if there are actual changes across all editable fields
+  const checkForChanges = (current: any, original: any): boolean => {
+    // Check avatar
+    const currentAvatar = current.avatar || '';
+    const originalAvatar = original.avatar || '';
+    if (currentAvatar !== originalAvatar) return true;
+    
+    // Check name
+    const currentName = (current.name || '').trim();
+    const originalName = (original.name || '').trim();
+    if (currentName !== originalName) return true;
+    
+    // Check bio (handle null/undefined)
+    const currentBio = (current.bio || '').trim();
+    const originalBio = (original.bio || '').trim();
+    if (currentBio !== originalBio) return true;
+    
+    // Check location (handle null/undefined)
+    const currentLocation = (current.location || '').trim();
+    const originalLocation = (original.location || '').trim();
+    if (currentLocation !== originalLocation) return true;
+    
+    // Check latitude (handle null/undefined/NaN)
+    const currentLat = current.latitude != null ? Number(current.latitude) : null;
+    const originalLat = original.latitude != null ? Number(original.latitude) : null;
+    if (currentLat !== originalLat) return true;
+    
+    // Check longitude (handle null/undefined/NaN)
+    const currentLng = current.longitude != null ? Number(current.longitude) : null;
+    const originalLng = original.longitude != null ? Number(original.longitude) : null;
+    if (currentLng !== originalLng) return true;
+    
+    // Check social links - compare all platforms
+    const currentSocial = current.socialLinks || {};
+    const originalSocial = original.socialLinks || {};
+    const socialPlatforms = ['instagram', 'tiktok', 'linkedin', 'facebook'];
+    
+    for (const platform of socialPlatforms) {
+      const currentVal = (currentSocial[platform] || '').trim();
+      const originalVal = (originalSocial[platform] || '').trim();
+      if (currentVal !== originalVal) return true;
+    }
+    
+    return false;
+  };
+
   // Update profile state when currentUser changes (e.g., when data is loaded from backend)
   useEffect(() => {
     setProfile(state.currentUser);
+    setOriginalProfile(state.currentUser); // Store original when user data loads
+    setHasChanges(false); // Reset changes flag when profile is reset
   }, [state.currentUser]);
+
+  // Check for changes whenever profile updates
+  useEffect(() => {
+    const hasActualChanges = checkForChanges(profile, originalProfile);
+    setHasChanges(hasActualChanges);
+  }, [profile, originalProfile]);
 
   // Load user data when component mounts
   useEffect(() => {
@@ -41,7 +96,7 @@ export default function EditProfileScreen() {
 
   const updateProfile = (field: string, value: any) => {
     setProfile(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
+    // hasChanges will be updated by useEffect
   };
 
   const updateSocialLink = (platform: keyof SocialLinks, value: string) => {
@@ -52,7 +107,7 @@ export default function EditProfileScreen() {
         [platform]: value.trim() || undefined,
       }
     }));
-    setHasChanges(true);
+    // hasChanges will be updated by useEffect
   };
 
   const handleLocationTextChange = async (value: string) => {
@@ -145,14 +200,6 @@ export default function EditProfileScreen() {
     setIsSaving(true);
 
     try {
-      if (profile.latitude && profile.longitude) {
-        console.log('🔄 [FLOW-1] Profile: Saving location to backend', {
-          latitude: profile.latitude,
-          longitude: profile.longitude,
-          location: profile.location
-        });
-      }
-
       const success = await actions.updateProfile({
         name: profile.name,
         bio: profile.bio,
@@ -207,13 +254,6 @@ export default function EditProfileScreen() {
           label = neighborhood || city || region || streetish || '';
         }
       } catch {}
-
-      console.log('🔄 [FLOW-1] Profile: Location set in local state', {
-        latitude,
-        longitude,
-        label,
-        source: 'useCurrentLocation'
-      });
 
       updateProfile('location', label);
       updateProfile('latitude', latitude);
@@ -305,7 +345,6 @@ export default function EditProfileScreen() {
               currentImageUrl={profile.avatar}
               onImageUpdate={(newImageUrl) => {
                 updateProfile('avatar', newImageUrl);
-                setHasChanges(true);
               }}
               size={100}
               showEditButton={true}

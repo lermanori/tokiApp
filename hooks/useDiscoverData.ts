@@ -275,11 +275,6 @@ export const useDiscoverData = () => {
   const updateMapRegion = useCallback((region: MapRegion, userInitiated: boolean = false) => {
     // Validate region has valid coordinates before setting
     if (region && typeof region.latitude === 'number' && typeof region.longitude === 'number' && Number.isFinite(region.latitude) && Number.isFinite(region.longitude)) {
-      console.log('🔄 [FLOW-6] useDiscoverData: updateMapRegion setting new region', {
-        latitude: region.latitude,
-        longitude: region.longitude,
-        userInitiated
-      });
       setMapRegion(region);
       if (userInitiated) {
         mapRegionInitializedRef.current = true;
