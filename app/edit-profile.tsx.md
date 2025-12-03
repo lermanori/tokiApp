@@ -10,6 +10,10 @@ This screen allows users to edit their profile details, including avatar, name, 
 - solution: Added a clear (×) button next to the location input to instantly clear the field and reset stored coordinates.
 - problem: Manually typing a location did not update coordinates unless "Use current" was tapped.
 - solution: Integrated a dropdown address autocomplete. On selection, we set both the display label and latitude/longitude.
+- problem: Save button was disabled until social links changed, even when location or other fields were modified.
+- solution: Implemented proper change detection that compares current profile to original across all editable fields (avatar, name, bio, location, coordinates, and social links). Added `checkForChanges` helper function and `useEffect` to automatically update `hasChanges` state when any field differs from original.
+- problem: Save button didn't provide clear feedback about why it was disabled (missing social links, no changes, no connection).
+- solution: Added `canSave()` helper and `getSaveButtonText()` function to show descriptive button text: "Add Social Link" when social links are missing, "No Changes" when nothing changed, "No Connection" when offline, "Saving..." during save, and "Save" when ready.
 
 ### How Fixes Were Implemented
 - Changed `handleSave` success branch to call `router.back()` immediately after a successful `actions.updateProfile(...)` and removed the success `Alert.alert`. This streamlines the UX to return the user to their profile as soon as the save completes successfully.
@@ -19,4 +23,15 @@ This screen allows users to edit their profile details, including avatar, name, 
   - Persist both `location` and coordinates (`latitude`, `longitude`) in local state
   - Hide the dropdown
   - We also clear stale coordinates when the user types manually until a suggestion is picked or current location is used.
+- Fixed change detection by:
+  - Adding `originalProfile` state to store the initial profile data
+  - Creating `checkForChanges` helper function that compares all editable fields (avatar, name, bio, location, latitude, longitude, and all social link platforms) between current and original profiles
+  - Adding `useEffect` hook that runs whenever `profile` or `originalProfile` changes to automatically update `hasChanges` state
+  - Resetting `hasChanges` to `false` when profile is reset from `state.currentUser` updates
+  - Removing manual `setHasChanges(true)` calls from `updateProfile` and `updateSocialLink` since the `useEffect` now handles this automatically
+- Improved button UX by:
+  - Adding `canSave()` helper function that checks all conditions (social links, connection, changes, saving state)
+  - Adding `getSaveButtonText()` function that returns descriptive text based on current state
+  - Updating button to use `canSave()` for disabled state and `getSaveButtonText()` for button text
+  - Button now clearly communicates why it's disabled: "Add Social Link", "No Changes", "No Connection", or "Saving..."
 

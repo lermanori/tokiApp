@@ -337,7 +337,7 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
        FROM toki_participants tp
        JOIN tokis t ON tp.toki_id = t.id
        WHERE tp.user_id = $1 
-         AND tp.status IN ('approved', 'joined')
+         AND tp.status = 'approved'
          AND t.host_id != $1
          AND t.status = 'active'
          AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')`,
@@ -411,12 +411,13 @@ router.get('/me', authenticateToken, async (req: Request, res: Response) => {
 // Update current user profile (single endpoint)
 router.put('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const { name, bio, location, latitude, longitude } = req.body as {
+    const { name, bio, location, latitude, longitude, socialLinks } = req.body as {
       name?: string;
       bio?: string | null;
       location?: string | null;
       latitude?: number | string;
       longitude?: number | string;
+      socialLinks?: { [key: string]: string };
     };
 
     // Validate inputs (only when provided)
@@ -437,6 +438,35 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
           error: 'Invalid location',
           message: 'Location must be a string up to 255 characters'
         });
+      }
+    }
+
+    // Validate social links if provided
+    if (socialLinks !== undefined) {
+      if (typeof socialLinks !== 'object' || Array.isArray(socialLinks)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid social links',
+          message: 'Social links must be an object'
+        });
+      }
+
+      const validPlatforms = ['instagram', 'tiktok', 'linkedin', 'facebook'];
+      for (const [platform, url] of Object.entries(socialLinks)) {
+        if (!validPlatforms.includes(platform)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid platform',
+            message: `Invalid social platform: ${platform}`
+          });
+        }
+        if (url !== null && url !== undefined && (typeof url !== 'string' || url.length > 255)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid URL',
+            message: `Invalid URL for ${platform}`
+          });
+        }
       }
     }
 
@@ -527,8 +557,11 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
       updateValues.push(lngNumber);
     }
 
-    // If nothing to update, return 400
-    if (updateFields.length === 0) {
+    // Check if we have anything to update (user fields OR social links)
+    const hasUserFieldsToUpdate = updateFields.length > 0;
+    const hasSocialLinksToUpdate = socialLinks !== undefined;
+
+    if (!hasUserFieldsToUpdate && !hasSocialLinksToUpdate) {
       return res.status(400).json({
         success: false,
         error: 'No fields to update',
@@ -536,48 +569,109 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
       });
     }
 
-    // Always update updated_at
-    paramCount++;
-    updateFields.push(`updated_at = $${paramCount}`);
-    updateValues.push(new Date());
+    // Use transaction to ensure atomicity
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // WHERE clause param
-    paramCount++;
-    updateValues.push(req.user!.id);
+      // Update user table if there are fields to update
+      if (hasUserFieldsToUpdate) {
+        // Always update updated_at
+        paramCount++;
+        updateFields.push(`updated_at = $${paramCount}`);
+        updateValues.push(new Date());
 
-    const result = await pool.query(
-      `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramCount}
-       RETURNING id, email, name, bio, location, avatar_url, verified, rating, member_since, updated_at, latitude, longitude`,
-      updateValues
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-        message: 'User profile not found'
-      });
-    }
-    const user = result.rows[0];
-    return res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          bio: user.bio,
-          location: user.location,
-          avatar: user.avatar_url,
-          latitude: user.latitude,
-          longitude: user.longitude,
-          verified: user.verified,
-          rating: user.rating,
-          memberSince: user.member_since,
-          updatedAt: user.updated_at
+        // WHERE clause param
+        paramCount++;
+        updateValues.push(req.user!.id);
+
+        await client.query(
+          `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramCount}`,
+          updateValues
+        );
+      }
+
+      // Update social links if provided
+      if (hasSocialLinksToUpdate) {
+        // Delete existing social links
+        await client.query(
+          'DELETE FROM user_social_links WHERE user_id = $1',
+          [req.user!.id]
+        );
+
+        // Insert new social links
+        for (const [platform, url] of Object.entries(socialLinks)) {
+          if (url && typeof url === 'string' && url.trim()) {
+            await client.query(
+              'INSERT INTO user_social_links (user_id, platform, username) VALUES ($1, $2, $3)',
+              [req.user!.id, platform, url.trim()]
+            );
+          }
+        }
+
+        // Update updated_at if we haven't already
+        if (!hasUserFieldsToUpdate) {
+          await client.query(
+            'UPDATE users SET updated_at = $1 WHERE id = $2',
+            [new Date(), req.user!.id]
+          );
         }
       }
-    });
+
+      await client.query('COMMIT');
+
+      // Get updated user data with social links
+      const userResult = await client.query(
+        `SELECT 
+          u.id, u.email, u.name, u.bio, u.location, u.avatar_url, 
+          u.verified, u.rating, u.member_since, u.updated_at, u.latitude, u.longitude,
+          json_object_agg(usl.platform, usl.username) FILTER (WHERE usl.platform IS NOT NULL) as social_links
+        FROM users u
+        LEFT JOIN user_social_links usl ON u.id = usl.user_id
+        WHERE u.id = $1
+        GROUP BY u.id`,
+        [req.user!.id]
+      );
+
+      if (userResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          message: 'User profile not found'
+        });
+      }
+
+      const user = userResult.rows[0];
+      const socialLinksData = user.social_links || {};
+
+      return res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            bio: user.bio,
+            location: user.location,
+            avatar: user.avatar_url,
+            latitude: user.latitude,
+            longitude: user.longitude,
+            verified: user.verified,
+            rating: user.rating,
+            memberSince: user.member_since,
+            updatedAt: user.updated_at,
+            socialLinks: socialLinksData
+          }
+        }
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     logger.error('Update profile error:', error);
     return res.status(500).json({
@@ -1470,7 +1564,7 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
        FROM toki_participants tp
        JOIN tokis t ON tp.toki_id = t.id
        WHERE tp.user_id = $1 
-         AND tp.status IN ('approved', 'joined')
+         AND tp.status = 'approved'
          AND t.host_id != $1
          AND t.status = 'active'`,
       [userId]

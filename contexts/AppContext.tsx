@@ -1969,11 +1969,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (updates: any): Promise<boolean> => {
     try {
+      console.log('🟢 [AppContext] updateProfile called with:', updates);
       dispatch({ type: 'SET_LOADING', payload: true });
       
+      console.log('🟢 [AppContext] Calling apiService.updateProfile...');
       const apiUser = await apiService.updateProfile(updates);
+      console.log('🟢 [AppContext] apiService.updateProfile returned:', apiUser);
       
       // Reload the full user data to get updated stats and social links
+      console.log('🟢 [AppContext] Reloading current user...');
       await loadCurrentUser();
       
       console.log('✅ Profile updated successfully');

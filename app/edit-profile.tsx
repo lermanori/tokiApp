@@ -181,10 +181,14 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
+    console.log('🔵 handleSave called');
+    
     // Validate that at least one social media link is provided
     const hasAtLeastOneSocial = Object.values(profile.socialLinks).some(link => link && link.trim());
+    console.log('🔵 Social links check:', { hasAtLeastOneSocial, socialLinks: profile.socialLinks });
     
     if (!hasAtLeastOneSocial) {
+      console.log('🔵 Blocked: No social links');
       Alert.alert(
         'Social Media Required',
         'Please add at least one social media link (Instagram, TikTok, LinkedIn, or Facebook).'
@@ -192,14 +196,26 @@ export default function EditProfileScreen() {
       return;
     }
 
+    console.log('🔵 Connection check:', { isConnected: state.isConnected });
     if (!state.isConnected) {
+      console.log('🔵 Blocked: Not connected');
       Alert.alert('Connection Error', 'Unable to save changes. Please check your connection and try again.');
       return;
     }
 
+    console.log('🔵 Setting isSaving to true');
     setIsSaving(true);
 
     try {
+      console.log('🔵 Calling actions.updateProfile with:', {
+        name: profile.name,
+        bio: profile.bio,
+        location: profile.location,
+        latitude: profile.latitude,
+        longitude: profile.longitude,
+        socialLinks: profile.socialLinks,
+      });
+      
       const success = await actions.updateProfile({
         name: profile.name,
         bio: profile.bio,
@@ -209,6 +225,8 @@ export default function EditProfileScreen() {
         socialLinks: profile.socialLinks,
       });
 
+      console.log('🔵 updateProfile returned:', success);
+
       if (success) {
         setHasChanges(false);
         router.back();
@@ -216,6 +234,7 @@ export default function EditProfileScreen() {
         Alert.alert('Error', 'Failed to update profile. Please try again.');
       }
     } catch (error) {
+      console.error('🔵 Error in handleSave:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsSaving(false);
@@ -303,6 +322,22 @@ export default function EditProfileScreen() {
     }
   };
 
+  // Helper to check if save is allowed
+  const canSave = () => {
+    const hasAtLeastOneSocial = Object.values(profile.socialLinks || {}).some(link => link && link.trim());
+    return hasAtLeastOneSocial && state.isConnected && hasChanges && !isSaving;
+  };
+
+  // Get descriptive button text based on state
+  const getSaveButtonText = () => {
+    if (isSaving) return 'Saving...';
+    const hasAtLeastOneSocial = Object.values(profile.socialLinks || {}).some(link => link && link.trim());
+    if (!hasAtLeastOneSocial) return 'Add Social Link';
+    if (!hasChanges) return 'No Changes';
+    if (!state.isConnected) return 'No Connection';
+    return 'Save';
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -316,17 +351,17 @@ export default function EditProfileScreen() {
           <Text style={styles.title}>Edit Profile</Text>
           <TouchableOpacity 
             onPress={handleSave}
-            disabled={!hasChanges || isSaving || !state.isConnected}
+            disabled={!canSave()}
             style={[
               styles.saveButton, 
-              (!hasChanges || isSaving || !state.isConnected) && styles.saveButtonDisabled
+              !canSave() && styles.saveButtonDisabled
             ]}
           >
             <Text style={[
               styles.saveText, 
-              (!hasChanges || isSaving || !state.isConnected) && styles.saveTextDisabled
+              !canSave() && styles.saveTextDisabled
             ]}>
-              {isSaving ? 'Saving...' : 'Save'}
+              {getSaveButtonText()}
             </Text>
           </TouchableOpacity>
         </View>

@@ -34,8 +34,9 @@ export interface Toki {
     km: number;
     miles: number;
   };
-  joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined';
+  joinStatus?: 'not_joined' | 'pending' | 'approved';
   externalLink?: string;
+  friendsAttending?: Array<{ id: string; name: string; avatar?: string }>;
 }
 
 export interface User {
@@ -556,10 +557,13 @@ class ApiService {
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
+    console.log('🟡 [API] updateProfile called with:', updates);
+    console.log('🟡 [API] Making request to /auth/me...');
     const response = await this.makeRequest<{ success: boolean; data: { user: User } }>('/auth/me', {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    console.log('🟡 [API] Request completed, response:', response);
     // Clear user cache after update to force refresh on next getCurrentUser call
     this.clearUserCache();
     return response.data.user;
@@ -989,6 +993,13 @@ class ApiService {
   async getConnectionsForToki(tokiId: string): Promise<{ connections: any[]; toki: { id: string; title: string } }> {
     const response = await this.makeRequest<{ success: boolean; data: { connections: any[]; toki: { id: string; title: string } } }>(
       `/connections/for-toki/${tokiId}`
+    );
+    return response.data;
+  }
+
+  async getFriendsAttendingToki(tokiId: string): Promise<Array<{ id: string; name: string; avatar?: string }>> {
+    const response = await this.makeRequest<{ success: boolean; data: Array<{ id: string; name: string; avatar?: string }> }>(
+      `/tokis/${tokiId}/friends-attending`
     );
     return response.data;
   }
