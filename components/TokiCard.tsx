@@ -7,6 +7,7 @@ import { useApp } from '@/contexts/AppContext';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { formatDistanceDisplay } from '@/utils/distance';
 import { getCategoryColor, getCategoryEmoji, getCategoryLabel } from '@/utils/categories';
+import FriendsGoingOverlay from './FriendsGoingOverlay';
 
 export interface TokiCardProps {
     toki: {
@@ -31,10 +32,11 @@ export interface TokiCardProps {
         } | string; // Support both new distance object and legacy string
         tags?: string[];
         isHostedByUser?: boolean; // Added for status badge
-        joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined'; // Added for status badge
+        joinStatus?: 'not_joined' | 'pending' | 'approved'; // Added for status badge
         scheduledTime?: string; // Added for actual scheduled time display
         visibility?: 'public' | 'private' | 'connections' | 'friends';
         isSaved?: boolean;
+        friendsGoing?: Array<{ id: string; name: string; avatar?: string }>; // Friends who are attending
     };
     onPress: () => void;
     onHostPress?: () => void;
@@ -69,8 +71,7 @@ const getJoinStatusColor = (toki: TokiCardProps['toki']) => {
     switch (toki.joinStatus) {
         case 'not_joined': return '#4DC4AA'; // I want to join - pastel green
         case 'pending': return '#F9E79B'; // Request pending - soft yellow
-        case 'approved': return '#A7F3D0'; // Approved - light pastel green
-        case 'joined': return '#EC4899'; // You're in - friendly pink
+        case 'approved': return '#EC4899'; // You're in - friendly pink (was 'joined')
         default: return '#4DC4AA';
     }
 };
@@ -82,8 +83,7 @@ const getJoinStatusText = (toki: TokiCardProps['toki']) => {
     switch (toki.joinStatus) {
         case 'not_joined': return 'Join';
         case 'pending': return 'Pending';
-        case 'approved': return 'Chat';
-        case 'joined': return 'You\'re in!';
+        case 'approved': return 'You\'re in!';
         default: return 'Join';
     }
 };
@@ -321,6 +321,10 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad, onRe
                     onLoad={handleHeaderImageLoad}
                     onError={handleHeaderImageError}
                 />
+                {/* Friends Going Overlay - Top Left */}
+                {toki.friendsGoing && toki.friendsGoing.length > 0 && (
+                    <FriendsGoingOverlay friends={toki.friendsGoing} />
+                )}
                 {/* Recreate Button - Top Left */}
                 {showRecreateButton && onRecreate && (
                     <TouchableOpacity

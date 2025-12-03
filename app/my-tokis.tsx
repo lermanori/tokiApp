@@ -24,7 +24,7 @@ interface Toki {
     name: string;
     avatar: string;
   };
-  joinStatus?: 'approved' | 'joined' | 'hosting' | 'not_joined' | 'pending';
+  joinStatus?: 'approved' | 'hosting' | 'not_joined' | 'pending';
   distance?: {
     km: number;
     miles: number;
@@ -39,7 +39,7 @@ interface Toki {
 const getMyTokisStatus = (toki: any, currentUserId: string): 'created' | 'joined' | 'not_joined' => {
   if (toki.joinStatus === 'hosting' || toki.host.id === currentUserId) {
     return 'created'; // You're hosting this Toki
-  } else if (toki.joinStatus === 'joined' || toki.joinStatus === 'approved') {
+  } else if (toki.joinStatus === 'approved') {
     return 'joined'; // You've joined this Toki
   } else {
     return 'not_joined'; // Available to join
@@ -121,10 +121,10 @@ export default function MyTokisScreen() {
       const hostId = (t as any)?.host?.id;
       const isHostedByUser = hostId === uid || joinStatus === 'hosting';
       
-      // Normalize status: check for both 'approved' and 'joined' statuses
+      // Normalize status: check for 'approved' status
       const normalizedStatus: 'hosting' | 'joined' | 'pending' | 'other' = isHostedByUser
         ? 'hosting'
-        : (joinStatus === 'approved' || joinStatus === 'joined')
+        : joinStatus === 'approved'
           ? 'joined'
           : joinStatus === 'pending'
             ? 'pending'

@@ -10,6 +10,8 @@ import Toast from 'react-native-toast-message';
 import RatingPrompt from '@/components/RatingPrompt';
 import InviteModal from '@/components/InviteModal';
 import ParticipantsModal from '@/components/ParticipantsModal';
+import FriendsGoingModal from '@/components/FriendsGoingModal';
+import FriendsGoingOverlay from '@/components/FriendsGoingOverlay';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -52,7 +54,7 @@ interface TokiDetails {
   distance?: string | { km: number; miles: number };
   visibility?: 'public' | 'private' | 'connections' | 'friends';
   isHostedByUser?: boolean;
-  joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined' | 'completed';
+  joinStatus?: 'not_joined' | 'pending' | 'approved' | 'completed';
   link?: string;
   latitude?: number;
   longitude?: number;
@@ -61,6 +63,11 @@ interface TokiDetails {
     name: string;
     avatar?: string;
     // isHost?: boolean; // not used
+  }>;
+  friendsAttending?: Array<{
+    id: string;
+    name: string;
+    avatar?: string;
   }>;
 }
 
@@ -86,7 +93,7 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
     image: '', // Use getActivityPhoto fallback
     distance: '0.3 km',
     isHostedByUser: true,
-    joinStatus: 'joined',
+    joinStatus: 'approved',
   },
   '2': {
     id: '2',
@@ -108,7 +115,7 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
     image: 'https://images.pexels.com/photos/317157/pexels-photo-317157.jpeg?auto=compress&cs=tinysrgb&w=400&h=300&dpr=2',
     distance: '1.5 km',
     isHostedByUser: true,
-    joinStatus: 'joined',
+    joinStatus: 'approved',
   },
   '3': {
     id: '3',
@@ -333,6 +340,14 @@ export default function TokiDetailsScreen() {
         const data = await response.json();
         const tokiData = data.data;
 
+        // Fetch friends attending data BEFORE creating transformedToki
+        let friendsAttending: Array<{ id: string; name: string; avatar?: string }> = [];
+        try {
+          friendsAttending = await actions.getFriendsAttendingToki(tokiId);
+        } catch (error) {
+          console.error('Error loading friends attending:', error);
+        }
+
         // Transform backend data to match our interface
         const transformedToki: TokiDetails = {
           id: tokiData.id,
@@ -392,6 +407,7 @@ export default function TokiDetailsScreen() {
             name: p?.user?.name || p?.name || 'Unknown',
             avatar: p?.user?.avatar || p?.avatar || undefined,
           })),
+          friendsAttending: friendsAttending, // Include friends data in initial object
         };
 
         setToki(transformedToki);
@@ -524,8 +540,8 @@ export default function TokiDetailsScreen() {
       return;
     }
 
-    // If user is already joined/approved, navigate to chat
-    if (toki.joinStatus === 'joined' || toki.joinStatus === 'approved') {
+    // If user is already approved, navigate to chat
+    if (toki.joinStatus === 'approved') {
       handleChatPress();
       return;
     }
@@ -542,8 +558,8 @@ export default function TokiDetailsScreen() {
         case 'not_joined':
           // Send join request using the backend; backend may auto-join if invited
           const joinResultStatus = await actions.sendJoinRequest(toki.id);
-          if (joinResultStatus === 'joined') {
-            setToki(prev => prev ? ({ ...prev, joinStatus: 'joined' }) : null);
+          if (joinResultStatus === 'approved') {
+            setToki(prev => prev ? ({ ...prev, joinStatus: 'approved' }) : null);
             setTimeout(() => { loadTokiData(toki.id); }, 300);
             console.log('✅ Auto-joined via invite for Toki:', toki.id);
           } else if (joinResultStatus === 'pending') {
@@ -569,8 +585,8 @@ export default function TokiDetailsScreen() {
   const handleChatPress = () => {
     if (!toki) return;
 
-    // Only allow chat access if user is approved or joined
-    if (toki.joinStatus === 'approved' || toki.joinStatus === 'joined' || toki.isHostedByUser) {
+    // Only allow chat access if user is approved
+    if (toki.joinStatus === 'approved' || toki.isHostedByUser) {
       router.push({
         pathname: '/chat',
         params: {
@@ -590,7 +606,9 @@ export default function TokiDetailsScreen() {
   // Invite flow will use a modal with connections selection
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [participantsSearch, setParticipantsSearch] = useState('');
+  const [friendsSearch, setFriendsSearch] = useState('');
   const [isRemovingParticipant, setIsRemovingParticipant] = useState(false);
   const [modalMode, setModalMode] = useState<'invite' | 'hide'>('invite');
   const [inviteConnections, setInviteConnections] = useState<any[]>([]);
@@ -603,7 +621,7 @@ export default function TokiDetailsScreen() {
     if (!toki) return;
     
     // Allow hosts or attendees of public tokis to invite
-    const canInvite = toki.isHostedByUser || (toki.visibility === 'public' && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved'));
+    const canInvite = toki.isHostedByUser || (toki.visibility === 'public' && toki.joinStatus === 'approved');
     if (!canInvite) {
       Alert.alert('Cannot invite', 'Only hosts or attendees of public events can invite users.');
       return;
@@ -1311,7 +1329,6 @@ export default function TokiDetailsScreen() {
       case 'not_joined': return 'I want to join';
       case 'pending': return 'Request Pending';
       case 'approved': return 'Join Chat';
-      case 'joined': return 'Join Chat';
       default: return 'I want to join';
     }
   };
@@ -1324,14 +1341,13 @@ export default function TokiDetailsScreen() {
       case 'not_joined': return '#4DC4AA'; // I want to join - pastel green
       case 'pending': return '#F9E79B'; // Request pending - soft yellow
       case 'approved': return '#4DC4AA'; // Join Chat - pastel green
-      case 'joined': return '#4DC4AA'; // Join Chat - pastel green
       default: return '#4DC4AA';
     }
   };
 
   const canAccessChat = () => {
     if (!toki) return false;
-    return toki.isHostedByUser || toki.joinStatus === 'approved' || toki.joinStatus === 'joined';
+    return toki.isHostedByUser || toki.joinStatus === 'approved';
   };
 
   if (!toki && isLoading) {
@@ -1409,6 +1425,8 @@ export default function TokiDetailsScreen() {
           isSaving={isSaving}
           onSaveToggle={handleSaveToggle}
           onShare={handleShareToki}
+          friendsAttending={toki?.friendsAttending}
+          onFriendsPress={() => setShowFriendsModal(true)}
           onBack={() => {
             // If coming from edit or create, go to home page instead of back to form
             if (fromEdit || fromCreate) {
@@ -1453,6 +1471,15 @@ export default function TokiDetailsScreen() {
           isHost={toki?.isHostedByUser || false}
           onClose={() => setShowParticipantsModal(false)}
           onRemoveParticipant={handleRemoveParticipantFromModal}
+        />
+
+        <FriendsGoingModal
+          visible={showFriendsModal}
+          friends={toki?.friendsAttending || []}
+          search={friendsSearch}
+          onChangeSearch={setFriendsSearch}
+          isLoading={false}
+          onClose={() => setShowFriendsModal(false)}
         />
 
         <View style={styles.detailsContainer}>
@@ -1695,7 +1722,7 @@ export default function TokiDetailsScreen() {
             {/* Invite button - show for hosts or attendees of public tokis */}
             {(() => {
               const isHost = toki.isHostedByUser;
-              const isPublicAttendee = toki.visibility === 'public' && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved');
+              const isPublicAttendee = toki.visibility === 'public' && toki.joinStatus === 'approved';
               const canInvite = isHost || isPublicAttendee;
               
               

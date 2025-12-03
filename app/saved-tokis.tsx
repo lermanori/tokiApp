@@ -144,7 +144,7 @@ export default function SavedTokisScreen() {
                     distance: toki.distance,
                     tags: toki.tags,
                     isHostedByUser: false,
-                    joinStatus: toki.joinStatus as 'not_joined' | 'pending' | 'approved' | 'joined' | undefined
+                    joinStatus: toki.joinStatus as 'not_joined' | 'pending' | 'approved' | undefined
                   }}
                   onPress={() => handleTokiPress(toki)}
                   onHostPress={() => {

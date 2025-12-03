@@ -22,3 +22,6 @@ This file contains the TokiHeader component that displays the header section of 
 
 - **problem**: Cleaned up unused code and imports.
 - **solution**: Removed unused icon imports and utility function imports, and deleted corresponding style definitions.
+
+- **problem**: No way to see which friends are attending a toki in the header.
+- **solution**: Added FriendsGoingOverlay component to display friends attending, with optional onPress handler to open friends modal.

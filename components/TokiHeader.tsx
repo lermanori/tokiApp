@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Heart, Share } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { getActivityPhoto } from '@/utils/activityPhotos';
+import FriendsGoingOverlay, { Friend } from './FriendsGoingOverlay';
 
 interface TokiHeaderProps {
   toki: {
@@ -17,6 +18,8 @@ interface TokiHeaderProps {
   onSaveToggle: () => void;
   onShare: () => void;
   onBack: () => void;
+  friendsAttending?: Friend[];
+  onFriendsPress?: () => void;
 }
 
 export default function TokiHeader({
@@ -26,7 +29,9 @@ export default function TokiHeader({
   isSaving,
   onSaveToggle,
   onShare,
-  onBack
+  onBack,
+  friendsAttending,
+  onFriendsPress
 }: TokiHeaderProps) {
   return (
     <View style={styles.imageContainer}>
@@ -40,6 +45,11 @@ export default function TokiHeader({
         colors={['rgba(0,0,0,0.3)', 'transparent']}
         style={styles.headerGradient}
       />
+      
+      {/* Friends Going Overlay - Top Left */}
+      {friendsAttending && friendsAttending.length > 0 && (
+        <FriendsGoingOverlay friends={friendsAttending} onPress={onFriendsPress} />
+      )}
       
       {/* Back Button */}
       <TouchableOpacity style={styles.backButtonHeader} onPress={onBack}>
