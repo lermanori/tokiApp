@@ -68,12 +68,12 @@ export default function TabLayout() {
           href: null, // Hide from tab bar
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="discover"
         options={{
           href: null, // Hide from tab bar
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="exMap"
         options={{

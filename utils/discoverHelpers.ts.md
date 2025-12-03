@@ -13,6 +13,12 @@ Helpers for Discover screens: data transform and filtering utilities for Tokis.
 - problem: `createdAt` field from API was not being passed through in `transformTokiToEvent`, causing creation date sorting to fail.
 - solution: Added `createdAt: toki.createdAt` to the return object in `transformTokiToEvent` function to preserve the creation date from API responses.
 
+- **problem**: `friendsGoing` data was being lost when transforming tokis to events, preventing friends overlay from showing on TokiCards in discover screen.
+- **solution**: Added `friendsGoing: toki.friendsGoing || []` to `transformTokiToEvent` function to preserve friends data through the transformation pipeline.
+
+- **problem**: Helper functions getJoinStatusText and getJoinStatusColor included 'joined' case which was deprecated in favor of 'approved'.
+- **solution**: Removed 'joined' case from both switch statements. Updated 'approved' case in getJoinStatusText to return "You're in!" (previously was for 'joined'). Updated 'approved' case in getJoinStatusColor to return '#EC4899' pink color (previously was for 'joined').
+
 ### How Fixes Were Implemented
 - Introduced `matchesMultiCategory` which treats empty or `['all']` as no-op and otherwise checks inclusion using `selectedCategories.includes(event.category)`.
 - Updated `matchesMultiCategory` to check against `event.tags` array instead of just `event.category`, enabling multi-category filtering (up to 3 categories per Toki).

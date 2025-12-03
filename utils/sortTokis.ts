@@ -76,6 +76,22 @@ export function sortEvents(
       case 'popularity': {
         const ap = (a as any).participantCount ?? (a as any).attendees ?? 0;
         const bp = (b as any).participantCount ?? (b as any).attendees ?? 0;
+        
+        // DEBUG: Log the first few comparisons
+        if (Math.random() < 0.1) { // Only log ~10% to avoid spam
+          console.log('🔍 [POPULARITY SORT DEBUG]', {
+            aTitle: (a as any).title,
+            aParticipantCount: (a as any).participantCount,
+            aAttendees: (a as any).attendees,
+            aFinal: ap,
+            bTitle: (b as any).title,
+            bParticipantCount: (b as any).participantCount,
+            bAttendees: (b as any).attendees,
+            bFinal: bp,
+            result: bp - ap
+          });
+        }
+        
         return bp - ap; // always most first
       }
       case 'created': {

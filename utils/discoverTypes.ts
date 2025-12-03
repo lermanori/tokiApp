@@ -23,9 +23,10 @@ export interface TokiEvent {
     longitude: number;
   };
   isHostedByUser?: boolean;
-  joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined';
+  joinStatus?: 'not_joined' | 'pending' | 'approved';
   algorithmScore?: number | null;
   createdAt?: string;
+  friendsGoing?: Array<{ id: string; name: string; avatar?: string }>;
 }
 
 export interface DiscoverFilters {

@@ -8,6 +8,20 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
   const hasValidImage = toki.image && toki.image.trim() !== '' && !toki.image.includes('activityPhotos');
   const imageUrl = hasValidImage ? toki.image : getActivityPhoto(toki.category);
   
+  // FIX: Use currentAttendees as fallback if attendees is not available
+  const attendeesValue = toki.attendees ?? toki.currentAttendees ?? 0;
+  
+  // DEBUG: Log if attendees is missing
+  if (toki.attendees == null && toki.currentAttendees == null) {
+    console.log('⚠️ [TRANSFORM DEBUG] Missing attendees for toki:', {
+      id: toki.id,
+      title: toki.title,
+      availableKeys: Object.keys(toki),
+      currentAttendees: toki.currentAttendees,
+      attendees: toki.attendees
+    });
+  }
+  
   return {
     id: toki.id,
     title: toki.title,
@@ -15,7 +29,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
     location: toki.location,
     time: toki.time,
     scheduledTime: toki.scheduledTime,
-    attendees: toki.attendees || 0,
+    attendees: attendeesValue,
     maxAttendees: toki.maxAttendees || 0,
     category: toki.category,
     distance: toki.distance,
@@ -35,6 +49,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
     joinStatus: toki.joinStatus || 'not_joined',
     algorithmScore: typeof toki.algorithmScore === 'number' ? toki.algorithmScore : null,
     createdAt: toki.createdAt,
+    friendsGoing: toki.friendsGoing || [],
   };
 };
 
@@ -139,8 +154,7 @@ export const getJoinStatusText = (event: TokiEvent): string => {
   switch (event.joinStatus) {
     case 'not_joined': return 'I want to join';
     case 'pending': return 'Request pending';
-    case 'approved': return 'Approved - Join chat';
-    case 'joined': return 'You\'re in!';
+    case 'approved': return 'You\'re in!';
     default: return 'I want to join';
   }
 };
@@ -154,8 +168,7 @@ export const getJoinStatusColor = (event: TokiEvent): string => {
   switch (event.joinStatus) {
     case 'not_joined': return '#4DC4AA';
     case 'pending': return '#F9E79B';
-    case 'approved': return '#A7F3D0';
-    case 'joined': return '#EC4899';
+    case 'approved': return '#EC4899';
     default: return '#4DC4AA';
   }
 };
