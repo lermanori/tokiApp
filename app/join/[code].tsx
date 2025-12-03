@@ -142,7 +142,7 @@ export default function JoinByCode() {
           
           // Check if current user is already a participant
           const isAlreadyIn =
-            (full && full.joinStatus && (full.joinStatus === 'joined' || full.joinStatus === 'approved')) ||
+            (full && full.joinStatus && full.joinStatus === 'approved') ||
             (Array.isArray(full?.participants) && full.participants.some((p: any) => (p.user?.id || p.id) === state.currentUser?.id));
 
           console.log('🔗 [JOIN FLOW] Checking if user is already a participant:', {

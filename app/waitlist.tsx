@@ -88,8 +88,8 @@ export default function WaitlistScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Why Toki? (optional)</Text>
-          <TextInput style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]} value={reason} onChangeText={setReason} multiline placeholder="Tell us why you belong to Toki" placeholderTextColor="#9CA3AF" />
+          <Text style={styles.label}>Tell us why you belong to Toki (optional)</Text>
+          <TextInput style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]} value={reason} onChangeText={setReason} multiline placeholder="Tell us about you" placeholderTextColor="#9CA3AF" />
         </View>
 
         <TouchableOpacity style={[styles.button, loading && { opacity: 0.7 }]} onPress={submit} disabled={loading}>
