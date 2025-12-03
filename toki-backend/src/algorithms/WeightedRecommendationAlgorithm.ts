@@ -169,7 +169,7 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
             FROM toki_participants tp
             WHERE tp.toki_id = ANY($1::uuid[])
               AND tp.user_id = ANY($2::uuid[])
-              AND tp.status IN ('approved', 'joined')
+              AND tp.status = 'approved'
             GROUP BY tp.toki_id
           `,
           [eventIds, connectionIds]

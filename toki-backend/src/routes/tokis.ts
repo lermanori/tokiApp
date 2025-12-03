@@ -523,7 +523,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
-        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees,
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         COALESCE(jp.status, 'not_joined') as join_status,
         EXISTS(
           SELECT 1 FROM saved_tokis st 
@@ -583,7 +583,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       OR t.host_id = $${paramCount + 1}
       OR EXISTS (
         SELECT 1 FROM toki_participants p
-        WHERE p.toki_id = t.id AND p.user_id = $${paramCount + 1} AND p.status IN ('approved','joined')
+        WHERE p.toki_id = t.id AND p.user_id = $${paramCount + 1} AND p.status = 'approved'
       )
       OR EXISTS (
         SELECT 1 FROM toki_invites ti
@@ -876,6 +876,53 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].total);
 
+    // Fetch friends attending for each toki (only if user is authenticated)
+    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string }>>();
+
+    if (userId) {
+      // Get all toki IDs from the result
+      const tokiIds = result.rows.map(row => row.id);
+      
+      if (tokiIds.length > 0) {
+        // Fetch friends attending for all tokis in one query
+        const friendsResult = await pool.query(
+          `SELECT 
+            tp.toki_id,
+            u.id,
+            u.name,
+            u.avatar_url
+          FROM toki_participants tp
+          JOIN users u ON tp.user_id = u.id
+          INNER JOIN user_connections uc ON (
+            (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+            (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
+          )
+          WHERE tp.toki_id = ANY($2::uuid[])
+            AND tp.status = 'approved'
+            AND uc.status = 'accepted'
+            AND NOT EXISTS (
+              SELECT 1 FROM user_blocks ub 
+              WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
+                OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
+            )
+          ORDER BY tp.toki_id, tp.joined_at ASC`,
+          [userId, tokiIds]
+        );
+
+        // Group friends by toki_id
+        friendsResult.rows.forEach(friend => {
+          if (!friendsMap.has(friend.toki_id)) {
+            friendsMap.set(friend.toki_id, []);
+          }
+          friendsMap.get(friend.toki_id)!.push({
+            id: friend.id,
+            name: friend.name,
+            avatar: friend.avatar_url
+          });
+        });
+      }
+    }
+
     // Format response with join status
     const tokis = result.rows.map((row) => ({
       id: row.id,
@@ -908,6 +955,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
       algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null,
+      friendsAttending: friendsMap.get(row.id) || []
     }));
 
     return res.status(200).json({
@@ -1025,7 +1073,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
-        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'joined'), 1) as current_attendees,
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         (
           6371 * acos(
             cos(radians($1)) * 
@@ -1036,24 +1084,34 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
           )
         ) as distance_km`;
     
-    // Add is_saved check if user is authenticated
+    // Add is_saved check and join_status if user is authenticated
     if (userId) {
       paramCount++;
       query += `,
         EXISTS(
           SELECT 1 FROM saved_tokis st 
           WHERE st.toki_id = t.id AND st.user_id = $${paramCount}
-        ) as is_saved`;
+        ) as is_saved,
+        COALESCE(jp.status, CASE WHEN t.host_id = $${paramCount} THEN 'hosting' ELSE 'not_joined' END) as join_status`;
     } else {
       query += `,
-        false as is_saved`;
+        false as is_saved,
+        'not_joined' as join_status`;
     }
     
     query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
-      LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'joined'
+      LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'approved'`;
+    
+    // Add join_status join if user is authenticated
+    if (userId) {
+      query += `
+      LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${paramCount}`;
+    }
+    
+    query += `
       ${whereConditions}
     `;
 
@@ -1063,7 +1121,11 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     }
 
     // Group by and order by distance
-    query += ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, t.image_urls`;
+    let groupByClause = ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, t.image_urls`;
+    if (userId) {
+      groupByClause += `, jp.status`;
+    }
+    query += groupByClause;
     query += ` ORDER BY distance_km ASC`;
 
     // Add pagination
@@ -1153,6 +1215,53 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       }
     }
 
+    // Fetch friends attending for each toki (only if user is authenticated)
+    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string }>>();
+
+    if (userId) {
+      // Get all toki IDs from the result
+      const tokiIds = result.rows.map(row => row.id);
+      
+      if (tokiIds.length > 0) {
+        // Fetch friends attending for all tokis in one query
+        const friendsResult = await pool.query(
+          `SELECT 
+            tp.toki_id,
+            u.id,
+            u.name,
+            u.avatar_url
+          FROM toki_participants tp
+          JOIN users u ON tp.user_id = u.id
+          INNER JOIN user_connections uc ON (
+            (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+            (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
+          )
+          WHERE tp.toki_id = ANY($2::uuid[])
+            AND tp.status = 'approved'
+            AND uc.status = 'accepted'
+            AND NOT EXISTS (
+              SELECT 1 FROM user_blocks ub 
+              WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
+                OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
+            )
+          ORDER BY tp.toki_id, tp.joined_at ASC`,
+          [userId, tokiIds]
+        );
+
+        // Group friends by toki_id
+        friendsResult.rows.forEach(friend => {
+          if (!friendsMap.has(friend.toki_id)) {
+            friendsMap.set(friend.toki_id, []);
+          }
+          friendsMap.get(friend.toki_id)!.push({
+            id: friend.id,
+            name: friend.name,
+            avatar: friend.avatar_url
+          });
+        });
+      }
+    }
+
     // Format response
     const tokis = result.rows.map(row => ({
       id: row.id,
@@ -1164,7 +1273,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       timeSlot: row.time_slot,
       scheduledTime: row.scheduled_time ? new Date(row.scheduled_time).toISOString().replace('T', ' ').slice(0, 16) : null,
       maxAttendees: row.max_attendees,
-      currentAttendees: row.current_attendees,
+      currentAttendees: Number(row.current_attendees ?? 0),
       category: row.category,
       visibility: row.visibility,
       autoApprove: row.auto_approve || false,
@@ -1182,8 +1291,10 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         avatar: row.host_avatar
       },
       tags: row.tags || [],
+      joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
-      algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null
+      algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null,
+      friendsAttending: friendsMap.get(row.id) || []
     }));
 
     const totalPages = Math.ceil(totalCount / limitNum);
@@ -1254,7 +1365,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
-        COALESCE(1 + COUNT(DISTINCT tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees,
+        COALESCE(1 + COUNT(DISTINCT tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         COALESCE(jp.status, CASE WHEN t.host_id = $${userIdParamPos} THEN 'hosting' ELSE 'not_joined' END) as join_status,
         EXISTS(
           SELECT 1 FROM saved_tokis st 
@@ -1279,7 +1390,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
-      LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status IN ('approved', 'joined')
+      LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'approved'
       LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${userIdParamPos}
       WHERE t.status = 'active'
         AND (
@@ -1411,7 +1522,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
           OR t.host_id = $2
           OR EXISTS (
             SELECT 1 FROM toki_participants p
-            WHERE p.toki_id = t.id AND p.user_id = $2 AND p.status IN ('approved','joined')
+            WHERE p.toki_id = t.id AND p.user_id = $2 AND p.status = 'approved'
           )
           OR EXISTS (
             SELECT 1 FROM toki_invites ti
@@ -1448,8 +1559,8 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     // Get participant count
     const participantResult = await pool.query(
-      'SELECT COUNT(*) as participant_count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
-      [id, 'approved', 'joined']
+      'SELECT COUNT(*) as participant_count FROM toki_participants WHERE toki_id = $1 AND status = $2',
+      [id, 'approved']
     );
 
     // Get participants for rating system
@@ -1461,9 +1572,9 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
         tp.status
       FROM toki_participants tp
       JOIN users u ON tp.user_id = u.id
-      WHERE tp.toki_id = $1 AND tp.status IN ($2, $3)
+      WHERE tp.toki_id = $1 AND tp.status = $2
       ORDER BY tp.joined_at ASC`,
-      [id, 'approved', 'joined']
+      [id, 'approved']
     );
 
     // Get current user's join status
@@ -1543,6 +1654,58 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       success: false,
       error: 'Server error',
       message: 'Failed to retrieve Toki'
+    });
+  }
+});
+
+// Get friends (accepted connections) who are attending a toki
+router.get('/:id/friends-attending', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    // Get all participants who are also accepted connections of the current user
+    const friendsResult = await pool.query(
+      `SELECT 
+        u.id,
+        u.name,
+        u.avatar_url,
+        tp.status
+      FROM toki_participants tp
+      JOIN users u ON tp.user_id = u.id
+      INNER JOIN user_connections uc ON (
+        (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+        (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
+      )
+      WHERE tp.toki_id = $2 
+        AND tp.status = 'approved'
+        AND uc.status = 'accepted'
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks ub 
+          WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
+            OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
+        )
+      ORDER BY tp.joined_at ASC`,
+      [userId, id]
+    );
+
+    const friends = friendsResult.rows.map(friend => ({
+      id: friend.id,
+      name: friend.name,
+      avatar: friend.avatar_url
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: friends
+    });
+
+  } catch (error) {
+    logger.error('Get friends attending toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve friends attending toki'
     });
   }
 });
@@ -1816,8 +1979,8 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     const toki = tokiCheck.rows[0];
     const isHost = toki.host_id === userId;
     const isPublicAttendee = toki.visibility === 'public' && 
-      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status IN ($3, $4)', 
-        [id, userId, 'approved', 'joined'])).rows.length > 0;
+      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status = $3', 
+        [id, userId, 'approved'])).rows.length > 0;
     
     if (!isHost && !isPublicAttendee) {
       return res.status(403).json({ success: false, error: 'Only host or attendees of public tokis can invite users' });
@@ -1970,8 +2133,8 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
     if (action === 'accept') {
       await pool.query(
         `INSERT INTO toki_participants (toki_id, user_id, status, joined_at)
-         VALUES ($1, $2, 'joined', NOW())
-         ON CONFLICT (toki_id, user_id) DO UPDATE SET status = 'joined', joined_at = NOW()`,
+         VALUES ($1, $2, 'approved', NOW())
+         ON CONFLICT (toki_id, user_id) DO UPDATE SET status = 'approved', joined_at = NOW()`,
         [tokiId, userId]
       );
 
@@ -2097,7 +2260,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
     if (existingJoinResult.rows.length > 0) {
       const existingJoin = existingJoinResult.rows[0];
       
-      if (existingJoin.status === 'joined') {
+      if (existingJoin.status === 'approved') {
         return res.status(400).json({
           success: false,
           error: 'Already joined',
@@ -2123,8 +2286,8 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
     // Check if Toki is full (skip check if max_attendees is NULL/unlimited)
     if (toki.max_attendees !== null && toki.max_attendees !== undefined) {
       const currentAttendeesResult = await pool.query(
-        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
-        [id, 'approved', 'joined']
+        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status = $2',
+        [id, 'approved']
       );
       
       const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count); // Host (1) + participants
@@ -2140,7 +2303,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
 
     // Determine status based on auto_approve setting or active invite
     const autoApprove = toki.auto_approve || false;
-    const joinStatus = (hasActiveInvite || autoApprove) ? 'joined' : 'pending';
+    const joinStatus = (hasActiveInvite || autoApprove) ? 'approved' : 'pending';
     
     // Insert join request or direct join
     const joinResult = await pool.query(
@@ -2250,8 +2413,8 @@ router.put('/:id/join/:requestId/approve', authenticateToken, async (req: Reques
     
     if (maxAttendees !== null && maxAttendees !== undefined) {
       const currentAttendeesResult = await pool.query(
-        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)',
-        [id, 'approved', 'joined']
+        'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status = $2',
+        [id, 'approved']
       );
       
       const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count);

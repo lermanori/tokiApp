@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS toki_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   toki_id UUID REFERENCES tokis(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'joined', 'declined'
+  status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'approved', 'declined', 'completed'
   joined_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(toki_id, user_id)
@@ -205,10 +205,10 @@ BEGIN
   
   -- Update tokis_joined count
   UPDATE user_stats 
-  SET tokis_joined = (
-    SELECT COUNT(*) FROM toki_participants 
-    WHERE user_id = NEW.host_id AND status IN ('approved', 'joined')
-  )
+      SET tokis_joined = (
+        SELECT COUNT(*) FROM toki_participants 
+        WHERE user_id = NEW.host_id AND status = 'approved'
+      )
   WHERE user_id = NEW.host_id;
   
   RETURN NEW;
@@ -227,19 +227,19 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     UPDATE tokis 
     SET current_attendees = current_attendees + 1
-    WHERE id = NEW.toki_id AND NEW.status = 'joined';
+    WHERE id = NEW.toki_id AND NEW.status = 'approved';
   ELSIF TG_OP = 'UPDATE' THEN
-    IF OLD.status != 'joined' AND NEW.status = 'joined' THEN
+    IF OLD.status != 'approved' AND NEW.status = 'approved' THEN
       UPDATE tokis 
       SET current_attendees = current_attendees + 1
       WHERE id = NEW.toki_id;
-    ELSIF OLD.status = 'joined' AND NEW.status != 'joined' THEN
+    ELSIF OLD.status = 'approved' AND NEW.status != 'approved' THEN
       UPDATE tokis 
       SET current_attendees = current_attendees - 1
       WHERE id = NEW.toki_id;
     END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF OLD.status = 'joined' THEN
+    IF OLD.status = 'approved' THEN
       UPDATE tokis 
       SET current_attendees = current_attendees - 1
       WHERE id = OLD.toki_id;
@@ -278,7 +278,7 @@ CREATE INDEX IF NOT EXISTS idx_user_ratings_rater_id ON user_ratings(rater_id);
 ALTER TABLE tokis ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled'));
 
 -- Add status column to toki_participants table if it doesn't exist
-ALTER TABLE toki_participants ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'joined' CHECK (status IN ('pending', 'approved', 'joined', 'completed', 'declined'));
+ALTER TABLE toki_participants ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'completed', 'declined'));
 
 -- User blocking table
 CREATE TABLE user_blocks (

@@ -1,19 +1,15 @@
-# File: toki.ts
+# File: toki-backend/src/routes/tokis.ts
 
 ### Summary
-Backend routes for toki management including creation, updates, joining, and approval logic.
+Backend routes for managing tokis including list endpoints, nearby search, and individual toki retrieval. Now includes friends attending data in list responses.
 
 ### Fixes Applied log
-- problem: Support unlimited max attendees (NULL value)
-- solution: Updated validation to allow null for maxAttendees, updated capacity checks to skip when max_attendees is NULL
-
-- problem: Auto-approve join requests feature
-- solution: Added autoApprove to request body, included in database operations, updated join logic to auto-approve when enabled
+- **problem**: Friends attending data was not included in toki list endpoints, requiring separate API calls for each toki.
+- **solution**: Added efficient batch query to fetch friends attending for all tokis in list responses, only when user is authenticated.
 
 ### How Fixes Were Implemented
-- Updated max attendees validation to allow null (unlimited)
-- Added autoApprove field to create and update endpoints
-- Updated join endpoint to check auto_approve flag and automatically set status to 'joined' when enabled
-- Updated capacity checks in join and approve endpoints to skip when max_attendees is NULL
-- Added autoApprove to all response mappings
-- Added notification for auto-approved users
+- **problem**: Users couldn't see which friends are going to tokis in list views without additional API calls.
+- **solution**: Added friends fetching logic to `/tokis/nearby` and `/tokis/` endpoints. Uses a single batch query with `ANY($2::uuid[])` to fetch all friends for all tokis at once, then groups them by toki_id in a Map. Only executes when userId is present (authenticated users). Added `friendsAttending` field to response objects.
+
+- **problem**: `/tokis/nearby` endpoint was missing `joinStatus` field and `currentAttendees` was being returned as a string instead of a number.
+- **solution**: Added LEFT JOIN to `toki_participants` to get user's join status. Added `join_status` calculation in SELECT clause using COALESCE with CASE statement to handle hosting status. Added `jp.status` to GROUP BY clause. Updated response mapping to include `joinStatus: row.join_status || 'not_joined'` and convert `currentAttendees: Number(row.current_attendees ?? 0)` to ensure it's always a number.
