@@ -111,8 +111,8 @@ export async function incrementLinkUsage(inviteCode: string): Promise<void> {
  */
 export async function isUserParticipant(tokiId: string, userId: string): Promise<boolean> {
   const result = await pool.query(
-    'SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status IN ($3, $4)',
-    [tokiId, userId, 'joined', 'approved']
+    'SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status = $3',
+    [tokiId, userId, 'approved']
   );
   
   return result.rows.length > 0;
@@ -128,8 +128,8 @@ export async function addUserToToki(tokiId: string, userId: string): Promise<boo
   try {
     // Check if toki has space
     const tokiResult = await pool.query(
-      'SELECT max_attendees, (SELECT COUNT(*) FROM toki_participants WHERE toki_id = $1 AND status IN ($2, $3)) as current_count FROM tokis WHERE id = $1',
-      [tokiId, 'joined', 'approved']
+      'SELECT max_attendees, (SELECT COUNT(*) FROM toki_participants WHERE toki_id = $1 AND status = $2) as current_count FROM tokis WHERE id = $1',
+      [tokiId, 'approved']
     );
 
     if (tokiResult.rows.length === 0) {
@@ -149,7 +149,7 @@ export async function addUserToToki(tokiId: string, userId: string): Promise<boo
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (toki_id, user_id) 
        DO UPDATE SET status = $3, joined_at = NOW()`,
-      [tokiId, userId, 'joined']
+      [tokiId, userId, 'approved']
     );
 
     return true;

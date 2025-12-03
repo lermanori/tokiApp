@@ -509,7 +509,7 @@ router.get('/tokis/:tokiId/messages', authenticateToken, async (req: Request, re
     const accessResult = await pool.query(
       `SELECT t.id FROM tokis t
        LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $2
-       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status IN ('approved', 'joined'))`,
+       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status = 'approved')`,
       [tokiId, req.user!.id]
     );
 
@@ -591,7 +591,7 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
     const accessResult = await pool.query(
       `SELECT t.id, t.host_id FROM tokis t
        LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $2
-       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status IN ('approved', 'joined'))`,
+       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status = 'approved')`,
       [tokiId, req.user!.id]
     );
 
@@ -860,7 +860,7 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $1
       LEFT JOIN toki_read_state trs ON t.id = trs.toki_id AND trs.user_id = $1
       WHERE t.status = 'active'
-        AND (t.host_id = $1 OR (tp.status IN ('approved', 'joined')))
+        AND (t.host_id = $1 OR tp.status = 'approved')
       ORDER BY COALESCE((
         SELECT m.created_at 
         FROM messages m 
@@ -878,7 +878,7 @@ router.get('/tokis/group-chats', authenticateToken, async (req: Request, res: Re
       FROM tokis t
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $1
       WHERE t.status = 'active'
-        AND (t.host_id = $1 OR (tp.status IN ('approved', 'joined')))`,
+        AND (t.host_id = $1 OR tp.status = 'approved')`,
       [req.user!.id]
     );
 
@@ -925,7 +925,7 @@ router.post('/tokis/:id/read', authenticateToken, async (req: Request, res: Resp
     const accessResult = await pool.query(
       `SELECT t.id FROM tokis t
        LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.user_id = $2
-       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status IN ('approved', 'joined'))`,
+       WHERE t.id = $1 AND (t.host_id = $2 OR tp.status = 'approved')`,
       [tokiId, req.user!.id]
     );
 

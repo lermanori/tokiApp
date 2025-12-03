@@ -28,7 +28,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
-        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status IN ('approved', 'joined')), 1) as current_attendees,
+        COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         st.created_at as saved_at
     `;
     

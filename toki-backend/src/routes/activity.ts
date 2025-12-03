@@ -60,7 +60,7 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
           t.host_id = $1
           OR EXISTS (
             SELECT 1 FROM toki_participants tp
-            WHERE tp.toki_id = t.id AND tp.user_id = $1 AND tp.status IN ('approved','joined')
+            WHERE tp.toki_id = t.id AND tp.user_id = $1 AND tp.status = 'approved'
           )
         )
         AND t.status = 'active'
@@ -159,7 +159,7 @@ router.get('/users/:userId/activity', authenticateToken, async (req: Request, re
           t.host_id = $1
           OR EXISTS (
             SELECT 1 FROM toki_participants tp
-            WHERE tp.toki_id = t.id AND tp.user_id = $1 AND tp.status IN ('approved','joined')
+            WHERE tp.toki_id = t.id AND tp.user_id = $1 AND tp.status = 'approved'
           )
         )
         AND t.status = 'active'

@@ -389,8 +389,8 @@ router.get('/for-toki/:tokiId', authenticateToken, async (req: Request, res: Res
     const toki = tokiResult.rows[0];
     const isHost = toki.host_id === currentUserId;
     const isPublicAttendee = toki.visibility === 'public' && 
-      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status IN ($3, $4)', 
-        [tokiId, currentUserId, 'approved', 'joined'])).rows.length > 0;
+      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status = $3', 
+        [tokiId, currentUserId, 'approved'])).rows.length > 0;
 
     if (!isHost && !isPublicAttendee) {
       return res.status(403).json({
