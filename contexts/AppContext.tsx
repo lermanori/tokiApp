@@ -26,12 +26,13 @@ interface Toki {
   image: string;
   distance: string;
   isHostedByUser?: boolean;
-  joinStatus?: 'not_joined' | 'pending' | 'approved' | 'joined';
+  joinStatus?: 'not_joined' | 'pending' | 'approved';
   visibility: 'public' | 'connections' | 'friends';
   category: string;
   createdAt: string;
   latitude?: number;
   longitude?: number;
+  friendsGoing?: Array<{ id: string; name: string; avatar?: string }>;
   scheduledTime?: string; // Add scheduled time for better display
   isSaved?: boolean;
   algorithmScore?: number | null;
@@ -263,7 +264,7 @@ const loadStoredData = async () => {
   // Calculate user stats from stored data
   const userTokis = storedTokis.filter((toki: Toki) => toki.isHostedByUser);
   const joinedTokis = storedTokis.filter((toki: Toki) => 
-    !toki.isHostedByUser && (toki.joinStatus === 'joined' || toki.joinStatus === 'approved')
+    !toki.isHostedByUser && toki.joinStatus === 'approved'
   );
 
   const updatedUser = {
@@ -379,7 +380,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       // Update user stats if join status changed
       let updatedUserAfterUpdate = state.currentUser;
       const updatedToki = updatedTokis.find(t => t.id === action.payload.id);
-      if (updatedToki && !updatedToki.isHostedByUser && action.payload.updates.joinStatus === 'joined') {
+      if (updatedToki && !updatedToki.isHostedByUser && action.payload.updates.joinStatus === 'approved') {
         updatedUserAfterUpdate = {
           ...state.currentUser,
           tokisJoined: state.currentUser.tokisJoined + 1,
@@ -559,6 +560,7 @@ interface AppContextType {
     // Connection actions
     getConnections: () => Promise<{ connections: any[]; pagination: any }>;
     getConnectionsForToki: (tokiId: string) => Promise<{ connections: any[]; toki: { id: string; title: string } }>;
+    getFriendsAttendingToki: (tokiId: string) => Promise<Array<{ id: string; name: string; avatar?: string }>>;
     getPendingConnections: () => Promise<any[]>;
     sendConnectionRequest: (userId: string) => Promise<boolean>;
     acceptConnectionRequest: (userId: string) => Promise<boolean>;
@@ -582,7 +584,7 @@ interface AppContextType {
     // User discovery actions
     searchUsers: (query?: string) => Promise<any[]>;
     // Toki join actions
-    sendJoinRequest: (id: string) => Promise<'joined' | 'pending' | null>;
+    sendJoinRequest: (id: string) => Promise<'approved' | 'pending' | null>;
     approveJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     declineJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     getJoinRequests: (tokiId: string) => Promise<any[]>;
@@ -1131,6 +1133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
         algorithmScore: apiToki.algorithmScore ?? null,
+        friendsGoing: (apiToki as any).friendsAttending || [],
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1184,6 +1187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scheduledTime: apiToki.scheduledTime,
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+        friendsGoing: (apiToki as any).friendsAttending || [],
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1248,6 +1252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
         algorithmScore: apiToki.algorithmScore ?? null,
+        friendsGoing: (apiToki as any).friendsAttending || [],
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1314,6 +1319,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timeSlot: params.timeSlot
       });
 
+      console.log('🔄 [FLOW-6] AppContext: getNearbyTokis API response', {
+        tokisCount: response?.tokis?.length || (response as any)?.data?.tokis?.length || 0,
+        latitude: params.latitude,
+        longitude: params.longitude,
+        radius: params.radius
+      });
+
       // Safety check: ensure response has tokis array (handle both response.tokis and response.data.tokis)
       const tokisArray = response?.tokis || (response as any)?.data?.tokis;
       if (!tokisArray || !Array.isArray(tokisArray)) {
@@ -1352,7 +1364,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
         isSaved: (apiToki as any).is_saved || false,
         algorithmScore: apiToki.algorithmScore ?? null,
+        friendsGoing: (apiToki as any).friendsAttending || [],
       }));
+
+      console.log('🔄 [FLOW-6] AppContext: Mapped tokis, about to dispatch', {
+        apiTokisCount: apiTokis.length,
+        willDispatch: true, // Always dispatch - refresh always updates, append always appends
+        currentTokisCount: state.tokis.length,
+        append
+      });
 
       if (append) {
         // Append to existing tokis, avoiding duplicates
@@ -1360,15 +1380,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const newTokis = apiTokis.filter(t => !existingIds.has(t.id));
         dispatch({ type: 'SET_TOKIS', payload: [...state.tokis, ...newTokis] });
       } else {
-        // Only set tokis if we got actual data - don't overwrite with empty array
-        // This prevents clearing tokis if a request returns empty (e.g., due to filters or errors)
-        if (apiTokis.length > 0) {
-          dispatch({ type: 'SET_TOKIS', payload: apiTokis });
-        } else if (state.tokis.length === 0) {
-          // Only set empty if we don't have any tokis yet (initial load)
-          dispatch({ type: 'SET_TOKIS', payload: apiTokis });
-        }
-        // Otherwise, keep existing tokis if new response is empty
+        // For refresh (append: false), always update state with new results
+        // This ensures location changes clear old tokis even if new location has no tokis
+        dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+        console.log('🔄 [FLOW-6] AppContext: Dispatched SET_TOKIS (refresh)', {
+          tokisCount: apiTokis.length,
+          wasEmpty: apiTokis.length === 0,
+          previousCount: state.tokis.length
+        });
       }
 
       // Update total count (only update if we got a valid total from pagination)
@@ -1590,14 +1609,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendJoinRequest = async (id: string): Promise<'joined' | 'pending' | null> => {
+  const sendJoinRequest = async (id: string): Promise<'approved' | 'pending' | null> => {
     try {
       console.log('🔄 Sending join request to backend for Toki:', id);
       
       const response = await apiService.joinToki(id);
       
       if (response.success) {
-        const backendStatus = (response.data?.status as 'joined' | 'pending' | undefined) || 'pending';
+        const backendStatus = (response.data?.status as 'approved' | 'pending' | undefined) || 'pending';
         // Update local state to reflect backend status
         dispatch({
           type: 'UPDATE_TOKI',
@@ -1799,7 +1818,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res: any = await apiService.joinByInviteCode(inviteCode);
       if (res?.success) {
-        // Refresh tokis so joinStatus reflects joined
+        // Refresh tokis so joinStatus reflects approved
         setTimeout(() => loadTokis(), 100);
         return true;
       }
@@ -1971,9 +1990,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
+      if (updates.latitude !== undefined || updates.longitude !== undefined) {
+        console.log('🔄 [FLOW-2] AppContext: updateProfile called with location', {
+          latitude: updates.latitude,
+          longitude: updates.longitude,
+          location: updates.location
+        });
+      }
+      
       const apiUser = await apiService.updateProfile(updates);
       
       // Reload the full user data to get updated stats and social links
+      if (updates.latitude !== undefined || updates.longitude !== undefined) {
+        console.log('🔄 [FLOW-2] AppContext: Profile updated, calling loadCurrentUser');
+      }
       await loadCurrentUser();
       
       console.log('✅ Profile updated successfully');
@@ -2247,9 +2277,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
         longitude: user.longitude,
       };
 
+      if (transformedUser.latitude && transformedUser.longitude) {
+        console.log('🔄 [FLOW-3] AppContext: loadCurrentUser received new location', {
+          latitude: transformedUser.latitude,
+          longitude: transformedUser.longitude,
+          location: transformedUser.location
+        });
+      }
+
       console.log('🔄 Dispatching UPDATE_CURRENT_USER with:', transformedUser);
       dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
       storage.set(STORAGE_KEYS.CURRENT_USER, transformedUser);
+      
+      if (transformedUser.latitude && transformedUser.longitude) {
+        console.log('🔄 [FLOW-3] AppContext: UPDATE_CURRENT_USER dispatched, state.currentUser will update', {
+          latitude: transformedUser.latitude,
+          longitude: transformedUser.longitude
+        });
+      }
+      
       console.log('✅ Current user loaded successfully:', transformedUser.name);
       console.log('📊 User stats:', { tokisCreated: transformedUser.tokisCreated, tokisJoined: transformedUser.tokisJoined, connections: transformedUser.connections });
       
@@ -2305,6 +2351,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ Failed to load connections for toki:', error);
       return { connections: [], toki: { id: tokiId, title: '' } };
+    }
+  };
+
+  const getFriendsAttendingToki = async (tokiId: string): Promise<Array<{ id: string; name: string; avatar?: string }>> => {
+    try {
+      const response = await apiService.getFriendsAttendingToki(tokiId);
+      console.log('✅ Friends attending toki loaded successfully');
+      return response;
+    } catch (error) {
+      console.error('❌ Failed to load friends attending toki:', error);
+      return [];
     }
   };
 
@@ -2969,6 +3026,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Connection actions
     getConnections,
     getConnectionsForToki,
+    getFriendsAttendingToki,
     getPendingConnections,
     sendConnectionRequest,
     acceptConnectionRequest,

@@ -1,14 +1,17 @@
-# File: AppContext.tsx
+# File: contexts/AppContext.tsx
 
 ### Summary
-React context providing global application state and actions for tokis, users, and notifications.
+Global app state management with actions for loading tokis, managing connections, and handling user data. Now includes friends going data in all toki load functions.
 
 ### Fixes Applied log
-- problem: Toki interface doesn't support unlimited max attendees or autoApprove
-- solution: Updated Toki interface to allow maxAttendees as number | null and added autoApprove field
-- problem: Creating toki with unlimited participants doesn't save correctly - defaults to 10 instead of null
-- solution: Fixed maxAttendees assignment in createToki to properly handle null values using !== undefined check instead of || operator
+- **problem**: Friends attending data from backend wasn't being mapped to internal state for TokiCard components.
+- **solution**: Added friendsGoing field to internal Toki interface and mapped friendsAttending from API responses to friendsGoing in all load functions.
+- **problem**: Need to trace location change flow from profile update to exMap reload for debugging
+- **solution**: Added 🔄 [FLOW-2] logs in updateProfile (when called with location and when calling loadCurrentUser) and 🔄 [FLOW-3] logs in loadCurrentUser (when receiving new location and when dispatching UPDATE_CURRENT_USER) to track state propagation
 
 ### How Fixes Were Implemented
-- Updated Toki interface: maxAttendees from number to number | null, added autoApprove?: boolean field
-- Changed maxAttendees assignment in createToki function from `tokiData.maxAttendees || 10` to `tokiData.maxAttendees !== undefined ? tokiData.maxAttendees : 10` to preserve null values for unlimited participants
+- **problem**: Backend returns friendsAttending but frontend TokiCard expects friendsGoing prop.
+- **solution**: Added `friendsGoing?: Array<{ id: string; name: string; avatar?: string }>` to internal Toki interface. Updated loadNearbyTokis, loadTokis, loadMyTokis, and loadTokisWithFilters to map `(apiToki as any).friendsAttending || []` to `friendsGoing` field. This ensures friends overlay appears on all TokiCards throughout the app when data is available.
+
+- **problem**: joinStatus type and logic included 'joined' status which was deprecated in favor of 'approved', causing inconsistencies.
+- **solution**: Removed 'joined' from joinStatus type definition. Updated all status checks from `'joined' || 'approved'` to just `'approved'`. Changed sendJoinRequest return type from `'joined' | 'pending'` to `'approved' | 'pending'`. Updated user stats calculation and join status update logic to only check for 'approved' status.

@@ -10,6 +10,8 @@ This screen allows users to edit their profile details, including avatar, name, 
 - solution: Added a clear (×) button next to the location input to instantly clear the field and reset stored coordinates.
 - problem: Manually typing a location did not update coordinates unless "Use current" was tapped.
 - solution: Integrated a dropdown address autocomplete. On selection, we set both the display label and latitude/longitude.
+- problem: Need to trace location change flow from profile update to exMap reload for debugging
+- solution: Added 🔄 [FLOW-1] logs in useCurrentLocation (when location set in local state) and handleSave (when saving to backend) to track the start of the location update flow
 
 ### How Fixes Were Implemented
 - Changed `handleSave` success branch to call `router.back()` immediately after a successful `actions.updateProfile(...)` and removed the success `Alert.alert`. This streamlines the UX to return the user to their profile as soon as the save completes successfully.

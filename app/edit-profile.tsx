@@ -145,6 +145,14 @@ export default function EditProfileScreen() {
     setIsSaving(true);
 
     try {
+      if (profile.latitude && profile.longitude) {
+        console.log('🔄 [FLOW-1] Profile: Saving location to backend', {
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          location: profile.location
+        });
+      }
+
       const success = await actions.updateProfile({
         name: profile.name,
         bio: profile.bio,
@@ -199,6 +207,13 @@ export default function EditProfileScreen() {
           label = neighborhood || city || region || streetish || '';
         }
       } catch {}
+
+      console.log('🔄 [FLOW-1] Profile: Location set in local state', {
+        latitude,
+        longitude,
+        label,
+        source: 'useCurrentLocation'
+      });
 
       updateProfile('location', label);
       updateProfile('latitude', latitude);

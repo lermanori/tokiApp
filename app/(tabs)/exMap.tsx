@@ -120,7 +120,14 @@ export default function ExMapScreen() {
         
         // Only return if valid numbers
         if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-            console.log('🏄 [MAP-FLOW] Profile center computed:', { lat: latNum, lng: lngNum, source: state.currentUser?.latitude ? 'userProfile' : 'mapRegion' });
+            const source = state.currentUser?.latitude ? 'userProfile' : 'mapRegion';
+            const trigger = state.currentUser?.latitude ? 'state.currentUser changed' : 'mapRegion changed';
+            console.log('🔄 [FLOW-4] exMap: profileCenter recomputed', { 
+                lat: latNum, 
+                lng: lngNum, 
+                source,
+                trigger
+            });
             return {
                 latitude: latNum,
                 longitude: lngNum,
@@ -139,19 +146,12 @@ export default function ExMapScreen() {
         const radiusKm = Number.isFinite(radiusValue) && radiusValue > 0 ? radiusValue : 500;
         // Backend radius is in kilometers; convert to meters for map constraint
         const radiusMeters = radiusKm * 1000;
-        console.log('🏄 [MAP-FLOW] Max radius computed:', { radiusKm, radiusMeters, rawRadius });
         return radiusMeters;
     }, [selectedFilters.radius]);
 
     // Add error boundary for category changes
     const handleCategoryToggle = useCallback((categories: string[]) => {
         try {
-            console.log('🔄 [EXMAP] Category toggle:', {
-                from: selectedCategories,
-                to: categories,
-                eventsCount: baseEvents.length,
-                filteredCount: filteredEvents.length
-            });
             setSelectedCategories(categories);
         } catch (error) {
             console.error('❌ [EXMAP] Error in handleCategoryToggle:', error);
@@ -164,12 +164,8 @@ export default function ExMapScreen() {
         try {
             const lat = mapRegion?.latitude ?? state.currentUser?.latitude;
             const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
+            
             const result = sortEvents(filteredEvents as any, sort, lat, lng);
-            console.log('🔄 [EXMAP] Sorted events:', {
-                filteredCount: filteredEvents.length,
-                sortedCount: result.length,
-                categories: selectedCategories
-            });
             return result;
         } catch (error) {
             console.error('❌ [EXMAP] Error in sortedEvents useMemo:', error);
@@ -282,7 +278,6 @@ export default function ExMapScreen() {
 
         if (!imageLoadTimeoutRef.current && expectedCount > 0) {
             imageLoadTimeoutRef.current = setTimeout(() => {
-                console.log('⏱️ [EXMAP] Image loading timeout, clearing loading state');
                 if (state.loading) {
                     actions.setLoading(false);
                 }
@@ -299,6 +294,15 @@ export default function ExMapScreen() {
             };
         }, [])
     );
+
+    // Reset refresh flag when location changes so focus effect can run again
+    useEffect(() => {
+        hasRefreshedOnFocusRef.current = false;
+        console.log('🏄 [MAP-FLOW] Location changed, resetting focus guard', {
+            lat: state.currentUser?.latitude,
+            lng: state.currentUser?.longitude
+        });
+    }, [state.currentUser?.latitude, state.currentUser?.longitude]);
 
     // Load user location early on focus (before initial load)
     useFocusEffect(
@@ -356,8 +360,7 @@ export default function ExMapScreen() {
         ])
     );
 
-    // Sync mapRegion when profileCenter changes to a different location (handles async profile loading)
-    // NOTE: We no longer reload tokis here; initial load is handled by useDiscoverData.
+    // Simple: When profile location changes, reload everything
     useEffect(() => {
         if (!profileCenter || !profileCenter.latitude || !profileCenter.longitude) return;
         if (!state.isConnected) return;
@@ -367,12 +370,28 @@ export default function ExMapScreen() {
         
         // Skip if we've already reloaded for this exact location (prevents infinite loop)
         if (hasReloadedForProfileCenterRef.current === profileCenterKey) {
-            console.log('🏄 [MAP-FLOW] Already reloaded for this profile center, skipping', { profileCenterKey });
+            console.log('🔄 [FLOW-5] exMap: Reload effect triggered but guard blocks (already reloaded)', { 
+                profileCenterKey,
+                guardValue: hasReloadedForProfileCenterRef.current
+            });
             return;
         }
         
-        // Update mapRegion to match profileCenter FIRST (fixes stale closure issue)
-        // This ensures mapRegion is current before we check distance
+        console.log('🔄 [FLOW-5] exMap: Reload effect triggered - location changed', {
+            newLocation: [profileCenter.latitude, profileCenter.longitude],
+            previousLocation: hasReloadedForProfileCenterRef.current,
+            guardValue: hasReloadedForProfileCenterRef.current
+        });
+        
+        // Mark as reloaded for this location BEFORE making the call (prevents race conditions)
+        hasReloadedForProfileCenterRef.current = profileCenterKey;
+        console.log('🔄 [FLOW-5] exMap: Guard set to new location', { profileCenterKey });
+        
+        // Update mapRegion to match profileCenter
+        console.log('🔄 [FLOW-5] exMap: Calling updateMapRegion', {
+            latitude: profileCenter.latitude,
+            longitude: profileCenter.longitude
+        });
         updateMapRegion({
             latitude: profileCenter.latitude,
             longitude: profileCenter.longitude,
@@ -380,28 +399,28 @@ export default function ExMapScreen() {
             longitudeDelta: 0.0421,
         }, false);
         
-        // Check if current mapRegion is far from profileCenter (more than 1km)
-        // After update, this should be small, but we check in case mapRegion was way off
-        const distance = profileCenter.latitude && profileCenter.longitude && mapRegion?.latitude && mapRegion?.longitude
-            ? Math.sqrt(
-                Math.pow((profileCenter.latitude - mapRegion!.latitude) * 111320, 2) +
-                Math.pow((profileCenter.longitude - mapRegion!.longitude) * 111320 * Math.cos(profileCenter.latitude * Math.PI / 180), 2)
-            )
-            : Infinity;
-        
-        // If profileCenter is significantly different from mapRegion, just mark as handled.
-        // Tokis are not reloaded here to avoid duplicate nearby loads.
-        if (distance > 1000) {
-            console.log('🏄 [MAP-FLOW] Profile center changed significantly, marking as handled (no reload)', {
-                profileCenter: [profileCenter.latitude, profileCenter.longitude],
-                mapRegion: mapRegion ? [mapRegion.latitude, mapRegion.longitude] : null,
-                distance
-            });
-            
-            // Mark as reloaded BEFORE making the call (prevents race conditions)
-            hasReloadedForProfileCenterRef.current = profileCenterKey;
-        }
-    }, [profileCenter?.latitude, profileCenter?.longitude, state.isConnected, selectedFilters.radius, updateMapRegion]);
+        // Reload tokis with new location - call directly with new coordinates to ensure we use the correct location
+        const radius = parseFloat(String(selectedFilters.radius || '500')) || 500;
+        console.log('🔄 [FLOW-5] exMap: Calling loadNearbyTokis with new location', {
+            latitude: profileCenter.latitude,
+            longitude: profileCenter.longitude,
+            radius
+        });
+        Promise.all([
+            actions.loadNearbyTokis({
+                latitude: profileCenter.latitude,
+                longitude: profileCenter.longitude,
+                radius: radius,
+                page: 1
+            }, false),
+            actions.loadNotifications() // Also refresh notifications
+        ]).then(() => {
+            console.log('🔄 [FLOW-5] exMap: Reload complete - map and tokis updated');
+        }).catch(error => {
+            console.error('❌ [MAP-FLOW] Failed to reload tokis after location change:', error);
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profileCenter?.latitude, profileCenter?.longitude, state.isConnected, selectedFilters.radius]);
 
     // Handle highlightTokiId from navigation params
     useEffect(() => {
@@ -598,8 +617,6 @@ export default function ExMapScreen() {
 
     const renderInteractiveMap = useCallback(() => {
         try {
-            console.log('🔄 [EXMAP] Rendering map with events:', sortedEvents.length, 'mapKey:', mapKey);
-
             // Don't render map until mapRegion is available (user location loaded)
             if (!mapRegion || isWaitingForUserLocation) {
                 return (
@@ -622,8 +639,6 @@ export default function ExMapScreen() {
                 }
                 return hasValidCoords;
             });
-
-            console.log('🔄 [EXMAP] Valid events for map:', validEvents.length);
 
             return (
                 <View style={styles.mapContainer} key="map-container">
