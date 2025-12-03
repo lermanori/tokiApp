@@ -1,13 +1,15 @@
-# File: api.ts
+# File: services/api.ts
 
 ### Summary
-API service for making HTTP requests to the backend, includes type definitions for Toki and related interfaces.
+API service layer with TypeScript interfaces and API client methods for communicating with the backend.
 
 ### Fixes Applied log
-- problem: Type definitions don't support unlimited max attendees or autoApprove
-- solution: Updated Toki and SavedToki interfaces to allow maxAttendees as number | null and added autoApprove field
+- **problem**: Toki interface didn't include friendsAttending field from backend responses.
+- **solution**: Added `friendsAttending?: Array<{ id: string; name: string; avatar?: string }>` to Toki interface.
 
 ### How Fixes Were Implemented
-- Updated Toki interface: maxAttendees from number to number | null, added autoApprove?: boolean
-- Updated SavedToki interface: maxAttendees from number to number | null
-- Updated createToki method signature to accept maxAttendees: number | null and autoApprove?: boolean
+- **problem**: TypeScript interface mismatch when backend started returning friendsAttending data.
+- **solution**: Added optional friendsAttending field to Toki interface to match backend response structure, allowing frontend to properly type and use friends data.
+
+- **problem**: Toki interface joinStatus type included 'joined' status which was deprecated in favor of 'approved'.
+- **solution**: Removed 'joined' from joinStatus type definition, standardizing on 'not_joined', 'pending', and 'approved' as the only valid statuses.
