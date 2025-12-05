@@ -1474,6 +1474,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         images: tokiData.images || [],
         userLatitude: tokiData.userLatitude ?? state.currentUser?.latitude ?? null,
         userLongitude: tokiData.userLongitude ?? state.currentUser?.longitude ?? null,
+        autoApprove: tokiData.autoApprove !== undefined ? tokiData.autoApprove : false,  // ADD THIS LINE
       };
 
       const apiToki = await apiService.createToki(apiTokiData);
