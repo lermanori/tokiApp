@@ -8,9 +8,13 @@ Reusable modal for inviting connections and managing visibility for a Toki. Extr
 - **Solution**: Moved modal into `components/InviteModal.tsx` with props for data, state, and actions.
 - **Problem**: Invite link section was showing in both 'invite' and 'manage visibility' modes.
 - **Solution**: Added conditional rendering to only show invite link section when mode is 'invite'.
+- **Problem**: Invite link section was visible to non-host users, but only hosts can create invite links.
+- **Solution**: Added `isHost` prop to conditionally render invite link section only for hosts.
 
 ### How Fixes Were Implemented
 - **Problem**: Inline JSX and styles increased complexity and duplicated logic.
 - **Solution**: Pulled over the JSX for the modal, connection list, and invite link controls. Localized styles inside the component to avoid leaking style concerns to pages. Exposed callbacks: `onCreateInviteLink`, `onRegenerateInviteLink`, `onCopyInviteLink`, `onToggleInvitee`, `onUnhideUser`, `onClose`, `onConfirm`. Updated `app/toki-details.tsx` to render the new component and wire existing handlers.
 - **Problem**: Invite link functionality was appearing in 'Manage Visibility' mode where it shouldn't be shown.
 - **Solution**: Wrapped the entire invite link section (`inviteLinkSection`) in a conditional `{mode === 'invite' && (...)}` to only display when the modal is in invite mode, not when managing visibility.
+- **Problem**: Non-host users could see the "Create Invite Link" button, but the backend API returns 404 for non-hosts.
+- **Solution**: Added optional `isHost?: boolean` prop to `InviteModalProps` interface with default value `false`. Updated the conditional rendering to check both `mode === 'invite' && isHost` before showing the invite link section. Updated `app/toki-details.tsx` to pass `isHost={toki.isHostedByUser || false}` to the InviteModal component.

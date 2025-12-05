@@ -29,6 +29,7 @@ interface InviteModalProps {
   onUnhideUser: (userId: string) => void;
   onClose: () => void;
   onConfirm: () => void;
+  isHost?: boolean;
 }
 
 const InviteModal: React.FC<InviteModalProps> = ({
@@ -47,6 +48,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
   onUnhideUser,
   onClose,
   onConfirm,
+  isHost = false,
 }) => {
   return (
     <Modal
@@ -161,7 +163,7 @@ const InviteModal: React.FC<InviteModalProps> = ({
             )}
           </ScrollView>
 
-          {mode === 'invite' && (
+          {mode === 'invite' && isHost && (
             <View style={styles.inviteLinkSection}>
               <Text style={styles.inviteLinkTitle}>Invite Link</Text>
               {activeInviteLink ? (

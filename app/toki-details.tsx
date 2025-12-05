@@ -677,7 +677,7 @@ export default function TokiDetailsScreen() {
       if (Platform.OS === 'ios') {
         console.log('🔍 [SHARE] Using iOS native share sheet');
         await RNShare.share({
-          message: `${shareMessage}\n\n${shareUrl}`,
+          message: `${shareUrl}`,
           title: toki.title
           // Removed 'url' parameter to avoid duplication - message already contains the URL
         });
@@ -1455,6 +1455,7 @@ export default function TokiDetailsScreen() {
           onUnhideUser={handleUnhideUser}
           onClose={() => setShowInviteModal(false)}
           onConfirm={handleInviteModalConfirm}
+          isHost={toki.isHostedByUser || false}
         />
 
         <ParticipantsModal
