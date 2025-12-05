@@ -6,6 +6,7 @@ import { ArrowLeft, Send, Users, Image as ImageIcon } from 'lucide-react-native'
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
+import ParticipantsModal from '@/components/ParticipantsModal';
 
 export default function ChatScreen() {
   const { state, actions } = useApp();
@@ -19,6 +20,18 @@ export default function ChatScreen() {
   const [reportReason, setReportReason] = useState('');
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Participants modal state
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [participantsSearch, setParticipantsSearch] = useState('');
+  const [tokiParticipants, setTokiParticipants] = useState<Array<{
+    id: string;
+    name: string;
+    avatar?: string;
+    isHost?: boolean;
+  }>>([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [isUserHost, setIsUserHost] = useState(false);
 
   // Report message function
   const handleReportMessage = async (messageId: string) => {
@@ -60,6 +73,91 @@ export default function ChatScreen() {
     setShowReportModal(false);
     setReportReason('');
     setReportingMessageId(null);
+  };
+
+  // Load Toki participants for the modal
+  const loadTokiParticipants = async () => {
+    if (!isGroup || !tokiId) return;
+    
+    setIsLoadingParticipants(true);
+    try {
+      const tokiData = await actions.getTokiById(tokiId);
+      if (tokiData) {
+        // Check if current user is host
+        const currentUserId = state.currentUser?.id;
+        const hostId = tokiData.host?.id || tokiData.host_id;
+        setIsUserHost(currentUserId === hostId);
+        
+        // Map participants to the format expected by ParticipantsModal
+        const participantsList = (tokiData.participants || []).map((p: any) => ({
+          id: p.id || p.user?.id || '',
+          name: p.name || p.user?.name || 'Unknown',
+          avatar: p.avatar || p.user?.avatar_url || undefined,
+          isHost: (p.id || p.user?.id) === hostId
+        }));
+        
+        // Check if host is already in participants list
+        const hostInParticipants = participantsList.some(p => p.id === hostId);
+        
+        // If host is not in participants list, add them
+        if (!hostInParticipants && tokiData.host) {
+          participantsList.push({
+            id: hostId,
+            name: tokiData.host.name || 'Host',
+            avatar: tokiData.host.avatar || undefined,
+            isHost: true
+          });
+        }
+        
+        // Sort participants: host first, then others
+        const sortedParticipants = participantsList.sort((a, b) => {
+          if (a.isHost && !b.isHost) return -1;
+          if (!a.isHost && b.isHost) return 1;
+          return 0;
+        });
+        
+        setTokiParticipants(sortedParticipants);
+      } else {
+        setTokiParticipants([]);
+      }
+    } catch (error) {
+      console.error('❌ [CHAT SCREEN] Failed to load participants:', error);
+      setTokiParticipants([]);
+    } finally {
+      setIsLoadingParticipants(false);
+    }
+  };
+
+  // Handle removing a participant from the group
+  const handleRemoveParticipant = async (participantId: string) => {
+    if (!tokiId) return;
+    
+    Alert.alert(
+      'Remove Participant',
+      'Are you sure you want to remove this participant from the group chat?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const success = await actions.removeParticipant(tokiId, participantId);
+              if (success) {
+                // Reload participants to update the list
+                await loadTokiParticipants();
+                Alert.alert('Success', 'Participant removed successfully');
+              } else {
+                Alert.alert('Error', 'Failed to remove participant. Please try again.');
+              }
+            } catch (error) {
+              console.error('❌ [CHAT SCREEN] Error removing participant:', error);
+              Alert.alert('Error', 'An unexpected error occurred.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   // Debounced function to mark chat as read
@@ -707,9 +805,16 @@ export default function ChatScreen() {
               {isGroup ? 'Group chat' : 'Direct message'}
             </Text>
           </View>
-          <TouchableOpacity>
-            <Users size={24} color="#8B5CF6" />
-          </TouchableOpacity>
+          {isGroup && tokiId && (
+            <TouchableOpacity
+              onPress={() => {
+                setShowParticipantsModal(true);
+                loadTokiParticipants();
+              }}
+            >
+              <Users size={24} color="#8B5CF6" />
+            </TouchableOpacity>
+          )}
         </View>
         {!state.isConnected && (
           <View style={styles.connectionWarning}>
@@ -872,6 +977,23 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Participants Modal - only show for group chats */}
+      {isGroup && tokiId && (
+        <ParticipantsModal
+          visible={showParticipantsModal}
+          participants={tokiParticipants}
+          search={participantsSearch}
+          onChangeSearch={setParticipantsSearch}
+          isLoading={isLoadingParticipants}
+          isHost={isUserHost}
+          onClose={() => {
+            setShowParticipantsModal(false);
+            setParticipantsSearch('');
+          }}
+          onRemoveParticipant={handleRemoveParticipant}
+        />
+      )}
     </SafeAreaView>
   );
 }

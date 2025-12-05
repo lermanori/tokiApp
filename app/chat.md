@@ -41,4 +41,29 @@ The chat screen now properly handles individual conversations and displays real 
 - **problem**: Input area looked basic
 - **solution**: Enhanced input container with shadows, better border radius, and improved send button styling
 
-The chat now provides a smooth, modern messaging experience with instant message display and intuitive keyboard controls. 
+The chat now provides a smooth, modern messaging experience with instant message display and intuitive keyboard controls.
+
+### Latest Fixes Applied:
+- **problem**: Users button in header had no functionality - clicking it did nothing, and it was showing on individual chats where it shouldn't
+- **solution**: Added participants modal functionality that opens when Users button is clicked in group chats, and made the button conditionally render only for group chats (`isGroup && tokiId`)
+
+### How Latest Fixes Were Implemented:
+- **problem**: Users button in chat header was not interactive
+- **solution**: Added `onPress` handler to Users button that opens participants modal for group chats
+
+- **problem**: No way to view participants in group chat
+- **solution**: Integrated `ParticipantsModal` component that displays all participants with search functionality
+
+- **problem**: Participants data not available in chat screen
+- **solution**: Added `loadTokiParticipants()` function that fetches toki data using `actions.getTokiById()` and maps participants to modal format
+
+- **problem**: Host was not included in participants list and didn't appear first
+- **solution**: Updated `loadTokiParticipants()` to include host in the list (if not already present), mark host with `isHost: true`, and sort participants so host appears first in the list
+
+- **problem**: Host users couldn't remove participants from group chat
+- **solution**: Added `handleRemoveParticipant()` function with confirmation dialog that calls `actions.removeParticipant()` and refreshes the participants list
+
+- **problem**: No state management for participants modal
+- **solution**: Added state variables: `showParticipantsModal`, `participantsSearch`, `tokiParticipants`, `isLoadingParticipants`, and `isUserHost` to manage modal state and participant data
+
+The chat screen now allows users to view and manage participants in group chats directly from the chat interface. 
