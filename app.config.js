@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Toki",
     slug: "toki",
-    version: "1.0.12",
+    version: "1.0.13",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "tokimap",
@@ -12,7 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "1",
+      buildNumber: "2",
       config: {},
       infoPlist: {
         UIBackgroundModes: ["remote-notification"]
@@ -58,7 +58,7 @@ module.exports = {
       url: "https://u.expo.dev/41a24d0b-1d53-429a-8753-acd4a5b9972c"
     },
     android: {
-      versionCode: 1,
+      versionCode: 2,
       permissions: [
         "android.permission.RECORD_AUDIO"
       ]

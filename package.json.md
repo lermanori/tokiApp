@@ -16,6 +16,8 @@ Project dependencies and scripts configuration file. Defines all npm packages, E
 - solution: Bumped version from 1.0.10 to 1.0.11.
 - problem: Version bump needed for new release.
 - solution: Bumped version from 1.0.11 to 1.0.12.
+- problem: Version bump needed for new release.
+- solution: Bumped version from 1.0.12 to 1.0.13.
 
 ### How Fixes Were Implemented
 - Removed `eas-cli` from devDependencies section. EAS CLI should be installed globally (`npm install -g eas-cli`) or used via `npx eas-cli`.
