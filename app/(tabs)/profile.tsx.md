@@ -30,3 +30,5 @@ Profile screen displaying user information, stats, and navigation to various sec
 
 - problem: When pressing the "Tokis Joined" stat counter, it navigated to the My Tokis page but always showed the "Hosting" tab instead of the "Joined" tab.
 - solution: Created separate navigation handlers `handleTokisJoined()` and `handleTokisCreated()` that pass a `tab` parameter to the My Tokis screen. Updated the stat counter buttons to use these specific handlers instead of the generic `handleMyTokis()`.
+- problem: Sync Data option in Support section was not needed.
+- solution: Removed the "Sync Data" menu item from the Support section and removed the unused `Settings` icon import from lucide-react-native.

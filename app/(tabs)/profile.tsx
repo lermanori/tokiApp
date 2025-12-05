@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
+import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
@@ -647,10 +647,6 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.menuItem} onPress={handleHelpSupport}>
               <CircleHelp size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Help & Support</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={actions.syncData}>
-              <Settings size={20} color="#1C1C1C" />
-              <Text style={styles.menuText}>Sync Data</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/health')}>
               <Activity size={20} color="#1C1C1C" />
