@@ -51,4 +51,17 @@ The fix ensures that the charCodes logging only attempts to process string value
   - `useFocusEffect`: Check at the start of callback and in periodic timer
   - Added `messages.length` to the dependency array to re-evaluate when messages are loaded
   - Now only attempts to mark as read when there are actual messages to mark
-  - All locations log skip messages for debugging 
+  - All locations log skip messages for debugging
+
+### Removed Image Upload Button
+- **problem**: Image upload button was present in the UI but had no functionality, creating confusion for users.
+- **solution**: Removed the image upload button and related code (ImageIcon import, attachButton style) until the feature is fully implemented.
+
+### How Fixes Were Implemented
+- **problem**: The TouchableOpacity with ImageIcon at line 920-922 had no onPress handler, making it a non-functional UI element.
+- **solution**:
+  - Removed the TouchableOpacity button element from the input wrapper
+  - Removed unused `Image as ImageIcon` import from lucide-react-native
+  - Removed unused `attachButton` style definition
+  - Created comprehensive implementation guide in `CHAT_IMAGE_UPLOAD_IMPLEMENTATION.md` for future implementation
+  - The button can be re-added when image upload functionality is ready to be implemented 

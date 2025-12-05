@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Send, Users, Image as ImageIcon } from 'lucide-react-native';
+import { ArrowLeft, Send, Users } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
@@ -917,9 +917,6 @@ export default function ChatScreen() {
                 }
               }}
             />
-            <TouchableOpacity style={styles.attachButton}>
-              <ImageIcon size={20} color="#6B7280" />
-            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={[
@@ -1174,10 +1171,6 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     maxHeight: 100,
     minHeight: 20,
-  },
-  attachButton: {
-    padding: 4,
-    marginLeft: 8,
   },
   sendButton: {
     width: 44,
