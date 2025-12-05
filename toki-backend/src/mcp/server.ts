@@ -5,24 +5,8 @@ import { userTools } from './tools/user-tools';
 import { adminTools } from './tools/admin-tools';
 import { CATEGORY_CONFIG } from '../config/categories';
 
-// Extract category keys for enum - create proper tuple type
-const CATEGORY_KEYS = [
-  'sports',
-  'coffee',
-  'music',
-  'dinner',
-  'work',
-  'culture',
-  'nature',
-  'drinks',
-  'party',
-  'wellness',
-  'chill',
-  'morning',
-  'shopping',
-  'education',
-  'film',
-] as const;
+// Extract category keys for enum from CATEGORY_CONFIG (single source of truth)
+const CATEGORY_KEYS = Object.keys(CATEGORY_CONFIG) as [string, ...string[]];
 
 export function createMCPServer() {
   const server = new McpServer({
@@ -121,18 +105,24 @@ export function createMCPServer() {
         inputSchema: z.object({
           api_key: z.string().describe('Admin MCP API key'),
           author_id: z.string().optional().describe('Optional: ID of the user who will be the host. If not provided, uses the user_id from the API key.'),
-          content: z.string().describe('Main text content for the Toki (used for title/description)'),
+          title: z.string().describe('Title of the Toki (required)'),
+          description: z.string().optional().describe('Optional description of the Toki'),
           category: z.enum(CATEGORY_KEYS).describe('Category for the Toki (required)'),
           location: z.string().describe('Location string for the Toki (required)'),
-          timeSlot: z.enum(['now', '30min', '1hour', '2hours', '3hours', 'tonight', 'tomorrow'] as const).describe('Time slot for when the Toki happens (required)'),
-          visibility: z.enum(['public', 'private', 'connections', 'friends'] as const).optional().describe('Visibility level - defaults to private if not specified'),
-          status: z.enum(['active', 'cancelled', 'completed'] as const).optional().describe('Status of the Toki'),
+          timeSlot: z.string().describe('Time slot description (e.g., "now", "30min", "tonight", "tomorrow", or any custom text)'),
+          visibility: z.enum(['public', 'private'] as const).optional().describe('Visibility level - defaults to public if not specified'),
           scheduledTime: z.string().datetime().optional().describe('Optional scheduled time (ISO 8601 format)'),
-          maxAttendees: z.number().int().min(1).max(1000).nullable().optional().describe('Maximum attendees (null for unlimited)'),
+          maxAttendees: z.number().int().min(1).max(1000).nullable().optional().describe('Maximum attendees (1-1000, or null for unlimited, defaults to 10 if not provided)'),
+          autoApprove: z.boolean().optional().describe('If true, join requests are automatically approved (defaults to false)'),
           latitude: z.number().optional().describe('Optional latitude coordinate'),
           longitude: z.number().optional().describe('Optional longitude coordinate'),
           external_url: z.string().url().optional().describe('Optional external link associated with the Toki'),
           tags: z.array(z.string()).optional().describe('Optional list of tags to associate with the Toki'),
+          images: z.array(z.object({
+            url: z.string().url().optional().describe('URL of an existing image already uploaded to Cloudinary (use with publicId)'),
+            publicId: z.string().optional().describe('Cloudinary public ID of an existing image (use with url)'),
+            base64: z.string().optional().describe('Base64-encoded image data for upload. Accepts either: 1) Data URI format: "data:image/png;base64,iVBORw0KGgo..." or 2) Raw base64 string: "iVBORw0KGgo...". Supported formats: JPEG, PNG, WebP. Images are automatically uploaded to Cloudinary and resized to 800x600.'),
+          })).optional().describe('Optional array of images for the Toki. Each image object can be either: 1) Existing image: provide both {url, publicId} for images already in Cloudinary, or 2) New upload: provide {base64} with base64-encoded image data (data URI or raw base64 string). Multiple images can be provided.'),
         }),
         annotations: {
           readOnlyHint: false,
@@ -142,18 +132,20 @@ export function createMCPServer() {
       async (args: {
         api_key: string;
         author_id?: string;
-        content: string;
+        title: string;
+        description?: string;
         category: string;
         location: string;
         timeSlot: string;
         visibility?: string;
-        status?: string;
         scheduledTime?: string;
         maxAttendees?: number | null;
         latitude?: number;
         longitude?: number;
         external_url?: string;
         tags?: string[];
+        autoApprove?: boolean;
+        images?: Array<{ url?: string; publicId?: string; base64?: string }>;
       }) => createAdmin.handler(args)
     );
   }
@@ -167,13 +159,23 @@ export function createMCPServer() {
         inputSchema: z.object({
           id: z.string().describe('ID of the Toki to update'),
           api_key: z.string().describe('Admin MCP API key'),
-          content: z.string().optional().describe('New content (if provided) used for title/description'),
+          title: z.string().optional().describe('New title (if provided)'),
+          description: z.string().optional().describe('New description (if provided)'),
           author_id: z.string().optional().describe('New host/author id, if changing ownership'),
           category: z.enum(CATEGORY_KEYS).optional().describe('Category for the Toki'),
+          timeSlot: z.string().optional().describe('Time slot description (e.g., "now", "30min", "tonight", or any custom text)'),
+          scheduledTime: z.string().datetime().optional().describe('Optional scheduled time (ISO 8601 format)'),
+          maxAttendees: z.number().int().min(1).max(1000).nullable().optional().describe('Maximum attendees (1-1000, or null for unlimited)'),
+          autoApprove: z.boolean().optional().describe('If true, join requests are automatically approved'),
           status: z.enum(['active', 'cancelled', 'completed'] as const).optional().describe('Status of the Toki'),
           location: z.string().optional().describe('Location string for the Toki'),
-          visibility: z.enum(['public', 'private', 'connections', 'friends'] as const).optional().describe('Visibility level'),
+          visibility: z.enum(['public', 'private'] as const).optional().describe('Visibility level'),
           external_url: z.string().url().optional().describe('Optional external link associated with the Toki'),
+          images: z.array(z.object({
+            url: z.string().url().optional().describe('URL of an existing image already uploaded to Cloudinary (use with publicId)'),
+            publicId: z.string().optional().describe('Cloudinary public ID of an existing image (use with url)'),
+            base64: z.string().optional().describe('Base64-encoded image data for upload. Accepts either: 1) Data URI format: "data:image/png;base64,iVBORw0KGgo..." or 2) Raw base64 string: "iVBORw0KGgo...". Supported formats: JPEG, PNG, WebP. Images are automatically uploaded to Cloudinary and resized to 800x600.'),
+          })).optional().describe('Optional array of images for the Toki. Each image object can be either: 1) Existing image: provide both {url, publicId} for images already in Cloudinary, or 2) New upload: provide {base64} with base64-encoded image data (data URI or raw base64 string). Multiple images can be provided.'),
         }),
         annotations: {
           readOnlyHint: false,
@@ -183,13 +185,19 @@ export function createMCPServer() {
       async (args: {
         id: string;
         api_key: string;
-        content?: string;
+        title?: string;
+        description?: string;
         author_id?: string;
         category?: string;
         status?: string;
         location?: string;
         visibility?: string;
         external_url?: string;
+        timeSlot?: string;
+        scheduledTime?: string;
+        maxAttendees?: number | null;
+        autoApprove?: boolean;
+        images?: Array<{ url?: string; publicId?: string; base64?: string }>;
       }) => updateAdmin.handler(args)
     );
   }

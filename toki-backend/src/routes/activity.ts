@@ -64,7 +64,10 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
           )
         )
         AND t.status = 'active'
-        AND t.visibility <> 'private'
+        AND (
+          t.visibility <> 'private'
+          OR t.host_id = $1
+        )
         AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW())
       GROUP BY 
         t.id, t.title, t.image_urls, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
@@ -163,7 +166,10 @@ router.get('/users/:userId/activity', authenticateToken, async (req: Request, re
           )
         )
         AND t.status = 'active'
-        AND t.visibility <> 'private'
+        AND (
+          t.visibility <> 'private'
+          OR t.host_id = $1
+        )
         AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW())
         AND NOT EXISTS (
           SELECT 1 FROM user_hidden_activities uha

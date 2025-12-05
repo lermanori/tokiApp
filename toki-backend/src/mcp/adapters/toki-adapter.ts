@@ -11,6 +11,18 @@ function toIsoString(value: Date | string): string {
   return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
+/**
+ * Normalize visibility value from database to SpecToki format.
+ * Maps 'connections' and 'friends' to 'public' since they're not actually implemented
+ * and are treated the same as 'public' in the backend.
+ */
+function normalizeVisibility(dbVisibility: string | null): 'public' | 'private' {
+  if (!dbVisibility) return 'private';
+  if (dbVisibility === 'private') return 'private';
+  // 'connections' and 'friends' are treated same as 'public' in backend
+  return 'public';
+}
+
 export async function transformTokiToSpecFormat(
   dbToki: DbToki,
   expand?: string[]
@@ -37,7 +49,7 @@ export async function transformTokiToSpecFormat(
     media_urls: mediaUrls,
     created_at: toIsoString(dbToki.created_at),
     updated_at: toIsoString(dbToki.updated_at),
-    visibility: dbToki.visibility ?? 'private',
+    visibility: normalizeVisibility(dbToki.visibility),
     tags,
     like_count: includeStats ? 0 : 0,
     comment_count: includeStats ? 0 : 0,

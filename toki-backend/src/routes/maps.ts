@@ -26,7 +26,7 @@ function fallbackUUID(): string {
   });
 }
 
-function buildShortLabel(components: any, formattedAddress: string): string {
+export function buildShortLabel(components: any, formattedAddress: string): string {
   const byType = (type: string) => components?.find((c: any) => (c.types || []).includes(type))?.long_name;
 
   const neighborhood = byType('sublocality') || byType('neighborhood');
