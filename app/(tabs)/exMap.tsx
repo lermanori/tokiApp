@@ -54,7 +54,7 @@ if (isWeb) {
 const categories = ['all', ...CATEGORIES];
 
 export default function ExMapScreen() {
-    const { state, actions } = useApp();
+    const { state, actions, dispatch } = useApp();
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
@@ -262,7 +262,7 @@ export default function ExMapScreen() {
             }
             setTimeout(() => {
                 if (state.loading) {
-                    actions.setLoading(false);
+                    dispatch({ type: 'SET_LOADING', payload: false });
                 }
             }, 100);
             return;
@@ -271,12 +271,13 @@ export default function ExMapScreen() {
         if (!imageLoadTimeoutRef.current && expectedCount > 0) {
             imageLoadTimeoutRef.current = setTimeout(() => {
                 if (state.loading) {
-                    actions.setLoading(false);
+                    dispatch({ type: 'SET_LOADING', payload: false });
                 }
                 imageLoadTimeoutRef.current = null;
             }, 3000);
         }
-    }, [imageLoadTracking, sortedEvents, state.loading, actions]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [imageLoadTracking, sortedEvents, state.loading]);
 
     // Reset refresh flag when screen loses focus
     useFocusEffect(
@@ -305,7 +306,8 @@ export default function ExMapScreen() {
                     console.error('🏄 [MAP-FLOW] Failed to load user location:', err);
                 });
             }
-        }, [state.isConnected, state.currentUser?.latitude, actions])
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [state.isConnected, state.currentUser?.latitude])
     );
 
     // Refresh on focus if no data (only after user location is available)
@@ -514,7 +516,8 @@ export default function ExMapScreen() {
         }
 
         actions.loadTokisWithFilters(queryParams);
-    }, [selectedFilters, profileCenter, mapRegion, actions]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedFilters, profileCenter, mapRegion]);
 
     // Event handlers
     const handleEventPress = useCallback((event: TokiEvent) => {

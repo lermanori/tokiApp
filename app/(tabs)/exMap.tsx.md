@@ -1,112 +1,24 @@
 # File: exMap.tsx
 
 ### Summary
-This file contains the ExMap screen component that combines the Explore screen's header (with gradient, greeting, search, and categories) with the Map screen's extended controls (Refresh, Sort, Filter). The map is always visible at the top, followed by categories and the list of Tokis below.
+This file contains the Explore/Map screen component that displays tokis on a map and in a list view. It handles user location, map region updates, filtering, sorting, and pagination.
 
 ### Fixes Applied log
-- problem: Need to combine Explore and Map functionality into a single unified screen
-- solution: Created new exMap.tsx that merges Explore header with Map extended controls, using useDiscoverData and useDiscoverFilters hooks for data management
-- problem: White space gap between header and map creating visual disconnect
-- solution: Implemented overlap technique using negative margins (-10px) to seamlessly connect header gradient with map container, added shadow for depth
-- problem: Redundant refresh button in header controls when drag-to-refresh already provides the same functionality
-- solution: Removed refresh button (RefreshCw icon) from extended controls and removed unused RefreshCw import, keeping only drag-to-refresh via RefreshControl on FlatList
+- **problem**: Maximum update depth exceeded error caused by infinite loop in `useFocusEffect` and `useEffect` hooks
+- **solution**: Removed `actions` from dependency arrays since the `actions` object is recreated on every render, causing infinite re-renders. Added ESLint disable comments where appropriate.
+
+- **problem**: `actions.setLoading` method doesn't exist on the actions object
+- **solution**: Replaced `actions.setLoading(false)` calls with `dispatch({ type: 'SET_LOADING', payload: false })` to properly update loading state.
 
 ### How Fixes Were Implemented
-- problem: Users needed a single screen with both Explore's friendly header and Map's extended controls
-- solution: 
-  - Combined LinearGradient header from Explore with greeting text "Feeling social right now?" and subtitle
-  - Added search bar with expandable input functionality on first line
-  - Integrated extended controls (Refresh, Sort, Filter) from Map screen on second line - removed map/list toggle button as map is always visible
-  - Map component always renders in FlatList ListHeaderComponent (no conditional rendering)
-  - Used useDiscoverData and useDiscoverFilters hooks for consistent data management
-  - Preserved all key features: map region management, highlight toki functionality, image loading tracking, infinite scroll, filter/sort modals, search, category selection, and responsive grid layout
-- problem: Visual gap between gradient header and map created awkward white space
-- solution: 
-  - Reduced header paddingBottom from 30 to 20
-  - Added marginBottom: -10 to header to pull content up
-  - Added marginTop: -10 to mapContainer to create 10px overlap
-  - Added shadow to mapContainer (shadowOpacity: 0.1, shadowRadius: 8, elevation: 5) for visual depth
-  - Result: Seamless transition from gradient header to map with no white space
-- problem: Refresh button in header was redundant since drag-to-refresh functionality already exists via RefreshControl
-- solution: 
-  - Removed TouchableOpacity containing RefreshCw icon from extendedControls View (lines 470-476)
-  - Removed RefreshCw from lucide-react-native imports
-  - Kept handleRefreshWithRadius function as it's still used by RefreshControl on FlatList
-  - Result: Cleaner UI with no duplicate refresh functionality, users can still refresh via standard drag-to-refresh gesture
-- problem: API limited responses to 50 items so the map and header were accurate but the UI still tried to fetch additional pages; cards also rendered all results at once with no true infinite scroll.
-- solution: Switched to client-side pagination by slicing the sorted events list into 20-item pages, added local “load more” state, and wired map/filter logic to the new `mapEvents` dataset so markers still display every result.
-- Added `mapEvents` from `useDiscoverData()` (falls back to `events`) so `useDiscoverFilters` and category counts always work on the full dataset even though the card list paginates locally.
-- Introduced `CARD_PAGE_SIZE`, `visibleCount`, and `isLocalLoadingMore` states plus a derived `paginatedEvents` array. `handleLoadMoreLocal` increments the visible window when the user nears the bottom, while the map continues to consume the unsliced `sortedEvents`.
-- Updated `FlatList` bindings (`data`, `ListFooterComponent`, scroll handlers) to rely on the local pagination helpers and removed the old backend-driven `handleLoadMoreWithRadius`.
-- problem: Search input container became narrow when typing due to height mismatch between searchButton and searchInputContainer
-- solution: Changed searchInputContainer paddingVertical from 0 to 12 to match searchButton, and removed height: 'auto' from searchInput to let padding control height naturally. Both containers now have consistent height preventing layout recalculation.
-- problem: When user changes location in profile and returns to exMap, the map region updates but tokis don't reload automatically - only after manual refresh
-- solution: Modified the profileCenter sync useEffect to detect significant location changes (more than 1km) and automatically reload tokis using handleRefresh. Added useEffect to reset hasRefreshedOnFocusRef when location changes so focus effect can run again when returning to screen.
-- problem: Location reload only works once - guard (hasReloadedForProfileCenterRef) prevents subsequent reloads when location changes multiple times
-- solution: Separated previous location tracking from guard logic by introducing previousProfileCenterRef. Reset guard when profileCenter changes (not state.currentUser) to keep it synchronized with the reload effect. Guard reset effect only resets the guard, while reload effect updates previousProfileCenterRef after using it for distance calculation.
-- problem: Need diagnostic logs to verify guard reset behavior and too many irrelevant logs cluttering console
-- solution: Added comprehensive diagnostic logging to reset effect showing previousKey, currentKey, guardValue, and shouldReset decision. Removed verbose logs: max radius computed, category toggle, sample events before sort, sorted events summary, image loading timeout, rendering map with events, and valid events count.
-- problem: Complex location reload logic with distance calculations and multiple refs is hard to understand and maintain
-- solution: Simplified to just reload everything when profile location changes. Removed reset effect, previousProfileCenterRef, and distance calculations. Now simply checks if location changed and reloads if it did.
-- problem: handleRefresh uses state.currentUser?.latitude which may not be updated yet when profile location changes, causing reload to use stale coordinates
-- solution: Changed reload effect to call actions.loadNearbyTokis directly with profileCenter coordinates instead of using handleRefresh, ensuring we always use the correct new location
-- problem: First location change works but second location change doesn't reload - effect dependencies causing re-runs that block subsequent reloads
-- solution: Removed updateMapRegion and actions from effect dependencies (they're stable callbacks) and added ESLint disable comment. This prevents effect from re-running when updateMapRegion updates mapRegion (which causes profileCenter to recompute and trigger effect again with guard already set)
-- problem: First location change works perfectly but second location change doesn't reload - effect re-runs due to updateMapRegion/actions in dependencies, causing guard to block subsequent reloads
-- solution: Removed updateMapRegion and actions from effect dependencies (they're stable callbacks) and added ESLint disable comment. This prevents effect from re-running when updateMapRegion updates mapRegion (which causes profileCenter to recompute and trigger effect again with guard already set)
+1. **Fixed infinite loop in useFocusEffect (line 300-309)**: Removed `actions` from dependency array. The `actions.loadCurrentUser()` function is stable, so we only need to depend on `state.isConnected` and `state.currentUser?.latitude`.
 
-### How Fixes Were Implemented
-- problem: Location changes not triggering automatic toki reload
-- solution:
-  - Modified the useEffect that syncs mapRegion when profileCenter changes (lines 374-419)
-  - Changed logic to compare new location with previous location (stored in hasReloadedForProfileCenterRef) instead of comparing with current mapRegion
-  - When distance between old and new location exceeds 1km, automatically calls handleRefresh to reload tokis with new location
-  - Added useEffect to reset hasRefreshedOnFocusRef when state.currentUser latitude/longitude changes, allowing focus effect to run again when user returns to screen after location change
-  - Result: Map region and tokis now update instantly when location changes, without requiring manual refresh
-- problem: Guard preventing reload from working on subsequent location changes
-- solution:
-  - Introduced separate `previousProfileCenterRef` to track previous location independently from the guard
-  - Created dedicated useEffect that resets `hasReloadedForProfileCenterRef` when `profileCenter` changes (not `state.currentUser`), keeping guard reset synchronized with the reload effect
-  - Guard reset effect only resets the guard, doesn't update `previousProfileCenterRef` (to preserve old value for distance calculation)
-  - Reload effect captures previous location from `previousProfileCenterRef` at start, uses it for distance calculation, then updates `previousProfileCenterRef` to new location at end
-  - This ensures the guard is reset when the actual data being checked (`profileCenter`) changes, and previous location is preserved for accurate distance calculation
-  - Result: Location reload now works consistently for every location change, with proper distance calculation and guard management
-- problem: Need to verify guard reset behavior and reduce console noise
-- solution:
-  - Enhanced reset effect logging to show diagnostic information: previousKey, currentKey, guardValue, and shouldReset decision
-  - Reset effect now logs both when it resets the guard and when it doesn't (to help debug why guard might not be resetting)
-  - Removed verbose logs that weren't directly related to location change debugging:
-    - Max radius computed log
-    - Category toggle log
-    - Sample events before sort debug log
-    - Sorted events summary log
-    - Image loading timeout log
-    - Rendering map with events log
-    - Valid events for map count log
-  - Kept all error logs and location-related logs (profile center computed, location changed, useFocusEffect syncing, etc.)
-  - Result: Cleaner console output focused on location change debugging, with detailed diagnostic information when guard reset logic runs
-- problem: Complex location reload logic with distance calculations and multiple refs is hard to understand and maintain
-- solution:
-  - Removed the reset effect (lines 301-328) that was resetting the guard when profileCenter changed
-  - Removed `previousProfileCenterRef` - no longer needed for distance calculations
-  - Simplified the reload effect to just check if location changed (compare with `hasReloadedForProfileCenterRef.current`)
-  - If location changed, immediately mark as reloaded, update mapRegion, and reload tokis
-  - No more distance calculations or complex guard reset logic
-  - Result: Much simpler code that's easier to understand - when profile location changes, reload everything. Works consistently every time.
-- problem: handleRefresh reads coordinates from state.currentUser which may not be updated yet when profile location changes, causing reload to use stale coordinates and page not updating visually
-- solution:
-  - Changed reload effect to call `actions.loadNearbyTokis` directly with `profileCenter.latitude` and `profileCenter.longitude` instead of using `handleRefresh`
-  - This ensures we always use the correct new coordinates from `profileCenter`, regardless of whether `state.currentUser` has been updated yet
-  - Also call `actions.loadNotifications()` in parallel to match `handleRefresh` behavior
-  - Removed `handleRefresh` from dependencies since we're not using it anymore
-  - Result: Page now reloads correctly with new location every time, using the exact coordinates from profileCenter
-- problem: First location change works but second location change doesn't reload - effect dependencies causing re-runs that block subsequent reloads
-- solution:
-  - Identified that `updateMapRegion` and `actions` in effect dependencies were causing the effect to re-run when `updateMapRegion` updated `mapRegion`
-  - When `mapRegion` updates, `profileCenter` recomputes (it depends on `mapRegion?.latitude`), triggering the effect again
-  - On the second run, the guard (`hasReloadedForProfileCenterRef.current`) is already set to the new location, so the effect skips the reload
-  - Removed `updateMapRegion` and `actions` from dependencies array (they're stable callbacks from hooks/context)
-  - Added ESLint disable comment to suppress exhaustive-deps warning
-  - Added debug log when guard blocks reload to help diagnose future issues
-  - Result: Effect now only runs when `profileCenter` coordinates actually change, not when `mapRegion` updates, allowing every location change to trigger a reload correctly
+2. **Fixed infinite loop in useEffect (line 251-279)**: Removed `actions` from dependency array for image loading tracking effect. The `actions.setLoading` was replaced with `dispatch` anyway.
 
+3. **Fixed useCallback dependency (line 499-519)**: Removed `actions` from `applyFilters` callback dependencies since `actions.loadTokisWithFilters` is a stable function reference.
+
+4. **Fixed setLoading calls**: 
+   - Added `dispatch` to destructured values from `useApp()` hook
+   - Replaced `actions.setLoading(false)` with `dispatch({ type: 'SET_LOADING', payload: false })` in two places (lines 265 and 274)
+
+The root cause was that the `actions` object in `AppContext` is recreated on every render, so including it in dependency arrays caused effects to run repeatedly, creating an infinite loop when those effects called functions that updated state.
