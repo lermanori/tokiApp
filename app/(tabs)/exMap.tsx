@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, ArrowUpDown, X } from 'lucide-react-native';
+import { Search, Filter, ArrowUpDown, X, MapPin } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
@@ -730,6 +730,11 @@ export default function ExMapScreen() {
 
                         {/* Extended controls from Map */}
                         <View style={styles.extendedControls}>
+                            {!showMap && (
+                                <TouchableOpacity style={styles.controlButton} onPress={toggleMapView}>
+                                    <MapPin size={20} color="#666666" />
+                                </TouchableOpacity>
+                            )}
                             <TouchableOpacity style={styles.controlButton} onPress={() => setShowSortModal(true)}>
                                 <ArrowUpDown size={20} color="#666666" />
                             </TouchableOpacity>
@@ -767,12 +772,13 @@ export default function ExMapScreen() {
 
                         return (
                             <>
-                                {mapComponent && typeof mapComponent === 'object' ? mapComponent : null}
+                                {showMap && mapComponent && typeof mapComponent === 'object' ? mapComponent : null}
+                                {!showMap && <View style={styles.categoriesSpacer} />}
                                 <DiscoverCategories
                                     categories={sortedCategories || []}
                                     selectedCategories={selectedCategories || []}
                                     onCategoryToggle={handleCategoryToggle}
-                                    showMap={true}
+                                    showMap={showMap}
                                 />
                                 <View>
                                     <Text style={styles.sectionTitle}>{String(sectionTitle || '')}</Text>
@@ -795,7 +801,7 @@ export default function ExMapScreen() {
                             </View>
                         );
                     }
-                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
+                }, [showMap, renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
                 renderItem={({ item, index }) => {
                     if (!item || typeof item !== 'object') {
                         return null;
@@ -1163,6 +1169,10 @@ const styles = StyleSheet.create({
         width: '60%',
         borderRadius: 4,
         backgroundColor: '#F3F4F6',
+    },
+    categoriesSpacer: {
+        height: 20,
+        backgroundColor: '#FFFFFF',
     },
 });
 
