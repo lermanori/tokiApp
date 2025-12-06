@@ -129,13 +129,23 @@ app.get('/admin/*', (req, res) => {
   res.sendFile(path.join(adminBuildPath, 'index.html'));
 });
 
+// Root endpoint for health checks (Railway and other services)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    version: '1.0.13'
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    version: '1.0.12'
+    version: '1.0.13'
   });
 });
 
@@ -174,7 +184,7 @@ app.all('/api/mcp/toki/*', corsMiddleware, (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     message: 'Toki API is running!',
-    version: '1.0.12',
+    version: '1.0.13',
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
