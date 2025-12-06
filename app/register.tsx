@@ -30,8 +30,6 @@ export default function RegisterScreen() {
   const [longitude, setLongitude] = useState<number | undefined>(undefined);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [invitationInfo, setInvitationInfo] = useState<{ email: string; inviterName: string } | null>(null);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [placesPredictions, setPlacesPredictions] = useState<Array<{ description: string; place_id: string; types?: string[]; structured?: { mainText?: string; secondaryText?: string } }>>([]);
   const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
@@ -39,39 +37,8 @@ export default function RegisterScreen() {
   const { dispatch, actions } = useApp();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
+  // Silently support invitation codes via URL (hidden from UI)
   const inviteCode = searchParams.invite as string | undefined;
-
-  useEffect(() => {
-    if (inviteCode) {
-      validateInvitation();
-    }
-  }, [inviteCode]);
-
-  const validateInvitation = async () => {
-    if (!inviteCode) return;
-
-    setValidating(true);
-    try {
-      const response = await apiService.validateInvitationCode(inviteCode);
-      if (response.success) {
-        setInvitationInfo({
-          email: response.data.email,
-          inviterName: response.data.inviterName,
-        });
-        setEmail(response.data.email);
-      } else {
-        Alert.alert('Invalid Invitation', 'This invitation link is invalid or has expired.', [
-          { text: 'OK', onPress: () => router.replace('/waitlist') },
-        ]);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to validate invitation', [
-        { text: 'OK', onPress: () => router.replace('/waitlist') },
-      ]);
-    } finally {
-      setValidating(false);
-    }
-  };
 
   const handleLocationTextChange = async (value: string) => {
     setLocation(value);
@@ -189,22 +156,52 @@ export default function RegisterScreen() {
     try {
       let response;
       
-      if (inviteCode && invitationInfo) {
-        // Use invitation-based registration
-        response = await apiService.registerWithInvitation({
+      // Silently use invitation flow if code present in URL (hidden from UI)
+      if (inviteCode) {
+        try {
+          // Validate invitation silently
+          const validationResponse = await apiService.validateInvitationCode(inviteCode);
+          if (validationResponse.success) {
+            // Use invitation-based registration
+            response = await apiService.registerWithInvitation({
+              name,
+              email,
+              password,
+              bio: bio || undefined,
+              location: location || undefined,
+              latitude: latitude,
+              longitude: longitude,
+              invitationCode: inviteCode,
+            });
+          } else {
+            // If invitation invalid, fall through to direct registration
+            response = await apiService.register({
+              name,
+              email,
+              password,
+              bio: bio || undefined,
+              location: location || undefined,
+            });
+          }
+        } catch (inviteError) {
+          // If invitation validation fails, fall through to direct registration
+          response = await apiService.register({
+            name,
+            email,
+            password,
+            bio: bio || undefined,
+            location: location || undefined,
+          });
+        }
+      } else {
+        // Direct registration (default)
+        response = await apiService.register({
           name,
           email,
           password,
           bio: bio || undefined,
           location: location || undefined,
-          latitude: latitude,
-          longitude: longitude,
-          invitationCode: inviteCode,
         });
-      } else {
-        // Regular registration (shouldn't happen if they have invite code, but fallback)
-        Alert.alert('Error', 'Invalid registration flow. Please use the waitlist.');
-        return;
       }
 
       if (response.success) {
@@ -225,38 +222,6 @@ export default function RegisterScreen() {
     }
   };
 
-  if (validating) {
-    return (
-      <LinearGradient colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']} style={styles.gradient}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loadingText}>Validating invitation...</Text>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
-  if (!inviteCode) {
-    return (
-      <LinearGradient colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']} style={styles.gradient}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorTitle}>Invalid Registration</Text>
-            <Text style={styles.errorText}>Please use a valid invitation link to register.</Text>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => router.replace('/waitlist')}
-            >
-              <Text style={styles.buttonText}>Go to Waitlist</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
   return (
     <LinearGradient colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
@@ -275,14 +240,6 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
 
                 <Text style={styles.title}>Create Account</Text>
-                
-                {invitationInfo && (
-                  <View style={styles.invitationBanner}>
-                    <Text style={styles.invitationText}>
-                      🎉 You've been invited by {invitationInfo.inviterName}!
-                    </Text>
-                  </View>
-                )}
 
                 <View style={styles.form}>
                 <TextInput
@@ -297,11 +254,11 @@ export default function RegisterScreen() {
                 />
 
                 <TextInput
-                  style={[styles.input, { backgroundColor: '#F3F4F6' }]}
+                  style={styles.input}
                   placeholder="Email *"
                   placeholderTextColor="#666"
                   value={email}
-                  editable={false}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"

@@ -437,10 +437,10 @@ export default function LoginScreen() {
               <View style={styles.footer}>
                 <Text style={styles.footerText}>Connect with people around you</Text>
                 <TouchableOpacity
-                  style={styles.waitlistButton}
-                  onPress={() => router.push('/waitlist')}
+                  style={styles.signUpButton}
+                  onPress={() => router.push('/register')}
                 >
-                  <Text style={styles.waitlistButtonText}>Join the Waitlist</Text>
+                  <Text style={styles.signUpButtonText}>Sign Up</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
-  waitlistButton: {
+  signUpButton: {
     marginTop: 12,
     backgroundColor: '#111827',
     paddingVertical: 12,
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
-  waitlistButtonText: {
+  signUpButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',

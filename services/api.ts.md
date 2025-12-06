@@ -1,15 +1,13 @@
-# File: services/api.ts
+# File: api.ts
 
 ### Summary
-API service layer with TypeScript interfaces and API client methods for communicating with the backend.
+This file contains the API service class that handles all backend API communication including authentication, user management, and data fetching.
 
 ### Fixes Applied log
-- **problem**: Toki interface didn't include friendsAttending field from backend responses.
-- **solution**: Added `friendsAttending?: Array<{ id: string; name: string; avatar?: string }>` to Toki interface.
+- **problem**: `register()` method only accepted name, email, and password, but backend supports bio and location
+- **solution**: Updated method signature to include optional bio and location parameters
 
 ### How Fixes Were Implemented
-- **problem**: TypeScript interface mismatch when backend started returning friendsAttending data.
-- **solution**: Added optional friendsAttending field to Toki interface to match backend response structure, allowing frontend to properly type and use friends data.
-
-- **problem**: Toki interface joinStatus type included 'joined' status which was deprecated in favor of 'approved'.
-- **solution**: Removed 'joined' from joinStatus type definition, standardizing on 'not_joined', 'pending', and 'approved' as the only valid statuses.
+- Added `bio?: string` and `location?: string` as optional parameters to the `register()` method
+- This allows the registration screen to pass bio and location data to the backend during direct registration
+- Maintains backwards compatibility since the parameters are optional
