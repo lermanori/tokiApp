@@ -1514,7 +1514,7 @@ export default function TokiDetailsScreen() {
               onPress={() => {
                 if (toki.latitude && toki.longitude) {
                   router.push({
-                    pathname: '/(tabs)/discover',
+                    pathname: '/(tabs)/exMap',
                     params: { highlightTokiId: toki.id }
                   });
                 } else {

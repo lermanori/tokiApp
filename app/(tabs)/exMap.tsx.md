@@ -16,6 +16,12 @@ This file contains the Explore/Map screen component that displays tokis on a map
 - **problem**: No way to reopen the map when it's closed, and categories bar was overlapping the header when map was hidden
 - **solution**: Added map toggle button (MapPin icon) to the header controls that's always visible. Button highlights in purple when map is visible. Added spacing spacer when map is hidden to prevent categories from overlapping the header.
 
+- **problem**: Map toggle functionality was removed - map should always be visible
+- **solution**: Removed all map toggle functionality including `showMap` state, `toggleMapView` function, header toggle button, clipboard button on map, and conditional rendering. Map now always renders. Removed unused `MapPin` import and `categoriesSpacer` style. Made `onToggleList` prop optional in DiscoverMap components.
+
+- **problem**: `setShowMap` function was being called in highlight logic (lines 423, 471) but `showMap` state was not defined, causing "Property 'setShowMap' doesn't exist" error on iOS
+- **solution**: Re-added `showMap` state declaration (`const [showMap, setShowMap] = useState(true)`) after `showSearch` state. Updated hardcoded `showMap={true}` prop in `DiscoverCategories` component to use the state variable `showMap={showMap}`. This ensures the map can be programmatically shown when navigating from toki details to highlight a specific toki.
+
 ### How Fixes Were Implemented
 1. **Fixed infinite loop in useFocusEffect (line 300-309)**: Removed `actions` from dependency array. The `actions.loadCurrentUser()` function is stable, so we only need to depend on `state.isConnected` and `state.currentUser?.latitude`.
 
@@ -42,3 +48,20 @@ The root cause was that the `actions` object in `AppContext` is recreated on eve
    - When map is closed, the header button allows reopening it
    - Added `categoriesSpacer` View component that renders when map is hidden to provide proper spacing (20px) between header and categories
    - Prevents categories bar from overlapping the header when map is closed
+
+7. **Removed map toggle functionality - map always visible**:
+   - Removed `showMap` state declaration
+   - Removed `toggleMapView` callback function
+   - Removed map toggle button from header controls
+   - Removed clipboard button (📋) from DiscoverMap.native.tsx and DiscoverMap.web.tsx
+   - Changed map rendering to always show (removed conditional `showMap &&`)
+   - Removed `categoriesSpacer` component and style
+   - Always pass `showMap={true}` to DiscoverCategories
+   - Removed `showMap` and `toggleMapView` from all dependency arrays
+   - Removed unused `MapPin` import
+   - Made `onToggleList` prop optional in DiscoverMap component interfaces
+
+8. **Re-added showMap state for highlight functionality**:
+   - Added `const [showMap, setShowMap] = useState(true)` state declaration after `showSearch` state (line 64)
+   - Updated `DiscoverCategories` prop from `showMap={true}` to `showMap={showMap}` (line 769)
+   - This allows `setShowMap(true)` calls in highlight logic (lines 423, 471) to work correctly when navigating from toki details to ensure the map is visible when highlighting a toki

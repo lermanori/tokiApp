@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, ArrowUpDown, X, MapPin } from 'lucide-react-native';
+import { Search, Filter, ArrowUpDown, X } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
@@ -60,8 +60,8 @@ export default function ExMapScreen() {
     const params = useLocalSearchParams();
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
-    const [showMap, setShowMap] = useState(true); // Start with map view
     const [showSearch, setShowSearch] = useState(false);
+    const [showMap, setShowMap] = useState(true); // Start with map view
     const [highlightedTokiId, setHighlightedTokiId] = useState<string | null>(null);
     const [highlightedTokiCoordinates, setHighlightedTokiCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
     const [sort, setSort] = useState<SortState>({ sortBy: 'relevance', sortOrder: 'asc' });
@@ -545,10 +545,6 @@ export default function ExMapScreen() {
         }, 500);
     }, []);
 
-    const toggleMapView = useCallback(() => {
-        setShowMap(prev => !prev);
-    }, []);
-
     const clearSearch = useCallback(() => {
         setSearchQuery('');
         setShowSearch(false);
@@ -622,7 +618,6 @@ export default function ExMapScreen() {
                         events={validEvents as any}
                         onEventPress={handleEventPress as any}
                         onMarkerPress={handleMapMarkerPress as any}
-                        onToggleList={toggleMapView}
                         highlightedTokiId={highlightedTokiId}
                         highlightedCoordinates={highlightedTokiCoordinates}
                         profileCenter={profileCenter}
@@ -646,7 +641,7 @@ export default function ExMapScreen() {
                 </View>
             );
         }
-    }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, toggleMapView, highlightedTokiId, highlightedTokiCoordinates, profileCenter, maxRadiusMeters, mapKey]);
+    }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, highlightedTokiId, highlightedTokiCoordinates, profileCenter, maxRadiusMeters, mapKey]);
 
     const getSectionTitle = () => {
         if (state.loading && state.tokis.length === 0) {
@@ -730,11 +725,6 @@ export default function ExMapScreen() {
 
                         {/* Extended controls from Map */}
                         <View style={styles.extendedControls}>
-                            {!showMap && (
-                                <TouchableOpacity style={styles.controlButton} onPress={toggleMapView}>
-                                    <MapPin size={20} color="#666666" />
-                                </TouchableOpacity>
-                            )}
                             <TouchableOpacity style={styles.controlButton} onPress={() => setShowSortModal(true)}>
                                 <ArrowUpDown size={20} color="#666666" />
                             </TouchableOpacity>
@@ -772,8 +762,7 @@ export default function ExMapScreen() {
 
                         return (
                             <>
-                                {showMap && mapComponent && typeof mapComponent === 'object' ? mapComponent : null}
-                                {!showMap && <View style={styles.categoriesSpacer} />}
+                                {mapComponent && typeof mapComponent === 'object' ? mapComponent : null}
                                 <DiscoverCategories
                                     categories={sortedCategories || []}
                                     selectedCategories={selectedCategories || []}
@@ -801,7 +790,7 @@ export default function ExMapScreen() {
                             </View>
                         );
                     }
-                }, [showMap, renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
+                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
                 renderItem={({ item, index }) => {
                     if (!item || typeof item !== 'object') {
                         return null;
@@ -1169,10 +1158,6 @@ const styles = StyleSheet.create({
         width: '60%',
         borderRadius: 4,
         backgroundColor: '#F3F4F6',
-    },
-    categoriesSpacer: {
-        height: 20,
-        backgroundColor: '#FFFFFF',
     },
 });
 
