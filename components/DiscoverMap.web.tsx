@@ -102,7 +102,7 @@ interface Props {
   events: EventItem[];
   onEventPress: (e: EventItem) => void;
   onMarkerPress: (e: EventItem) => void;
-  onToggleList: () => void;
+  onToggleList?: () => void;
   highlightedTokiId?: string | null;
   highlightedCoordinates?: { latitude: number; longitude: number } | null;
   // Optional radius constraint around user profile location (ExMap)
@@ -800,11 +800,6 @@ function DiscoverMap({
           ))}
         </MapContainer>
 
-        <div style={{ position: 'absolute', top: 60, right: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button style={{ backgroundColor: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 8, width: 40, height: 40, cursor: 'pointer', fontSize: 18 }} onClick={onToggleList}>
-            📋
-          </button>
-        </div>
       </div>
     </View>
   );

@@ -22,7 +22,7 @@ interface Props {
   events: EventItem[];
   onEventPress: (e: EventItem) => void;
   onMarkerPress: (e: EventItem) => void;
-  onToggleList: () => void;
+  onToggleList?: () => void;
   highlightedTokiId?: string | null;
   highlightedCoordinates?: { latitude: number; longitude: number } | null;
 }
@@ -429,9 +429,6 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
           }}
         >
           <Text style={styles.zoomText}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.control} onPress={onToggleList}>
-          <Text>📋</Text>
         </TouchableOpacity>
       </View>
     </View>
