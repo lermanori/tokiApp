@@ -139,9 +139,14 @@ export const adminTools: RegisteredTool[] = [
               url: { type: 'string' },
               publicId: { type: 'string' },
               base64: { type: 'string' },
+              aspectRatio: { 
+                type: 'string',
+                enum: ['1:1', '4:3'],
+                description: 'Optional aspect ratio for cropping. Defaults to 4:3 if not specified. Applies to both URL and base64 images.'
+              },
             },
           },
-          description: 'Optional array of images. Each image can have: {url, publicId} for existing images, or {base64} for upload',
+          description: 'Optional array of images. Each image can have: {url} for existing images (will be downloaded and reprocessed), {base64} for upload, and optional {aspectRatio} for cropping (1:1 or 4:3, defaults to 4:3)',
         },
       },
       required: ['api_key', 'title', 'category', 'location', 'timeSlot'],
@@ -162,7 +167,7 @@ export const adminTools: RegisteredTool[] = [
       external_url?: string;
       tags?: string[];
       autoApprove?: boolean;
-      images?: Array<{ url?: string; publicId?: string; base64?: string }>;
+      images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
     }) => {
       const {
         api_key,
@@ -300,9 +305,22 @@ export const adminTools: RegisteredTool[] = [
         if (images && Array.isArray(images) && images.length > 0) {
           for (const image of images) {
             try {
-              if (image.url && image.publicId) {
-                imageUrls.push(image.url);
-                imagePublicIds.push(image.publicId);
+              if (image.url) {
+                // Reprocess existing URLs: download, validate, upload to Cloudinary
+                const reprocessResult = await ImageService.copyAndTransformImage(
+                  image.url,
+                  String(row.id),
+                  image.aspectRatio || '4:3'
+                );
+
+                if (reprocessResult.success && reprocessResult.url && reprocessResult.publicId) {
+                  imageUrls.push(reprocessResult.url);
+                  imagePublicIds.push(reprocessResult.publicId);
+                  logger.info(`✅ [MCP] Reprocessed image from URL: ${image.url} → ${reprocessResult.url}`);
+                } else {
+                  logger.warn(`⚠️ [MCP] Failed to reprocess image from URL: ${image.url} - ${reprocessResult.error || 'Unknown error'}`);
+                  // Skip this image, continue with others (partial success)
+                }
                 continue;
               }
 
@@ -318,7 +336,11 @@ export const adminTools: RegisteredTool[] = [
                 }
 
                 const imageBuffer = Buffer.from(base64Data, 'base64');
-                const uploadResult = await ImageService.uploadTokiImage(String(row.id), imageBuffer);
+                const uploadResult = await ImageService.uploadTokiImage(
+                  String(row.id),
+                  imageBuffer,
+                  image.aspectRatio || '4:3'
+                );
 
                 if (uploadResult.success && uploadResult.url && uploadResult.publicId) {
                   imageUrls.push(uploadResult.url);
@@ -426,9 +448,14 @@ export const adminTools: RegisteredTool[] = [
               url: { type: 'string' },
               publicId: { type: 'string' },
               base64: { type: 'string' },
+              aspectRatio: { 
+                type: 'string',
+                enum: ['1:1', '4:3'],
+                description: 'Optional aspect ratio for cropping. Defaults to 4:3 if not specified. Applies to both URL and base64 images.'
+              },
             },
           },
-          description: 'Optional array of images. Each image can have: {url, publicId} for existing images, or {base64} for upload',
+          description: 'Optional array of images. Each image can have: {url} for existing images (will be downloaded and reprocessed), {base64} for upload, and optional {aspectRatio} for cropping (1:1 or 4:3, defaults to 4:3)',
         },
       },
       required: ['id', 'api_key'],
@@ -450,7 +477,7 @@ export const adminTools: RegisteredTool[] = [
       latitude?: number;
       longitude?: number;
       autoApprove?: boolean;
-      images?: Array<{ url?: string; publicId?: string; base64?: string }>;
+      images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
     }) => {
       const {
         api_key,
@@ -672,9 +699,22 @@ export const adminTools: RegisteredTool[] = [
         if (Array.isArray(images) && images.length > 0) {
           for (const image of images) {
             try {
-              if (image.url && image.publicId) {
-                imageUrls.push(image.url);
-                imagePublicIds.push(image.publicId);
+              if (image.url) {
+                // Reprocess existing URLs: download, validate, upload to Cloudinary
+                const reprocessResult = await ImageService.copyAndTransformImage(
+                  image.url,
+                  String(id),
+                  image.aspectRatio || '4:3'
+                );
+
+                if (reprocessResult.success && reprocessResult.url && reprocessResult.publicId) {
+                  imageUrls.push(reprocessResult.url);
+                  imagePublicIds.push(reprocessResult.publicId);
+                  logger.info(`✅ [MCP] Reprocessed image from URL: ${image.url} → ${reprocessResult.url}`);
+                } else {
+                  logger.warn(`⚠️ [MCP] Failed to reprocess image from URL: ${image.url} - ${reprocessResult.error || 'Unknown error'}`);
+                  // Skip this image, continue with others (partial success)
+                }
                 continue;
               }
 
@@ -690,7 +730,11 @@ export const adminTools: RegisteredTool[] = [
                 }
 
                 const imageBuffer = Buffer.from(base64Data, 'base64');
-                const uploadResult = await ImageService.uploadTokiImage(String(id), imageBuffer);
+                const uploadResult = await ImageService.uploadTokiImage(
+                  String(id),
+                  imageBuffer,
+                  image.aspectRatio || '4:3'
+                );
 
                 if (uploadResult.success && uploadResult.url && uploadResult.publicId) {
                   imageUrls.push(uploadResult.url);
