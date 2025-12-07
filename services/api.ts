@@ -427,7 +427,7 @@ class ApiService {
   }
 
   // Authentication Methods
-  async register(userData: { name: string; email: string; password: string; bio?: string; location?: string }): Promise<AuthResponse> {
+  async register(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number }): Promise<AuthResponse> {
     const response = await this.makeRequest<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),

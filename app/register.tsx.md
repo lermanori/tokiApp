@@ -24,3 +24,10 @@ This file contains the user registration screen that allows users to create acco
 - Made email field always editable by removing `editable={false}` and adding `onChangeText={setEmail}`
 - Updated registration logic to use `apiService.register()` for direct sign ups and `apiService.registerWithInvitation()` only when invite code is silently detected in URL
 - Invitation codes are still supported for backwards compatibility but are completely hidden from the UI
+- **problem**: Latitude and longitude coordinates were collected but not sent to backend during direct registration, causing exMap to fail
+- **solution**: Updated all `apiService.register()` calls to pass `latitude` and `longitude` when available. Backend now automatically geocodes location strings if coordinates aren't provided.
+- **implementation**:
+  - Updated direct registration calls (lines 178-184, 188-194, 198-204) to include `latitude: latitude` and `longitude: longitude` parameters
+  - Coordinates are already collected when user selects from autocomplete or uses current location
+  - If user only types location string, backend will automatically geocode it to get coordinates
+  - This ensures all new users have coordinates saved, preventing exMap failures

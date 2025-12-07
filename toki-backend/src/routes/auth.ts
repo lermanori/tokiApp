@@ -14,7 +14,7 @@ const router = Router();
 // User registration
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, name, bio, location } = req.body;
+    const { email, password, name, bio, location, latitude, longitude } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({
         success: false,
@@ -40,13 +40,59 @@ router.post('/register', async (req: Request, res: Response) => {
         message: 'A user with this email already exists'
       });
     }
+
+    // Handle coordinates: use provided coordinates or geocode location string
+    let latNumber: number | null = null;
+    let lngNumber: number | null = null;
+
+    // Validate coordinates if provided
+    const latProvided = latitude !== undefined && latitude !== null && latitude !== '';
+    const lngProvided = longitude !== undefined && longitude !== null && longitude !== '';
+
+    if (latProvided && lngProvided) {
+      const parsedLat = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
+      const parsedLng = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        if (parsedLat >= -90 && parsedLat <= 90 && parsedLng >= -180 && parsedLng <= 180) {
+          latNumber = parsedLat;
+          lngNumber = parsedLng;
+        }
+      }
+    } else if (location && typeof location === 'string' && location.trim().length > 0) {
+      // Derive coordinates from location if provided without explicit coords
+      try {
+        const key = process.env.GOOGLE_MAPS_API_KEY;
+        if (key) {
+          const params = new URLSearchParams({ address: location.trim(), key, language: 'en' });
+          const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+          const resp = await fetch(url);
+          const data: any = await resp.json();
+          if (data.status === 'OK') {
+            const r = (data.results || [])[0];
+            const lat = r?.geometry?.location?.lat;
+            const lng = r?.geometry?.location?.lng;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              latNumber = lat;
+              lngNumber = lng;
+            }
+          } else {
+            logger.warn('Geocode on /register failed:', { status: data.status, message: data.error_message });
+          }
+        } else {
+          logger.warn('GOOGLE_MAPS_API_KEY is not configured; skipping geocode for registration');
+        }
+      } catch (e) {
+        logger.error('Error geocoding location in /register:', e);
+      }
+    }
+
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name, bio, location)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, name, bio, location, verified, rating, member_since, created_at`,
-      [email, passwordHash, name, bio || null, location || null]
+      `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, email, name, bio, location, latitude, longitude, verified, rating, member_since, created_at`,
+      [email, passwordHash, name, bio || null, location || null, latNumber, lngNumber]
     );
     const user = result.rows[0];
     await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
@@ -61,6 +107,8 @@ router.post('/register', async (req: Request, res: Response) => {
           name: user.name,
           bio: user.bio,
           location: user.location,
+          latitude: user.latitude,
+          longitude: user.longitude,
           verified: user.verified,
           rating: user.rating,
           memberSince: user.member_since

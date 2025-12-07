@@ -24,3 +24,12 @@ This file handles user authentication including login, registration, and passwor
   - Updating `updated_at` timestamp even when only social links change
   - Including social links in response by joining `user_social_links` table and using `json_object_agg` to aggregate links
   - Allowing saves when only social links change (no other fields) by checking both `hasUserFieldsToUpdate` and `hasSocialLinksToUpdate`
+- **problem**: POST /register endpoint didn't save latitude/longitude coordinates, causing exMap to fail when users don't have coordinates
+- **solution**: Updated POST /register to accept optional latitude/longitude parameters and automatically geocode location strings when coordinates aren't provided (same logic as PUT /me endpoint)
+- **implementation**: 
+  - Added `latitude` and `longitude` to request body destructuring
+  - Added coordinate validation logic (checks for valid numbers, valid ranges)
+  - Added geocoding fallback: if location string is provided but coordinates aren't, uses Google Maps Geocoding API to derive coordinates
+  - Updated INSERT query to include `latitude` and `longitude` columns
+  - Updated RETURNING clause to include coordinates in response
+  - This ensures new users always have coordinates saved (either from autocomplete/current location or from geocoding), preventing exMap failures

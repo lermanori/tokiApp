@@ -181,6 +181,8 @@ export default function RegisterScreen() {
               password,
               bio: bio || undefined,
               location: location || undefined,
+              latitude: latitude,
+              longitude: longitude,
             });
           }
         } catch (inviteError) {
@@ -191,6 +193,8 @@ export default function RegisterScreen() {
             password,
             bio: bio || undefined,
             location: location || undefined,
+            latitude: latitude,
+            longitude: longitude,
           });
         }
       } else {
@@ -201,6 +205,8 @@ export default function RegisterScreen() {
           password,
           bio: bio || undefined,
           location: location || undefined,
+          latitude: latitude,
+          longitude: longitude,
         });
       }
 
