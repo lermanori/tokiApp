@@ -120,3 +120,5 @@ This document lists ALL misalignments found between the MCP server and REST API 
 - The `external_url` vs `externalLink` naming difference is already handled in the handler
 - `userLatitude`/`userLongitude` might be auto-derived from the API key's user, so may not be needed in MCP
 
+
+

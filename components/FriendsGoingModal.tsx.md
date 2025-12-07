@@ -11,3 +11,5 @@ Modal component that displays a full list of all friends who are attending a tok
 - **Problem**: Overlay only shows 3 friends, need a way to see all friends going.
 - **Solution**: Built modal component with search input, scrollable friend list showing avatars and names, clickable rows that navigate to user profiles, and friend count display. Follows same design patterns as ParticipantsModal for consistency.
 
+
+

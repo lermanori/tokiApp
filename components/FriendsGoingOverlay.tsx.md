@@ -11,3 +11,5 @@ Reusable overlay component that displays which friends (accepted connections) ar
 - **Problem**: Needed a visual indicator of friends attending on toki cards and details page.
 - **Solution**: Built overlay component with overlapping circular avatars (max 3 displayed), white background with shadow, and text showing friend count. Supports optional onPress handler for navigation/interaction. Uses getInitials helper for avatar fallback when no image is available.
 
+
+
