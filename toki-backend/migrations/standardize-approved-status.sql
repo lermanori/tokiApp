@@ -20,3 +20,5 @@ SET current_attendees = (
 -- to count 'approved' status instead of 'joined', so future changes
 -- will automatically maintain correct counts.
 
+
+

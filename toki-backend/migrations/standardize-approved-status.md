@@ -70,3 +70,5 @@ If needed, you can rollback by:
    UPDATE tokis t SET current_attendees = (SELECT COALESCE(COUNT(*), 0) + 1 FROM toki_participants tp WHERE tp.toki_id = t.id AND tp.status = 'joined');
    ```
 
+
+
