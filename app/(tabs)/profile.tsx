@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff } from 'lucide-react-native';
+import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff, Trash2 } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
@@ -16,6 +16,7 @@ export default function ProfileScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [myActivity, setMyActivity] = useState<any[]>([]);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const handleProfileImageUpdate = async (newImageUrl: string) => {
     try {
@@ -350,6 +351,117 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleDeleteAccount = () => {
+    // First confirmation dialog with detailed warning
+    Alert.alert(
+      '⚠️ Delete Account',
+      'Are you sure you want to delete your account? This action is IRREVERSIBLE and will permanently delete:\n\n• Your account and profile\n• All your Tokis and activities\n• All your connections\n• All your messages and conversations\n• All your saved Tokis\n• All your ratings and reviews\n• All your notifications\n\nYou will be able to re-sign up later with the same or different email address.\n\nThis cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Continue',
+          onPress: () => {
+            // Second confirmation dialog
+            Alert.alert(
+              '⚠️ Final Confirmation',
+              'This is your last chance to cancel. Are you absolutely sure you want to permanently delete your account?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel'
+                },
+                {
+                  text: 'Delete My Account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await performAccountDeletion();
+                  }
+                }
+              ],
+              { cancelable: true }
+            );
+          }
+        }
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const performAccountDeletion = async () => {
+    setIsDeletingAccount(true);
+    try {
+      console.log('🗑️ Starting account deletion...');
+      const result = await apiService.deleteAccount();
+      
+      if (result.success) {
+        console.log('✅ Account deleted successfully');
+        Alert.alert(
+          'Account Deleted',
+          'Your account has been permanently deleted. You can re-sign up anytime.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Clear local state and navigate to login
+                actions.logout().catch(() => {
+                  // Even if logout fails, navigate to login
+                });
+                router.replace('/login');
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+      } else {
+        throw new Error(result.message || 'Failed to delete account');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting account:', error);
+      
+      let errorMessage = 'Failed to delete account. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      // Check if it's a network error
+      const isNetworkError = error instanceof TypeError || 
+        (error instanceof Error && (
+          error.message.includes('Network request failed') ||
+          error.message.includes('Failed to fetch') ||
+          error.message.includes('timeout') ||
+          error.message.includes('network')
+        ));
+      
+      if (isNetworkError) {
+        Alert.alert(
+          'Network Error',
+          'Unable to connect to the server. Please check your internet connection and try again.',
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: 'Retry',
+              onPress: () => performAccountDeletion()
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          errorMessage,
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const handleNotificationToggle = (value: boolean) => {
     setNotificationsEnabled(value);
     Alert.alert(
@@ -651,6 +763,16 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/health')}>
               <Activity size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>System Health</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={handleDeleteAccount}
+              disabled={isDeletingAccount || state.loading}
+            >
+              <Trash2 size={20} color={isDeletingAccount || state.loading ? "#CCCCCC" : "#EF4444"} />
+              <Text style={[styles.menuText, { color: isDeletingAccount || state.loading ? "#CCCCCC" : "#EF4444" }]}>
+                {isDeletingAccount ? 'Deleting Account...' : 'Delete Account'}
+              </Text>
             </TouchableOpacity>
           </View>
 

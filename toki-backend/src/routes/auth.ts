@@ -1668,4 +1668,64 @@ router.get('/users/:userId', async (req: Request, res: Response) => {
   }
 });
 
+// Delete current user account
+router.delete('/me', authenticateToken, async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user!.id;
+    
+    // Verify user exists
+    const userCheck = await client.query(
+      'SELECT id, email, name FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        message: 'User account not found'
+      });
+    }
+
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Log deletion event before deletion
+    try {
+      await client.query(
+        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+        [userId, 'account_deleted']
+      );
+      logger.info(`📊 [ACTIVITY] Logged account deletion event for user ${userId}`);
+    } catch (logError) {
+      logger.error('Error logging account deletion event:', logError);
+      // Don't fail deletion if logging fails
+    }
+
+    // Delete user (cascade will handle all related data)
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    logger.info(`🗑️ [AUTH] User account deleted: ${userId} (${userCheck.rows[0].email})`);
+
+    return res.json({
+      success: true,
+      message: 'Account deleted successfully'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Delete account error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to delete account',
+      message: 'Internal server error during account deletion'
+    });
+  } finally {
+    client.release();
+  }
+});
+
 export default router; 

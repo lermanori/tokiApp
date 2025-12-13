@@ -471,6 +471,29 @@ class ApiService {
     }
   }
 
+  async deleteAccount(): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await this.makeRequest<{ success: boolean; message: string }>('/auth/me', {
+        method: 'DELETE',
+      });
+      
+      // Clear tokens immediately after successful deletion
+      await this.clearTokens();
+      
+      return { success: true, message: response.message || 'Account deleted successfully' };
+    } catch (error) {
+      console.error('Delete account error:', error);
+      
+      // If it's an auth error, clear tokens anyway
+      if (error instanceof Error && ((error as any).isAuthError || (error as any).status === 401 || (error as any).status === 403)) {
+        await this.clearTokens();
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
+      return { success: false, message: errorMessage };
+    }
+  }
+
   // Invitation Methods
   async sendInvitation(email: string): Promise<{ success: boolean; data: { invitation: any; remainingCredits: number } }> {
     return this.makeRequest('/invitations', {
