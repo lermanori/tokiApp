@@ -22,3 +22,5 @@ SET current_attendees = (
 
 
 
+
+
