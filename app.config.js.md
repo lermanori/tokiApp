@@ -1,28 +1,14 @@
 # File: app.config.js
 
 ### Summary
-Expo app configuration file. Defines app metadata, build settings, plugins, and platform-specific configurations (iOS, Android, web).
+This file contains the Expo app configuration for the Toki application, including iOS and Android settings, plugins, and app metadata.
 
 ### Fixes Applied log
-- problem: No expo-notifications plugin configured, and iOS/Android push notification settings missing.
-- solution: Added `expo-notifications` plugin, iOS `UIBackgroundModes: ["remote-notification"]` for background push delivery, and Android notification channel configuration.
-- problem: Invalid `android.notification` property in Expo config schema causing expo-doctor validation error.
-- solution: Removed `android.notification` property as it's not a valid Expo config field. Android notification configuration should be handled programmatically.
-- problem: Version bump needed for new release.
-- solution: Bumped app version from 1.0.1 to 1.0.9, runtimeVersion from 1.0.0 to 1.0.1, and iOS buildNumber from 2 to 3.
-- problem: Version bump needed for new release.
-- solution: Bumped app version from 1.0.9 to 1.0.10.
-- problem: Version bump needed for new release.
-- solution: Bumped app version from 1.0.10 to 1.0.11.
-- problem: Version bump and build number reset needed for new release.
-- solution: Bumped app version from 1.0.11 to 1.0.12, reset iOS buildNumber from 3 to 1, and added Android versionCode set to 1.
-- problem: Version and build number bump needed for new release.
-- solution: Bumped app version from 1.0.12 to 1.0.13, iOS buildNumber from 1 to 2, and Android versionCode from 1 to 2.
-- problem: Version and build number bump needed for new release.
-- solution: Bumped app version from 1.0.14 to 1.0.15, iOS buildNumber from 3 to 4, and Android versionCode from 3 to 4.
+- **problem**: Missing location permission purpose strings (NSLocationWhenInUseUsageDescription and NSLocationAlwaysUsageDescription) required by iOS for location permission requests.
+- **solution**: Added both location permission description strings to the iOS infoPlist configuration with the text: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you."
+- **problem**: Version and build number bump needed for new release.
+- **solution**: Bumped app version from 1.0.15 to 1.0.16, iOS buildNumber from 4 to 5, and Android versionCode from 4 to 5.
 
 ### How Fixes Were Implemented
-- Added `"expo-notifications"` to plugins array to enable native push notification support.
-- Added iOS `infoPlist.UIBackgroundModes: ["remote-notification"]` to allow background push delivery (for badge updates, silent notifications).
-- Removed invalid `android.notification` config block (icon and color properties) from Expo config. Android notification channels are configured programmatically in `utils/notifications.ts`.
-
+- **problem**: iOS requires explicit permission purpose strings in Info.plist to explain to users why the app needs location access. Without these strings, location permission requests may be ignored or the app may be rejected by Apple.
+- **solution**: Added `NSLocationWhenInUseUsageDescription` and `NSLocationAlwaysUsageDescription` keys to the `ios.infoPlist` object in the Expo configuration. These strings will be included in the iOS Info.plist file when the app is built, and will be displayed to users when the app requests location permissions.
