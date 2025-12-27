@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook, Flag } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import TokiCard from '@/components/TokiCard';
 import AppInstallPrompt from '@/components/AppInstallPrompt';
+import ReportModal from '@/components/ReportModal';
 
 interface ConnectionStatus {
   status: 'none' | 'pending' | 'accepted' | 'declined';
@@ -45,6 +46,7 @@ export default function UserProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [publicActivity, setPublicActivity] = useState<any[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Helper function to get user initials
   const getUserInitials = (name: string) => {
@@ -211,6 +213,21 @@ export default function UserProfileScreen() {
         }
       ]
     );
+  };
+
+  // Report user handler
+  const handleReportUser = async (reason: string) => {
+    if (!userId) return;
+    
+    try {
+      const success = await actions.reportUser(userId, reason);
+      if (!success) {
+        throw new Error('Failed to report user');
+      }
+    } catch (error) {
+      console.error('Error reporting user:', error);
+      throw error;
+    }
   };
 
   const renderActionButton = () => {
@@ -437,6 +454,19 @@ export default function UserProfileScreen() {
             {renderActionButton()}
           </View>
 
+          {/* Report Button - Only show if not viewing own profile */}
+          {state.currentUser?.id && state.currentUser.id !== userId && (
+            <View style={styles.reportSection}>
+              <TouchableOpacity
+                style={styles.reportButton}
+                onPress={() => setShowReportModal(true)}
+              >
+                <Flag size={18} color="#EF4444" />
+                <Text style={styles.reportText}>Report User</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Statistics */}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
@@ -517,6 +547,16 @@ export default function UserProfileScreen() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        onSubmit={handleReportUser}
+        title="Report User"
+        subtitle="Please let us know why this user's profile is inappropriate."
+        contentType="User"
+      />
     </SafeAreaView>
     </>
   );
@@ -778,5 +818,28 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  reportSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 8,
+  },
+  reportText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
   },
 });

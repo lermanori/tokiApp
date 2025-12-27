@@ -563,6 +563,10 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         SELECT 1 FROM toki_hidden_users hu
         WHERE hu.toki_id = t.id AND hu.user_id = $${paramCount + 1}
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM user_hidden_activities uha
+        WHERE uha.toki_id = t.id AND uha.user_id = $${paramCount + 1}
+      )
     `;
     // Add userId for jp join and for block/hidden checks
     paramCount++;
@@ -1038,9 +1042,25 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
           )
         ) <= $3
     `;
+    
+    // Filter out hidden activities if user is authenticated
+    if (userId) {
+      whereConditions += `
+        AND NOT EXISTS (
+          SELECT 1 FROM user_hidden_activities uha
+          WHERE uha.toki_id = t.id AND uha.user_id = $4
+        )
+      `;
+    }
 
     const baseParams: any[] = [lat, lng, radiusKm];
     let paramCount = 3;
+    
+    // Add userId parameter if authenticated (for hidden activities filter)
+    if (userId) {
+      paramCount++;
+      baseParams.push(userId);
+    }
 
     // Add category filter
     if (category) {
@@ -1085,14 +1105,16 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         ) as distance_km`;
     
     // Add is_saved check and join_status if user is authenticated
+    // Note: userId is already in baseParams at position 4 if authenticated
+    const userIdParamNum = userId ? 4 : null;
+    
     if (userId) {
-      paramCount++;
       query += `,
         EXISTS(
           SELECT 1 FROM saved_tokis st 
-          WHERE st.toki_id = t.id AND st.user_id = $${paramCount}
+          WHERE st.toki_id = t.id AND st.user_id = $${userIdParamNum}
         ) as is_saved,
-        COALESCE(jp.status, CASE WHEN t.host_id = $${paramCount} THEN 'hosting' ELSE 'not_joined' END) as join_status`;
+        COALESCE(jp.status, CASE WHEN t.host_id = $${userIdParamNum} THEN 'hosting' ELSE 'not_joined' END) as join_status`;
     } else {
       query += `,
         false as is_saved,
@@ -1108,7 +1130,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     // Add join_status join if user is authenticated
     if (userId) {
       query += `
-      LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${paramCount}`;
+      LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${userIdParamNum}`;
     }
     
     query += `
@@ -1116,9 +1138,6 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     `;
 
     const queryParams = [...baseParams];
-    if (userId) {
-      queryParams.push(userId);
-    }
 
     // Group by and order by distance
     let groupByClause = ` GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, t.image_urls`;
@@ -1392,7 +1411,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'approved'
       LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${userIdParamPos}
-      WHERE t.status = 'active'
+      WHERE (t.status = 'active' OR t.host_id = $${userIdParamPos})
         AND (
           t.host_id = $${userIdParamPos}
           OR EXISTS (

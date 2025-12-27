@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
-import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound } from 'lucide-react';
+import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag } from 'lucide-react';
 import WaitlistTab from './WaitlistTab';
 import DatabaseTab from './DatabaseTab';
 import AlgorithmTab from './AlgorithmTab';
@@ -8,11 +8,12 @@ import SettingsTab from './SettingsTab';
 import AnalyticsTab from './AnalyticsTab';
 import NotificationScheduleTab from './NotificationScheduleTab';
 import McpKeysTab from './McpKeysTab';
+import ReportsTab from './ReportsTab';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys'
+    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys' | 'reports'
   >('analytics');
 
   const handleLogout = () => {
@@ -138,6 +139,12 @@ export default function Dashboard() {
             icon={<KeyRound size={18} />}
             label="MCP Keys"
           />
+          <TabButton
+            active={activeTab === 'reports'}
+            onClick={() => setActiveTab('reports')}
+            icon={<Flag size={18} />}
+            label="Reports"
+          />
         </div>
       </div>
 
@@ -154,6 +161,7 @@ export default function Dashboard() {
         {activeTab === 'settings' && <SettingsTab />}
         {activeTab === 'notification-schedule' && <NotificationScheduleTab />}
         {activeTab === 'mcp-keys' && <McpKeysTab />}
+        {activeTab === 'reports' && <ReportsTab />}
       </div>
     </div>
   );

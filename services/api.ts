@@ -1458,6 +1458,24 @@ class ApiService {
     console.log('🗑️ [API] Clearing authentication cache');
     this.authCache = null;
   }
+
+  // Report a Toki
+  async reportToki(tokiId: string, reason: string) {
+    const response = await this.post(`/reports/tokis/${tokiId}`, { reason });
+    return response;
+  }
+
+  // Report a user
+  async reportUser(userId: string, reason: string) {
+    const response = await this.post(`/reports/users/${userId}`, { reason });
+    return response;
+  }
+
+  // Get my reports
+  async getMyReports() {
+    const response = await this.get('/reports/my-reports');
+    return response;
+  }
 }
 
 // Export singleton instance

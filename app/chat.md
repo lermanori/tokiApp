@@ -1,11 +1,17 @@
 # File: chat.tsx
 
 ### Summary
-This file contains the Chat screen component that handles both individual user conversations and group chats. It displays messages in a chat interface with real-time message sending capabilities.
+This file contains the Chat screen component that handles both individual user conversations and group chats. It displays messages in a chat interface with real-time message sending capabilities and message reporting functionality.
 
 ### Fixes Applied log
 - **problem**: Chat screen was hardcoded to show "Sunset Beach Volleyball" and used old message format
 - **solution**: Updated to use route parameters to display correct conversation details and real message data from API
+
+- **problem**: Message reporting used long-press gesture which was not discoverable
+- **solution**: Added visible Flag icon button next to each message for easy reporting
+
+- **problem**: Message reports weren't showing in admin panel
+- **solution**: Backend endpoint now uses unified `content_reports` table (handled in messages.ts)
 
 ### How Fixes Were Implemented
 - **problem**: Added route parameter handling to get conversationId, otherUserName, and isGroup from navigation
@@ -26,13 +32,20 @@ This file contains the Chat screen component that handles both individual user c
 - **problem**: Message timestamps were not formatted correctly
 - **solution**: Added proper timestamp formatting using `new Date(message.created_at).toLocaleTimeString()`
 
-The chat screen now properly handles individual conversations and displays real message data from the backend API.
+- **problem**: Long-press gesture for reporting was not user-friendly or discoverable
+- **solution**: Added Flag icon button that appears next to each message (only for other users' messages)
+
+- **problem**: Message bubble layout didn't accommodate the report button
+- **solution**: Wrapped message bubble and flag button in `messageContent` view with flexDirection row and gap
+
+The chat screen now properly handles individual conversations, displays real message data, and provides an intuitive one-tap reporting mechanism.
 
 ### Additional Improvements Made:
 - **problem**: Messages reloaded completely after sending, causing loading screen
 - **solution**: Added optimistic updates - new messages appear immediately in local state without API reload
 
 - **problem**: Enter key didn't send messages
+- **solution**: Added onKeyPress and onSubmitEditing handlers to send message on Enter key
 - **solution**: Added `onSubmitEditing`, `blurOnSubmit={false}`, and `returnKeyType="send"` to TextInput
 
 - **problem**: Chat bubbles lacked visual polish

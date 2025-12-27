@@ -37,6 +37,7 @@ import activityRoutes from './routes/activity';
 import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
 import invitationRoutes from './routes/invitations';
+import reportsRoutes from './routes/reports';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcp/server';
@@ -170,6 +171,7 @@ app.use('/api/activity', corsMiddleware, activityRoutes);
 app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 app.use('/api/push', corsMiddleware, pushRoutes);
 app.use('/api/invitations', corsMiddleware, invitationRoutes);
+app.use('/api/reports', corsMiddleware, reportsRoutes);
 
 // MCP HTTP endpoint (Streamable HTTP transport)
 // Route base: /api/mcp/toki and /api/mcp/toki/*

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import * as Clipboard from 'expo-clipboard';
@@ -12,6 +12,7 @@ import InviteModal from '@/components/InviteModal';
 import ParticipantsModal from '@/components/ParticipantsModal';
 import FriendsGoingModal from '@/components/FriendsGoingModal';
 import FriendsGoingOverlay from '@/components/FriendsGoingOverlay';
+import ReportModal from '@/components/ReportModal';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -607,6 +608,7 @@ export default function TokiDetailsScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showParticipantsModal, setShowParticipantsModal] = useState(false);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [participantsSearch, setParticipantsSearch] = useState('');
   const [friendsSearch, setFriendsSearch] = useState('');
   const [isRemovingParticipant, setIsRemovingParticipant] = useState(false);
@@ -869,6 +871,40 @@ export default function TokiDetailsScreen() {
     
     setParticipantToRemove({ id: userId, name: participantName });
     setShowRemoveConfirm(true);
+  };
+
+  // Report Toki handler
+  const handleReportToki = async (reason: string) => {
+    if (!toki) return;
+    
+    try {
+      const success = await actions.reportToki(toki.id, reason);
+      if (!success) {
+        throw new Error('Failed to report Toki');
+      }
+
+      // Toki is now auto-hidden on backend, refresh feeds to update UI
+      console.log('🔄 [TOKI DETAILS] Refreshing feeds after report...');
+      await actions.loadTokis(); // Refresh discover feed
+      
+      // Close modal and show success message
+      Alert.alert(
+        'Toki Reported',
+        'Thank you for your report. This Toki has been hidden from your feed while we review it. You\'ll be able to see it again if our review determines it doesn\'t violate our guidelines.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back since the Toki is now hidden
+              router.back();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error reporting Toki:', error);
+      throw error;
+    }
   };
 
   const handleRemoveParticipantFromModal = async (participantId: string) => {
@@ -1786,6 +1822,19 @@ export default function TokiDetailsScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Report Button - Only show for Tokis not hosted by current user */}
+          {!toki.isHostedByUser && (
+            <View style={styles.reportSection}>
+              <TouchableOpacity
+                style={styles.reportButton}
+                onPress={() => setShowReportModal(true)}
+              >
+                <Flag size={20} color="#EF4444" />
+                <Text style={styles.reportText}>Report Toki</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Host Actions - Only show for Tokis hosted by current user */}
           {toki.isHostedByUser && (
             <View style={styles.hostActionsSection}>
@@ -2166,7 +2215,17 @@ export default function TokiDetailsScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        onSubmit={handleReportToki}
+        title="Report Toki"
+        subtitle="Please let us know why this Toki is inappropriate. This helps us maintain a safe community."
+        contentType="Toki"
+      />
+      </SafeAreaView>
     </>
   );
 }
@@ -2682,6 +2741,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#EF4444',
+  },
+  reportSection: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 8,
+  },
+  reportText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
   },
   deleteText: {
     fontSize: 14,

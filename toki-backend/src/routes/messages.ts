@@ -738,17 +738,30 @@ router.post('/:messageId/report', authenticateToken, async (req: Request, res: R
       });
     }
 
-    // Insert report into database
+    // Insert report into unified content_reports table
     const reportResult = await pool.query(
-      `INSERT INTO message_reports (
-        message_id, 
+      `INSERT INTO content_reports (
+        content_type,
+        content_id, 
         reporter_id, 
         reason, 
-        reported_at
-      ) VALUES ($1, $2, $3, NOW()) 
+        reported_at,
+        status
+      ) VALUES ($1, $2, $3, $4, NOW(), 'pending') 
+      ON CONFLICT (reporter_id, content_type, content_id) 
+      WHERE status = 'pending' 
+      DO NOTHING
       RETURNING id`,
-      [messageId, reporterId, reason.trim()]
+      ['message', messageId, reporterId, reason.trim()]
     );
+
+    // Check if report was actually inserted (not a duplicate)
+    if (reportResult.rows.length === 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'You have already reported this message'
+      });
+    }
 
     logger.info(`🚨 [MESSAGES] Message ${messageId} reported by user ${reporterId} for reason: ${reason}`);
 

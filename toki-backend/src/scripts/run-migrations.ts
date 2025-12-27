@@ -264,6 +264,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 16: Create unified content_reports table
+    try {
+      console.log('📝 Migration 16: Creating content_reports table for unified reporting...');
+      const contentReportsSql = readFileSync(
+        join(sqlDir, 'create-unified-content-reports.sql'),
+        'utf-8'
+      );
+      await pool.query(contentReportsSql);
+      console.log('✅ Content reports table migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Content reports table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

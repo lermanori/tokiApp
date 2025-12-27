@@ -391,5 +391,43 @@ export const adminApi = {
     });
     return handleResponse(response);
   },
+
+  // Reports
+  getReports: async (params?: { 
+    page?: number; 
+    limit?: number; 
+    status?: string; 
+    contentType?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    const response = await fetch(`${API_BASE}/reports?${query}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  updateReport: async (reportId: string, data: { status: string; notes?: string }) => {
+    const response = await fetch(`${API_BASE}/reports/${reportId}`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  // Block/Unblock Toki
+  blockToki: async (tokiId: string, data: { block: boolean; reason?: string }) => {
+    const response = await fetch(`${API_BASE}/tokis/${tokiId}/block`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
 };
 

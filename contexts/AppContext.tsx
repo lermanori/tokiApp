@@ -2667,6 +2667,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const reportToki = async (tokiId: string, reason: string): Promise<boolean> => {
+    try {
+      console.log('🚨 [APP CONTEXT] Reporting Toki:', tokiId, 'for reason:', reason);
+      
+      // Call backend API to report Toki
+      await apiService.reportToki(tokiId, reason);
+      console.log('✅ [APP CONTEXT] Toki reported successfully');
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [APP CONTEXT] Failed to report Toki:', error);
+      return false;
+    }
+  };
+
+  const reportUser = async (userId: string, reason: string): Promise<boolean> => {
+    try {
+      console.log('🚨 [APP CONTEXT] Reporting user:', userId, 'for reason:', reason);
+      
+      // Call backend API to report user
+      await apiService.reportUser(userId, reason);
+      console.log('✅ [APP CONTEXT] User reported successfully');
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [APP CONTEXT] Failed to report user:', error);
+      return false;
+    }
+  };
+
   const getImageForActivity = (activity: string) => {
     const activityImages: { [key: string]: string } = {
       sports: 'https://images.pexels.com/photos/1263348/pexels-photo-1263348.jpeg?auto=compress&cs=tinysrgb&w=400&h=250&dpr=2',
@@ -3053,7 +3083,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     markConversationAsRead,
     markTokiAsRead,
     // Message moderation actions
-    reportMessage,
+      reportMessage,
+      reportToki,
+      reportUser,
     // Socket management actions
     reestablishGlobalListeners,
     testWebSocketListeners,

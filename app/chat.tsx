@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Send, Users } from 'lucide-react-native';
+import { ArrowLeft, Send, Users, Flag } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
@@ -848,33 +848,38 @@ export default function ChatScreen() {
               const isOwnMessage = message.sender_id === state.currentUser?.id;
               
               return (
-                <Pressable
+                <View
                   key={message.id}
                   style={[
                     styles.messageContainer,
                     isOwnMessage ? styles.currentUserMessage : styles.otherUserMessage
                   ]}
-                  onLongPress={() => {
-                    // Only allow reporting other users' messages
-                    if (!isOwnMessage) {
-                      handleReportMessage(message.id);
-                    }
-                  }}
-                  android_ripple={{ color: 'rgba(0, 0, 0, 0.1)' }}
                 >
                   {message.sender_id !== state.currentUser?.id && (
                     <Text style={styles.otherUserText}>{message.sender_name}</Text>
                   )}
-                  <View style={[
-                    styles.messageBubble,
-                    message.sender_id === state.currentUser?.id ? styles.currentUserBubble : styles.otherUserBubble
-                  ]}>
-                    <Text style={[
-                      styles.messageText,
-                      message.sender_id === state.currentUser?.id ? styles.currentUserText : styles.otherUserText
+                  <View style={styles.messageContent}>
+                    <View style={[
+                      styles.messageBubble,
+                      message.sender_id === state.currentUser?.id ? styles.currentUserBubble : styles.otherUserBubble
                     ]}>
-                      {message.content}
-                    </Text>
+                      <Text style={[
+                        styles.messageText,
+                        message.sender_id === state.currentUser?.id ? styles.currentUserText : styles.otherUserText
+                      ]}>
+                        {message.content}
+                      </Text>
+                    </View>
+                    {/* Flag icon button - only show for other users' messages */}
+                    {!isOwnMessage && (
+                      <TouchableOpacity
+                        style={styles.reportIconButton}
+                        onPress={() => handleReportMessage(message.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Flag size={14} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                   <Text style={[
                     styles.timestamp,
@@ -882,7 +887,7 @@ export default function ChatScreen() {
                   ]}>
                     {formatMessageTimestamp(message.created_at)}
                   </Text>
-                </Pressable>
+                </View>
               );
             })
           )}
@@ -1071,6 +1076,18 @@ const styles = StyleSheet.create({
   },
   otherUserMessage: {
     alignItems: 'flex-start',
+  },
+  messageContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reportIconButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarContainer: {
     width: 32,
