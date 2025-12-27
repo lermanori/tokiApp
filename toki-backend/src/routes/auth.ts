@@ -11,10 +11,23 @@ import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordR
 
 const router = Router();
 
+// Current Terms of Use version - update this when terms are updated
+const CURRENT_TERMS_VERSION = '2025-12-27';
+
 // User registration
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, password, name, bio, location, latitude, longitude } = req.body;
+    const { email, password, name, bio, location, latitude, longitude, termsAccepted } = req.body;
+    
+    // Validate terms acceptance
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Terms not accepted',
+        message: 'You must accept the Terms of Use and Privacy Policy to register'
+      });
+    }
+    
     if (!email || !password || !name) {
       return res.status(400).json({
         success: false,
@@ -89,10 +102,10 @@ router.post('/register', async (req: Request, res: Response) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, email, name, bio, location, latitude, longitude, verified, rating, member_since, created_at`,
-      [email, passwordHash, name, bio || null, location || null, latNumber, lngNumber]
+      `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude, terms_accepted_at, terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+       RETURNING id, email, name, bio, location, latitude, longitude, verified, rating, member_since, created_at, terms_accepted_at, terms_version`,
+      [email, passwordHash, name, bio || null, location || null, latNumber, lngNumber, CURRENT_TERMS_VERSION]
     );
     const user = result.rows[0];
     await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
@@ -111,7 +124,9 @@ router.post('/register', async (req: Request, res: Response) => {
           longitude: user.longitude,
           verified: user.verified,
           rating: user.rating,
-          memberSince: user.member_since
+          memberSince: user.member_since,
+          termsAcceptedAt: user.terms_accepted_at,
+          termsVersion: user.terms_version
         },
         tokens
       }
@@ -129,7 +144,16 @@ router.post('/register', async (req: Request, res: Response) => {
 // Invitation-based registration (skips waitlist)
 router.post('/register/invite', async (req: Request, res: Response) => {
   try {
-    const { email, password, name, bio, location, latitude, longitude, invitationCode } = req.body;
+    const { email, password, name, bio, location, latitude, longitude, invitationCode, termsAccepted } = req.body;
+    
+    // Validate terms acceptance
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Terms not accepted',
+        message: 'You must accept the Terms of Use and Privacy Policy to register'
+      });
+    }
     
     if (!email || !password || !name || !invitationCode) {
       return res.status(400).json({
@@ -288,7 +312,7 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
     const result = await pool.query(
-      `SELECT id, email, password_hash, name, bio, location, verified, rating, member_since
+      `SELECT id, email, password_hash, name, bio, location, verified, rating, member_since, terms_accepted_at, terms_version
        FROM users WHERE email = $1`,
       [email]
     );
@@ -308,7 +332,32 @@ router.post('/login', async (req: Request, res: Response) => {
         message: 'Email or password is incorrect'
       });
     }
+    
+    // Always generate tokens (even if terms not accepted)
+    // This allows users to call /accept-terms endpoint
     const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+    
+    // Check if user has accepted current terms version
+    if (!user.terms_accepted_at || user.terms_version !== CURRENT_TERMS_VERSION) {
+      return res.json({
+        success: true,
+        requiresTermsAcceptance: true,
+        message: 'Please accept the updated Terms of Use',
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            bio: user.bio,
+            location: user.location,
+            verified: user.verified,
+            rating: user.rating,
+            memberSince: user.member_since
+          },
+          tokens // Now we include tokens so they can call /accept-terms
+        }
+      });
+    }
     
     // Log login event
     try {
@@ -345,6 +394,53 @@ router.post('/login', async (req: Request, res: Response) => {
       success: false,
       error: 'Login failed',
       message: 'Internal server error during login'
+    });
+  }
+});
+
+// Accept terms endpoint - updates user's terms acceptance and issues tokens
+router.post('/accept-terms', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    
+    await pool.query(
+      `UPDATE users 
+       SET terms_accepted_at = NOW(), terms_version = $1 
+       WHERE id = $2`,
+      [CURRENT_TERMS_VERSION, userId]
+    );
+    
+    // Generate tokens now that terms are accepted
+    const userResult = await pool.query(
+      `SELECT id, email, name FROM users WHERE id = $1`,
+      [userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const user = userResult.rows[0];
+    const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+    
+    logger.info(`✅ [AUTH] User ${user.id} accepted terms version ${CURRENT_TERMS_VERSION}`);
+    
+    return res.json({
+      success: true,
+      message: 'Terms accepted successfully',
+      data: {
+        tokens
+      }
+    });
+  } catch (error) {
+    logger.error('Accept terms error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to accept terms',
+      message: 'Internal server error'
     });
   }
 });

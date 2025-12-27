@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
 import { apiService } from '../services/api';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import TermsAgreementModal from '../components/TermsAgreementModal';
 
 // Dev environment user credentials
 const DEV_USERS = [
@@ -34,6 +35,7 @@ export default function LoginScreen() {
   const [loadingData, setLoadingData] = useState(false); // New state for data loading
   const [errorMessage, setErrorMessage] = useState(''); // New state for error messages
   const [isDevMode, setIsDevMode] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const { dispatch, actions } = useApp();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -100,6 +102,14 @@ export default function LoginScreen() {
       {
         const response = await apiService.login({ email, password });
         if (response.success) {
+          // Check if terms acceptance is required
+          if (response.requiresTermsAcceptance) {
+            // Show terms modal instead of proceeding
+            setShowTermsModal(true);
+            setLoading(false);
+            return;
+          }
+          
           // Save credentials for dev environment
           saveCredentials(email, password, name);
           
@@ -447,6 +457,70 @@ export default function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Terms Agreement Modal */}
+      <TermsAgreementModal
+        visible={showTermsModal}
+        onAccept={async () => {
+          try {
+            const response = await apiService.acceptTerms();
+            if (response.success) {
+              setShowTermsModal(false);
+              // Clear auth cache to force fresh authentication check
+              apiService.clearAuthCache();
+              console.log('🔐 [LOGIN] Terms accepted, proceeding with login');
+              
+              // Convert API user to frontend user format
+              const currentUserResult = await apiService.getCurrentUser();
+              const user = {
+                ...currentUserResult,
+                rating: parseFloat(currentUserResult.rating) || 0,
+                tokisCreated: currentUserResult.stats?.tokis_created || 0,
+                tokisJoined: currentUserResult.stats?.tokis_joined || 0,
+                connections: currentUserResult.stats?.connections_count || 0,
+              };
+              
+              // Update the app state with the authenticated user
+              dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
+              console.log('🔐 [LOGIN] Updated current user in state after terms acceptance:', user.id);
+              
+              // Now redirect
+              if (returnTo) {
+                const cleanParams = Object.fromEntries(
+                  Object.entries(returnParams)
+                    .filter(([_, value]) => value !== undefined)
+                    .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+                );
+                const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+                
+                if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+                  let redirectUrl = returnToPath;
+                  if (Object.keys(cleanParams).length > 0) {
+                    const queryString = new URLSearchParams(cleanParams);
+                    redirectUrl += `?${queryString.toString()}`;
+                  }
+                  console.log('✅ [LOGIN] Navigating directly to toki-details:', redirectUrl);
+                  router.replace(redirectUrl as any);
+                } else {
+                  actions.setRedirection(returnToPath, cleanParams);
+                  router.replace('/(tabs)');
+                }
+              } else {
+                router.replace('/(tabs)');
+              }
+            } else {
+              Alert.alert('Error', response.message || 'Failed to accept terms');
+            }
+          } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to accept terms');
+          }
+        }}
+        onCancel={() => {
+          setShowTermsModal(false);
+          setLoading(false);
+          // User must accept terms to continue
+        }}
+      />
     </LinearGradient>
   );
 }

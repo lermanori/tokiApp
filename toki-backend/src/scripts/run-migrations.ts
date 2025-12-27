@@ -247,6 +247,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 15: Add terms acceptance tracking
+    try {
+      console.log('📝 Migration 15: Adding terms acceptance columns to users table...');
+      const termsAcceptanceSql = readFileSync(
+        join(sqlDir, 'add-terms-acceptance-columns.sql'),
+        'utf-8'
+      );
+      await pool.query(termsAcceptanceSql);
+      console.log('✅ Terms acceptance columns migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Terms acceptance columns already exist, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

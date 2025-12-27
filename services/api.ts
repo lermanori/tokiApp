@@ -197,6 +197,7 @@ export interface Message {
 
 export interface AuthResponse {
   success: boolean;
+  requiresTermsAcceptance?: boolean;
   message: string;
   data: {
     user: User;
@@ -427,7 +428,7 @@ class ApiService {
   }
 
   // Authentication Methods
-  async register(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number }): Promise<AuthResponse> {
+  async register(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number; termsAccepted: boolean }): Promise<AuthResponse> {
     const response = await this.makeRequest<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
@@ -446,7 +447,21 @@ class ApiService {
       body: JSON.stringify(credentials),
     });
 
-    if (response.success) {
+    // Always save tokens if they exist (even if terms acceptance required)
+    // This allows the accept-terms endpoint to work
+    if (response.success && response.data.tokens) {
+      await this.saveTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+    }
+
+    return response;
+  }
+
+  async acceptTerms(): Promise<{ success: boolean; data: { tokens: { accessToken: string; refreshToken: string } }; message: string }> {
+    const response = await this.makeRequest<{ success: boolean; data: { tokens: { accessToken: string; refreshToken: string } }; message: string }>('/auth/accept-terms', {
+      method: 'POST',
+    });
+
+    if (response.success && response.data.tokens) {
       await this.saveTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
     }
 

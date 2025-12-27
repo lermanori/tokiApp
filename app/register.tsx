@@ -34,6 +34,7 @@ export default function RegisterScreen() {
   const [placesPredictions, setPlacesPredictions] = useState<Array<{ description: string; place_id: string; types?: string[]; structured?: { mainText?: string; secondaryText?: string } }>>([]);
   const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const { dispatch, actions } = useApp();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -142,6 +143,11 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    if (!termsAccepted) {
+      Alert.alert('Error', 'You must accept the Terms of Use and Privacy Policy to create an account');
+      return;
+    }
+    
     if (!email || !password || !name) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -172,6 +178,7 @@ export default function RegisterScreen() {
               latitude: latitude,
               longitude: longitude,
               invitationCode: inviteCode,
+              termsAccepted: true,
             });
           } else {
             // If invitation invalid, fall through to direct registration
@@ -183,6 +190,7 @@ export default function RegisterScreen() {
               location: location || undefined,
               latitude: latitude,
               longitude: longitude,
+              termsAccepted: true,
             });
           }
         } catch (inviteError) {
@@ -195,6 +203,7 @@ export default function RegisterScreen() {
             location: location || undefined,
             latitude: latitude,
             longitude: longitude,
+            termsAccepted: true,
           });
         }
       } else {
@@ -207,6 +216,7 @@ export default function RegisterScreen() {
           location: location || undefined,
           latitude: latitude,
           longitude: longitude,
+          termsAccepted: true,
         });
       }
 
@@ -350,10 +360,38 @@ export default function RegisterScreen() {
                   </View>
                 )}
 
+                <View style={styles.termsContainer}>
+                  <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => setTermsAccepted(!termsAccepted)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                      {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.termsLabel}>
+                      I agree to the{' '}
+                      <Text
+                        style={styles.termsLink}
+                        onPress={() => router.push('/terms-of-use')}
+                      >
+                        Terms of Use
+                      </Text>
+                      {' '}and{' '}
+                      <Text
+                        style={styles.termsLink}
+                        onPress={() => router.push('/privacy-policy')}
+                      >
+                        Privacy Policy
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity
-                  style={[styles.button, loading && styles.buttonDisabled]}
+                  style={[styles.button, (loading || !termsAccepted) && styles.buttonDisabled]}
                   onPress={handleRegister}
-                  disabled={loading}
+                  disabled={loading || !termsAccepted}
                 >
                   <Text style={styles.buttonText}>
                     {loading ? 'Creating Account...' : 'Create Account'}
@@ -589,6 +627,47 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
     marginTop: 2,
+  },
+  termsContainer: {
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+    borderRadius: 4,
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  termsLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#1C1C1C',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#8B5CF6',
+    fontFamily: 'Inter-SemiBold',
+    textDecorationLine: 'underline',
   },
 });
 

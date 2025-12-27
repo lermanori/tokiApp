@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 
 const TERMS_CONTENT = `Toki - Terms of Use
 
-Last Updated: November 17, 2025
+Last Updated: December 27, 2025
 
 READ THESE TERMS CAREFULLY. THEY CONTAIN IMPORTANT LIMITATIONS ON TOKI'S LIABILITY AND REQUIRE BINDING ARBITRATION OF DISPUTES.
 
@@ -130,6 +130,23 @@ You may not post User Content that:
 • Toki's decision to monitor, remove, or not remove content does not constitute an endorsement or verification of such content.
 • The fact that Toki removes some content does not create an obligation to remove other content.
 • You may report inappropriate content through the Service, but Toki is under no obligation to take action.
+
+4.6 NO TOLERANCE POLICY FOR OBJECTIONABLE CONTENT AND ABUSIVE BEHAVIOR
+
+Toki maintains a ZERO TOLERANCE policy for:
+• Objectionable, harmful, illegal, or inappropriate content of any kind
+• Harassment, bullying, threats, or abusive behavior toward any user
+• Hate speech, discrimination, or content that promotes violence
+• Spam, scams, or fraudulent activity
+• Any conduct that violates these Terms or applicable laws
+
+CONSEQUENCES OF VIOLATIONS:
+• Immediate account termination without warning or refund
+• Permanent ban from the Service
+• Reporting to law enforcement when appropriate
+• Legal action when warranted
+
+By using the Service, you acknowledge that Toki reserves the right to immediately terminate your account for any violation of these Terms, at our sole discretion, without prior notice or opportunity to appeal.
 
 5. Hosting Events
 
@@ -451,7 +468,7 @@ BY USING THE SERVICE, YOU ACKNOWLEDGE THAT:
 8. You agree to indemnify and hold Toki harmless from any claims arising from your use of the Service.
 9. If you do not agree to these Terms, you must not use the Service.
 
-Last Updated: November 17, 2025
+Last Updated: December 27, 2025
 
 © 2025 Toki App Ltd. All rights reserved.`;
 
