@@ -8,6 +8,8 @@ This file contains the Expo app configuration for the Toki application, includin
 - **solution**: Added both location permission description strings to the iOS infoPlist configuration with the text: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you."
 - **problem**: Version and build number bump needed for new release.
 - **solution**: Bumped app version from 1.0.15 to 1.0.16, iOS buildNumber from 4 to 5, and Android versionCode from 4 to 5.
+- **problem**: Version and build number bump needed for new release.
+- **solution**: Bumped app version from 1.0.16 to 1.0.17, iOS buildNumber from 5 to 6, and Android versionCode from 5 to 6.
 
 ### How Fixes Were Implemented
 - **problem**: iOS requires explicit permission purpose strings in Info.plist to explain to users why the app needs location access. Without these strings, location permission requests may be ignored or the app may be rejected by Apple.

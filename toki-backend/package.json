@@ -1,6 +1,6 @@
 {
   "name": "toki-backend",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Backend API for Toki social map app",
   "main": "dist/index.js",
   "scripts": {

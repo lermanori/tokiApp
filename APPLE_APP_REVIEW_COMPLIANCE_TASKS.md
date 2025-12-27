@@ -1,6 +1,6 @@
 # Apple App Review Compliance - Task List
 
-**Status**: 🟡 In Progress (2/4 Critical Tasks Complete)  
+**Status**: 🟡 In Progress (3/4 Critical Tasks Complete)  
 **Priority**: 🔴 Critical - Required for App Store Approval  
 **Last Updated**: 2025-12-27
 
@@ -12,7 +12,7 @@ Apple rejected the app due to missing user-generated content moderation features
 1. ✅ **COMPLETE** - Require users to agree to terms (EULA) with clear "no tolerance" language
 2. ✅ **COMPLETE** - Method for filtering objectionable content (reporting + blocking)
 3. ✅ **COMPLETE** - Mechanism for users to flag objectionable content (all types)
-4. ⚠️ **PARTIAL** - Mechanism for users to block abusive users (needs developer notification)
+4. ✅ **COMPLETE** - Mechanism for users to block abusive users (with developer notifications)
 
 ---
 
@@ -155,44 +155,69 @@ Apple rejected the app due to missing user-generated content moderation features
 ---
 
 ### Task 1.3: Enhanced Blocking with Developer Notifications
-**Status**: ⬜ Not Started  
+**Status**: ✅ COMPLETE  
 **Priority**: 🔴 Critical  
-**Estimated Time**: 4-6 hours
+**Completed**: December 27, 2025
 
 #### Backend Implementation
-- [ ] Update `toki-backend/src/routes/blocks.ts`:
-  - [ ] Add email notification when user is blocked:
-    - [ ] Send email to admin/support email
-    - [ ] Include blocker info, blocked user info, reason
-    - [ ] Include timestamp
-  - [ ] Add admin panel notification/log entry
-  - [ ] Optional: Add webhook notification for integrations
-- [ ] Ensure instant content removal:
-  - [ ] Verify Toki queries filter blocked users immediately
-  - [ ] Verify message queries filter blocked users immediately
-  - [ ] Verify connection queries filter blocked users (already done)
-  - [ ] Test that blocked user's content disappears instantly
+- [x] Update `toki-backend/src/routes/blocks.ts`:
+  - [x] Add email notification when user is blocked:
+    - [x] Send email to admin/support email (supports Resend API and SMTP fallback)
+    - [x] Include blocker info, blocked user info, reason
+    - [x] Include timestamp and block ID
+    - [x] Detailed HTML email template with all block information
+  - [x] Add admin panel notification/log entry:
+    - [x] Created `admin_logs` table for audit trail
+    - [x] Logs all block actions with full context (blocker, blocked user, reason, timestamp)
+    - [x] Migration script created (Migration 17)
+  - [x] Enhanced logging for debugging email delivery
+- [x] Ensure instant content removal:
+  - [x] Verified Toki queries filter blocked users immediately (already implemented)
+  - [x] Verified message queries filter blocked users immediately (already implemented)
+  - [x] Verified connection queries filter blocked users (already done)
+  - [x] Content removal is instant via existing query filters
 
 #### Frontend Implementation
-- [ ] Update blocking flow to refresh feeds immediately:
-  - [ ] After blocking in `app/connections.tsx`, refresh Toki feed
-  - [ ] After blocking in `app/user-profile/[userId].tsx`, refresh feeds
-  - [ ] Show confirmation: "User blocked. Their content has been removed from your feed."
-- [ ] Update `app/connections.tsx` blocking UI:
-  - [ ] Show clear message about what blocking does
-  - [ ] Confirm content will be removed instantly
+- [x] Update blocking flow to refresh feeds immediately:
+  - [x] After blocking in `app/connections.tsx`, refresh Toki feed via `actions.loadTokis()`
+  - [x] After blocking in `app/user-profile/[userId].tsx`, refresh feeds
+  - [x] Show confirmation: "User blocked. Their content has been removed from your feed."
+- [x] Update `app/connections.tsx` blocking UI:
+  - [x] Enhanced modal text explaining immediate effects
+  - [x] Confirms content will be removed instantly
+  - [x] Mentions team notification
+- [x] Add Block/Unblock button to user profile screen:
+  - [x] Conditionally shows "Block User" or "Unblock User" based on current status
+  - [x] Checks block status on profile load
+  - [x] Updates button state after block/unblock actions
+  - [x] Green unblock button when user is blocked, red block button otherwise
 
 #### Email/Notification Setup
-- [ ] Configure email service for admin notifications (if not already set up)
-- [ ] Create email template for block notifications
-- [ ] Add environment variable for admin email address
+- [x] Configure email service for admin notifications:
+  - [x] Uses existing email utility (`toki-backend/src/utils/email.ts`)
+  - [x] Supports Resend API (preferred for production)
+  - [x] SMTP fallback for development
+- [x] Create email template for block notifications:
+  - [x] Professional HTML email template
+  - [x] Includes all relevant block information
+  - [x] Clear action items and review requirements
+- [x] Add environment variable for admin email address:
+  - [x] Uses `ADMIN_EMAIL` or `SUPPORT_EMAIL` environment variable
+  - [x] Graceful handling if email not configured
 
-**Files to Modify:**
-- `toki-backend/src/routes/blocks.ts`
-- `toki-backend/src/utils/email.ts` (or create notification utility)
-- `app/connections.tsx`
-- `app/user-profile/[userId].tsx`
-- `contexts/AppContext.tsx` (refresh feeds after block)
+**Implementation Summary**: See commit `4a8bf63` - "feat: Implement Task 1.3 - Enhanced Blocking with Developer Notifications"
+
+**Files Modified:**
+- `toki-backend/src/routes/blocks.ts` - Added email notifications and admin logging
+- `toki-backend/src/routes/blocks.ts.md` - Documentation (new file)
+- `toki-backend/src/config/database-setup.sql` - Added admin_logs table
+- `toki-backend/src/scripts/run-migrations.ts` - Added Migration 17
+- `toki-backend/src/scripts/create-admin-logs-table.sql` - Migration script (new file)
+- `toki-backend/src/scripts/create-admin-logs-table.sql.md` - Migration docs (new file)
+- `app/connections.tsx` - Enhanced feedback and feed refresh
+- `app/connections.tsx.md` - Documentation
+- `app/user-profile/[userId].tsx` - Added Block/Unblock button with status checking
+- `app/user-profile/[userId].tsx.md` - Documentation
 
 ---
 
@@ -258,26 +283,21 @@ Apple rejected the app due to missing user-generated content moderation features
 ## Phase 2: Important Enhancements (Recommended)
 
 ### Task 2.1: Instant Content Removal on Block
-**Status**: ⬜ Not Started  
+**Status**: ✅ COMPLETE (Completed as part of Task 1.3)  
 **Priority**: 🟡 High  
-**Estimated Time**: 2-3 hours
+**Completed**: December 27, 2025
 
 #### Implementation
-- [ ] Verify all Toki queries exclude blocked users
-- [ ] Verify all message queries exclude blocked users
-- [ ] Add real-time feed refresh after blocking:
-  - [ ] Refresh Discover feed
-  - [ ] Refresh My Tokis
-  - [ ] Refresh Saved Tokis
-  - [ ] Refresh Connections
-- [ ] Test that content disappears immediately (no page refresh needed)
+- [x] Verify all Toki queries exclude blocked users (verified - already implemented)
+- [x] Verify all message queries exclude blocked users (verified - already implemented)
+- [x] Add real-time feed refresh after blocking:
+  - [x] Refresh Discover feed via `actions.loadTokis()`
+  - [x] Refresh My Tokis (handled by loadTokis)
+  - [x] Refresh Saved Tokis (handled by loadTokis)
+  - [x] Refresh Connections via `loadConnections()`
+- [x] Test that content disappears immediately (no page refresh needed)
 
-**Files to Modify:**
-- `toki-backend/src/routes/tokis.ts` (verify filters)
-- `toki-backend/src/routes/messages.ts` (verify filters)
-- `app/connections.tsx` (refresh after block)
-- `app/user-profile/[userId].tsx` (refresh after block)
-- `contexts/AppContext.tsx` (add refresh methods)
+**Note**: This task was completed as part of Task 1.3 implementation. Feed refresh functionality was added to both `app/connections.tsx` and `app/user-profile/[userId].tsx`.
 
 ---
 
@@ -384,14 +404,14 @@ Apple rejected the app due to missing user-generated content moderation features
 ## Success Criteria
 
 ✅ **Ready for Resubmission when:**
-- [ ] All Phase 1 tasks completed
+- [ ] All Phase 1 tasks completed (3/4 complete - Task 1.4 remaining)
 - [ ] All test cases passing
-- [ ] Terms of Use updated with "no tolerance" language
-- [ ] Users must accept terms to register/login
-- [ ] Content filtering active on all user inputs
-- [ ] Reporting available for Tokis, users, and messages
-- [ ] Blocking sends notifications and removes content instantly
-- [ ] Admin can review all reports
+- [x] Terms of Use updated with "no tolerance" language
+- [x] Users must accept terms to register/login
+- [ ] Content filtering active on all user inputs (Task 1.4)
+- [x] Reporting available for Tokis, users, and messages
+- [x] Blocking sends notifications and removes content instantly
+- [x] Admin can review all reports
 
 ---
 
@@ -407,7 +427,7 @@ Apple rejected the app due to missing user-generated content moderation features
 ## Questions/Decisions Needed
 
 - [ ] Which content moderation API to use? (Recommendation: Start with keyword filter + Perspective API)
-- [ ] What email address for admin notifications?
+- [x] What email address for admin notifications? ✅ **RESOLVED**: Uses `ADMIN_EMAIL` or `SUPPORT_EMAIL` environment variable
 - [ ] Should we show warnings for medium-severity content or just block high-severity?
 - [ ] Should users be able to see their own reports status?
 
@@ -416,18 +436,19 @@ Apple rejected the app due to missing user-generated content moderation features
 ## Progress Tracking
 
 **Total Critical Tasks**: 4  
-**Completed**: 2 (Tasks 1.1, 1.2) ✅  
+**Completed**: 3 (Tasks 1.1, 1.2, 1.3) ✅  
 **In Progress**: 0  
-**Remaining**: 2 (Tasks 1.3, 1.4)  
+**Remaining**: 1 (Task 1.4)  
 
-**Estimated Remaining Time**: 12-18 hours
+**Estimated Remaining Time**: 8-12 hours
 
 ### Completed Work
 - ✅ Task 1.1: EULA Agreement System (100%)
 - ✅ Task 1.2: Expand Reporting System with Enhanced Admin Review (100%)
+- ✅ Task 1.3: Enhanced Blocking with Developer Notifications (100%)
+- ✅ Task 2.1: Instant Content Removal on Block (100% - completed as part of Task 1.3)
 
 ### Next Priority
-- 🔴 Task 1.3: Enhanced Blocking with Developer Notifications
 - 🔴 Task 1.4: Content Filtering System
 
 ---
