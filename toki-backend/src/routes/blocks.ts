@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
+import { sendEmail } from '../utils/email';
 
 const router = Router();
 
@@ -31,11 +32,177 @@ router.post('/users/:userId', authenticateToken, async (req: Request, res: Respo
       });
     }
 
+    // Get user details for email notification
+    const blockerResult = await pool.query(
+      'SELECT id, name, email FROM users WHERE id = $1',
+      [blockerId]
+    );
+    const blockedUserResult = await pool.query(
+      'SELECT id, name, email FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (blockerResult.rows.length === 0 || blockedUserResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const blocker = blockerResult.rows[0];
+    const blockedUser = blockedUserResult.rows[0];
+
     // Create block
-    await pool.query(
-      'INSERT INTO user_blocks (blocker_id, blocked_user_id, reason) VALUES ($1, $2, $3)',
+    const blockResult = await pool.query(
+      'INSERT INTO user_blocks (blocker_id, blocked_user_id, reason) VALUES ($1, $2, $3) RETURNING id, created_at',
       [blockerId, userId, reason]
     );
+
+    const block = blockResult.rows[0];
+
+    // Send email notification to admin
+    const adminEmail = process.env.ADMIN_EMAIL || process.env.SUPPORT_EMAIL;
+    if (adminEmail) {
+      try {
+        // Try Resend API first (if configured)
+        const RESEND_API_KEY = process.env.RESEND_API_KEY;
+        
+        const emailSubject = '🚫 User Block Notification - Toki App';
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #EF4444;">🚫 User Block Notification</h2>
+            
+            <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 16px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>A user has been blocked on the Toki platform</strong></p>
+            </div>
+            
+            <h3 style="color: #333;">Block Details:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold; width: 40%;">Blocker:</td>
+                <td style="padding: 12px 0;">${blocker.name} (ID: ${blocker.id})</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold;">Blocker Email:</td>
+                <td style="padding: 12px 0;">${blocker.email}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold;">Blocked User:</td>
+                <td style="padding: 12px 0;">${blockedUser.name} (ID: ${blockedUser.id})</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold;">Blocked User Email:</td>
+                <td style="padding: 12px 0;">${blockedUser.email}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold;">Reason:</td>
+                <td style="padding: 12px 0;">${reason || 'No reason provided'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 12px 0; font-weight: bold;">Timestamp:</td>
+                <td style="padding: 12px 0;">${new Date(block.created_at).toLocaleString('en-US', { timeZone: 'UTC', timeZoneName: 'short' })}</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; font-weight: bold;">Block ID:</td>
+                <td style="padding: 12px 0;">${block.id}</td>
+              </tr>
+            </table>
+            
+            <div style="background-color: #F3F4F6; padding: 16px; margin: 20px 0; border-radius: 8px;">
+              <h4 style="margin-top: 0; color: #333;">Actions Taken:</h4>
+              <ul style="margin: 8px 0; padding-left: 20px; color: #666;">
+                <li>User ${blockedUser.name} has been blocked by ${blocker.name}</li>
+                <li>All content from ${blockedUser.name} is now hidden from ${blocker.name}</li>
+                <li>Direct messaging between these users is now prevented</li>
+                <li>Connection has been automatically removed (if existed)</li>
+              </ul>
+            </div>
+            
+            <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B; padding: 16px; margin: 20px 0;">
+              <p style="margin: 0; color: #92400E;">
+                <strong>⚠️ Review Required:</strong> Please review this block in the admin panel to determine if further action is needed.
+              </p>
+            </div>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px;">
+              This is an automated notification from the Toki platform. 
+              Login to the admin panel to review details and take action if needed.
+            </p>
+          </div>
+        `;
+        
+        if (RESEND_API_KEY) {
+          // Use Resend API (preferred for production)
+          const resendResponse = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${RESEND_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: "admin@toki-app.com",
+              to: adminEmail,
+              subject: emailSubject,
+              html: emailHtml,
+            }),
+          });
+          
+          if (resendResponse.ok) {
+            console.log(`📧 Block notification sent to admin via Resend: ${adminEmail}`);
+          } else {
+            console.error('📧 Resend email failed, falling back to SMTP');
+            // Fallback to SMTP
+            await sendEmail({
+              to: adminEmail,
+              subject: emailSubject,
+              html: emailHtml,
+            });
+          }
+        } else {
+          // Use SMTP (development/fallback)
+          await sendEmail({
+            to: adminEmail,
+            subject: emailSubject,
+            html: emailHtml,
+          });
+        }
+      } catch (emailError) {
+        // Don't fail the block operation if email fails
+        console.error('📧 Failed to send block notification email:', emailError);
+      }
+    } else {
+      console.warn('⚠️ No admin email configured for block notifications');
+    }
+
+    // Log block action for admin panel
+    try {
+      // Check if admin_logs table exists before trying to insert
+      await pool.query(
+        `INSERT INTO admin_logs (action_type, admin_id, target_id, target_type, details, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [
+          'user_block',
+          blockerId, // Not actually an admin, but the user who initiated the block
+          userId,
+          'user',
+          JSON.stringify({
+            blocker_name: blocker.name,
+            blocked_user_name: blockedUser.name,
+            reason: reason || 'No reason provided',
+            block_id: block.id
+          })
+        ]
+      );
+    } catch (logError: any) {
+      // Don't fail if logging fails (table might not exist yet)
+      if (logError.code === '42P01') {
+        // Table doesn't exist - that's okay, it will be created by migration
+        console.warn('⚠️ admin_logs table does not exist yet. Run database migration to enable logging.');
+      } else {
+        console.error('Failed to create admin log entry:', logError);
+      }
+    }
 
     // Instead of deleting connections, we'll filter them out in the queries
     // This preserves the connection history and allows restoration when unblocking
@@ -43,7 +210,7 @@ router.post('/users/:userId', authenticateToken, async (req: Request, res: Respo
 
     return res.json({
       success: true,
-      message: 'User blocked successfully'
+      message: 'User blocked successfully. Their content has been removed from your feed.'
     });
   } catch (error) {
     console.error('Error blocking user:', error);

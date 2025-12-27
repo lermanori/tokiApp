@@ -281,6 +281,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 17: Admin logs
+    try {
+      console.log('📝 Migration 17: Creating admin_logs table...');
+      const adminLogsSql = readFileSync(
+        join(sqlDir, 'create-admin-logs-table.sql'),
+        'utf-8'
+      );
+      await pool.query(adminLogsSql);
+      console.log('✅ Admin logs migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  admin_logs table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

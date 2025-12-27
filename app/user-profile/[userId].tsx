@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook, Flag } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook, Flag, UserX, UserCheck } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
@@ -47,6 +47,7 @@ export default function UserProfileScreen() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [publicActivity, setPublicActivity] = useState<any[]>([]);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   // Helper function to get user initials
   const getUserInitials = (name: string) => {
@@ -78,6 +79,7 @@ export default function UserProfileScreen() {
       loadUserProfile();
       loadConnectionStatus();
       loadPublicActivity();
+      loadBlockStatus();
     }
   }, [userId]);
 
@@ -127,6 +129,21 @@ export default function UserProfileScreen() {
         isRequester: false,
         createdAt: undefined
       });
+    }
+  };
+
+  const loadBlockStatus = async () => {
+    try {
+      // Only check block status if user is authenticated
+      if (state.currentUser && userId) {
+        const blockStatus = await apiService.checkBlockStatus(userId);
+        setIsBlocked(blockStatus.blockedByMe);
+      } else {
+        setIsBlocked(false);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load block status:', error);
+      setIsBlocked(false);
     }
   };
 
@@ -194,7 +211,7 @@ export default function UserProfileScreen() {
     
     Alert.alert(
       'Block User',
-      `Are you sure you want to block ${userProfile.name}? This will:\n\n• Remove them from your connections\n• Hide their content from you\n• Prevent them from messaging you\n\nYou can unblock them later from your settings.`,
+      `Are you sure you want to block ${userProfile.name}?\n\nThis will immediately:\n\n• Remove all their content from your feeds\n• Remove them from your connections\n• Prevent them from messaging you\n• Hide your Tokis from them\n• Notify our team for review\n\nYou can unblock them later from your settings.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -203,11 +220,55 @@ export default function UserProfileScreen() {
           onPress: async () => {
             try {
               await apiService.blockUser(userId);
-              Alert.alert('User Blocked', `${userProfile.name} has been blocked successfully.`);
-              router.back();
+              setIsBlocked(true); // Update local state
+              Alert.alert(
+                'User Blocked',
+                `${userProfile.name} has been blocked successfully. Their content has been removed from your feed.`
+              );
+              
+              // Refresh feeds to show instant content removal
+              if (actions.loadTokis) {
+                await actions.loadTokis();
+              }
+              
+              // Don't navigate back - let user see the unblock button
             } catch (error) {
               console.error('❌ Failed to block user:', error);
               Alert.alert('Error', 'Failed to block user. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleUnblockUser = () => {
+    if (!userProfile) return;
+    
+    Alert.alert(
+      'Unblock User',
+      `Are you sure you want to unblock ${userProfile.name}?\n\nThis will:\n\n• Restore their ability to message you\n• Make your Tokis visible to them again\n• Allow them to send connection requests\n• Restore their content in your feeds`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock User',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await apiService.unblockUser(userId);
+              setIsBlocked(false); // Update local state
+              Alert.alert(
+                'User Unblocked',
+                `${userProfile.name} has been unblocked successfully.`
+              );
+              
+              // Refresh feeds to show restored content
+              if (actions.loadTokis) {
+                await actions.loadTokis();
+              }
+            } catch (error) {
+              console.error('❌ Failed to unblock user:', error);
+              Alert.alert('Error', 'Failed to unblock user. Please try again.');
             }
           }
         }
@@ -464,6 +525,29 @@ export default function UserProfileScreen() {
                 <Flag size={18} color="#EF4444" />
                 <Text style={styles.reportText}>Report User</Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Block/Unblock Button - Only show if not viewing own profile */}
+          {state.currentUser?.id && state.currentUser.id !== userId && (
+            <View style={styles.blockSection}>
+              {isBlocked ? (
+                <TouchableOpacity
+                  style={styles.unblockButton}
+                  onPress={handleUnblockUser}
+                >
+                  <UserCheck size={18} color="#10B981" />
+                  <Text style={styles.unblockText}>Unblock User</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.blockButton}
+                  onPress={handleBlockUser}
+                >
+                  <UserX size={18} color="#EF4444" />
+                  <Text style={styles.blockText}>Block User</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -841,5 +925,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#EF4444',
+  },
+  blockSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  blockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    gap: 8,
+  },
+  blockText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#EF4444',
+  },
+  unblockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    gap: 8,
+  },
+  unblockText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#10B981',
   },
 });

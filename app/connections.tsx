@@ -428,20 +428,34 @@ export default function ConnectionsScreen() {
       if (response.ok) {
         const responseData = await response.json();
         console.log('🚫 [BLOCK] Success response:', responseData);
-        console.log('🚫 [BLOCK] Block successful! Reloading data...');
         
-        await loadConnections();
-        await loadBlockedUsers();
+        // Show success message with instant content removal confirmation
+        Alert.alert(
+          'User Blocked',
+          `${selectedUser.name} has been blocked successfully. Their content has been removed from your feed.`,
+          [{ text: 'OK' }]
+        );
         
-        console.log('🚫 [BLOCK] Data reloaded successfully');
+        // Reload data to reflect instant content removal
+        console.log('🚫 [BLOCK] Refreshing feeds...');
+        await Promise.all([
+          loadConnections(),
+          loadBlockedUsers(),
+          // Refresh tokis feed through context actions
+          actions.loadTokis?.(),
+        ]);
+        
+        console.log('🚫 [BLOCK] All data refreshed successfully');
       } else {
         const errorData = await response.text();
         console.log('🚫 [BLOCK] Error response:', errorData);
         console.log('🚫 [BLOCK] Block failed with status:', response.status);
+        Alert.alert('Error', 'Failed to block user. Please try again.');
       }
     } catch (error) {
       console.error('🚫 [BLOCK] Exception error:', error);
       console.log('🚫 [BLOCK] Block failed with exception:', error instanceof Error ? error.message : String(error));
+      Alert.alert('Error', 'Failed to block user. Please try again.');
     } finally {
       setShowBlockPrompt(false);
       setSelectedUser(null);
@@ -893,10 +907,12 @@ export default function ConnectionsScreen() {
             </Text>
             
             <Text style={styles.modalSubtext}>
-              This will:
+              This will immediately:
+              {'\n'}• Remove all their content from your feeds
               {'\n'}• Remove them from your connections
               {'\n'}• Prevent them from messaging you
               {'\n'}• Hide your Tokis from them
+              {'\n'}• Notify our team for review
             </Text>
             
             <View style={styles.modalActions}>

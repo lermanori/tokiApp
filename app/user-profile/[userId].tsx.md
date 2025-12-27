@@ -1,77 +1,55 @@
 # File: user-profile/[userId].tsx
 
 ### Summary
-This file contains the public profile page component that allows users to view other users' profiles. It displays profile information, connection status, and provides action buttons for requesting connections or sending messages.
-
-### Features Implemented
-- **Public Profile Display**: Shows other users' profile information including avatar, name, bio, location, and member since date
-- **Connection Status Management**: Displays different action buttons based on connection status
-- **Dynamic Action Buttons**: 
-  - "Request Connection" for users not connected
-  - "Request Pending" for pending requests
-  - "Send Message" for connected users
-- **Profile Statistics**: Shows Tokis joined, created, and connections count
-- **Social Media Links**: Displays user's social media profiles
-- **User Safety Features**: Block user functionality and error handling
-
-### Component Structure
-1. **Header Section**: Back button, title, and more options menu
-2. **Profile Header**: Avatar, name, bio, location, member since, social links
-3. **Action Button**: Dynamic button based on connection status
-4. **Statistics**: User activity metrics in a card layout
-5. **Loading & Error States**: Proper loading indicators and error handling
-
-### Connection Status Logic
-- **`none`**: No connection exists → Show "Request Connection" button
-- **`pending`**: Request sent/received → Show "Request Sent/Pending" button (disabled)
-- **`accepted`**: Connected → Show "Send Message" button
-- **`declined`**: Request was declined → Show "Request Connection" button (can retry)
-
-### Technical Implementation
-- **Route Parameters**: Uses `useLocalSearchParams` to get userId from URL
-- **State Management**: Local state for profile data and connection status
-- **API Integration**: Prepared for future API calls (currently using mock data)
-- **Navigation**: Integrates with existing chat and navigation systems
-- **Error Handling**: Comprehensive error handling with user-friendly messages
-
-### Mock Data (Development)
-Currently uses mock data for development:
-- Sample user profile with realistic data
-- Connection status simulation
-- API call placeholders for future implementation
-
-### API Integration (Phase 2 Complete)
-- ✅ `getUserProfile(userId)`: Fetch user profile data
-- ✅ `getConnectionStatus(userId)`: Get connection status between users
-- ✅ `sendConnectionRequest(userId)`: Send connection request
-- ✅ `blockUser(userId)`: Block user functionality
-
-All API methods are now integrated and the component uses real backend data instead of mock data.
-
-### Styling
-- **Design System**: Consistent with app's design language
-- **Responsive Layout**: Adapts to different screen sizes
-- **Visual Hierarchy**: Clear information organization
-- **Interactive Elements**: Proper button states and feedback
-
-### Navigation Integration
-- **Back Navigation**: Returns to previous screen
-- **Chat Integration**: Direct navigation to chat with specific user when "Send Message" is pressed
-- **Profile Links**: Ready for integration with other app sections
+This file contains the user profile screen, displaying public user information, connection status, and allowing users to connect, message, report, or block other users. Enhanced with better feedback and feed refresh for Apple App Review compliance.
 
 ### Fixes Applied log
-- **Fixed Send Message navigation**: Changed "Send Message" button to navigate to chat with correct parameters
-- **Updated navigation behavior**: Users now go directly to chat with the specific user using otherUserId parameter
-- **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
- - **Added Public Activity section**: Renders a horizontal list of public Tokis joined by the user using `getUserActivity()`; uses `TokiCard`.
- - **Self-profile guard**: Disables action buttons when viewing your own public profile (shows disabled "Your Profile" button).
-- **Restricted Activity Visibility**: Activity is now only visible to users with accepted connections. Non-connected users see a message prompting them to connect.
-- **Removed Rating stat**: Removed the Rating statistic from the profile stats section to match the main profile screen (now shows 3 stats: Tokis Joined, Tokis Created, Connections).
+- **problem**: Block button was not visible in the UI (handleBlockUser existed but wasn't connected to any UI element)
+- **solution**: Added "Block User" button below the "Report User" button, styled consistently with report button.
+
+- **problem**: Unblock button was not shown when viewing a blocked user's profile
+- **solution**: Added block status checking on profile load, and conditionally show "Block User" or "Unblock User" button based on current block status.
+
+- **problem**: Block confirmation didn't inform users about instant content removal and team notification
+- **solution**: Updated Alert.alert text to explicitly state immediate effects including content removal and team notification.
+
+- **problem**: No feedback after successful block operation
+- **solution**: Added Alert.alert with success message confirming block and content removal.
+
+- **problem**: Feeds didn't refresh after blocking from profile screen
+- **solution**: Added automatic feed refresh using actions.loadTokis() after successful block.
 
 ### How Fixes Were Implemented
-- Imported `TokiCard`, added `publicActivity` state, `loadPublicActivity()` and invoked it when `userId` changes.
-- Inserted the section after the statistics block with a title "<FirstName>'s Activity".
-- Added conditional `state.currentUser?.id === userId` to render `disabledButton` and avoid self-requests.
-- Activity section now checks `connectionStatus?.status === 'accepted'` or `state.currentUser?.id === userId` before displaying activity. Non-connected users see "Connect with this user to see their activity" message. Uses IIFE pattern for conditional rendering logic.
+- **Block/Unblock Button UI**:
+  - Added UserX and UserCheck icons import from lucide-react-native
+  - Added blockSection, blockButton, unblockButton styles
+  - Positioned button directly below report button
+  - Only shows when viewing another user's profile (not own profile)
+  - Conditionally renders "Block User" (red) or "Unblock User" (green) based on isBlocked state
 
-This component provides the foundation for user discovery and social networking features in the app.
+- **Block Status Checking**:
+  - Added isBlocked state to track if current user has blocked the profile user
+  - Added loadBlockStatus() function that calls apiService.checkBlockStatus()
+  - Loads block status when profile loads (in useEffect)
+  - Updates isBlocked state after block/unblock actions
+
+- **Unblock Functionality**:
+  - Added handleUnblockUser() function with confirmation dialog
+  - Calls apiService.unblockUser() to remove block
+  - Updates isBlocked state to false after successful unblock
+  - Refreshes Tokis feed to show restored content
+
+- **Enhanced Block Confirmation**:
+  - Updated Alert.alert message to include "immediately" keyword
+  - Added bullet points about instant content removal, connection removal, messaging prevention, and team notification
+  - More comprehensive explanation of blocking effects
+
+- **Success Feedback**:
+  - Added Alert.alert after successful block API call
+  - Message explicitly states "Their content has been removed from your feed"
+  - Provides clear confirmation before navigating back
+
+- **Feed Refresh**:
+  - Calls actions.loadTokis() after successful block
+  - Ensures Tokis feed reflects block immediately
+  - User sees updated feed when they navigate back
