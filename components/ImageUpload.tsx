@@ -69,25 +69,46 @@ export default function ImageUpload({
     }
   }, [showCropModal, selectedImageUri]);
 
-  const requestPermissions = async () => {
+  const requestPermissions = async (useCamera: boolean = false) => {
     console.log('ImageUpload: Checking current permission status...');
-    const currentStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
-    console.log('ImageUpload: Current permission status:', currentStatus);
     
-    if (currentStatus.status === 'granted') {
-      console.log('ImageUpload: Permission already granted');
+    if (useCamera) {
+      const currentStatus = await ImagePicker.getCameraPermissionsAsync();
+      console.log('ImageUpload: Current camera permission status:', currentStatus);
+      
+      if (currentStatus.status === 'granted') {
+        console.log('ImageUpload: Camera permission already granted');
+        return true;
+      }
+      
+      console.log('ImageUpload: Requesting camera permission...');
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      console.log('ImageUpload: Camera permission request result:', status);
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera permissions to take photos.');
+        return false;
+      }
+      return true;
+    } else {
+      const currentStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
+      console.log('ImageUpload: Current permission status:', currentStatus);
+      
+      if (currentStatus.status === 'granted') {
+        console.log('ImageUpload: Permission already granted');
+        return true;
+      }
+      
+      console.log('ImageUpload: Requesting permission...');
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('ImageUpload: Permission request result:', status);
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload images.');
+        return false;
+      }
       return true;
     }
-    
-    console.log('ImageUpload: Requesting permission...');
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    console.log('ImageUpload: Permission request result:', status);
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please grant camera roll permissions to upload images.');
-      return false;
-    }
-    return true;
   };
 
   const handleImagePicker = async (useCamera: boolean = false) => {
@@ -98,29 +119,44 @@ export default function ImageUpload({
     setShowCropModal(false);
     
     try {
-      console.log('ImageUpload: Requesting library permissions...');
-      const hasPermission = await requestPermissions();
+      console.log('ImageUpload: Requesting permissions...');
+      const hasPermission = await requestPermissions(useCamera);
       if (!hasPermission) return;
 
-      console.log('ImageUpload: Launching image picker with options:', {
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.8
-      });
-      
-      console.log('ImageUpload: About to call ImagePicker.launchImageLibraryAsync...');
-      console.log('ImageUpload: Platform.OS =', Platform.OS);
-      
       // Add timeout detection
       const timeoutId = setTimeout(() => {
         console.log('⚠️ ImageUpload: Picker has been waiting for 5 seconds - might be stuck');
       }, 5000);
       
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.8,
-      });
+      let result;
+      
+      if (useCamera) {
+        console.log('ImageUpload: Launching camera with options:', {
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8
+        });
+        console.log('ImageUpload: About to call ImagePicker.launchCameraAsync...');
+        console.log('ImageUpload: Platform.OS =', Platform.OS);
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      } else {
+        console.log('ImageUpload: Launching image picker with options:', {
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8
+        });
+        console.log('ImageUpload: About to call ImagePicker.launchImageLibraryAsync...');
+        console.log('ImageUpload: Platform.OS =', Platform.OS);
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+        });
+      }
       
       clearTimeout(timeoutId);
 

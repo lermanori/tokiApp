@@ -4,6 +4,9 @@
 This is a reusable component for image upload functionality. It handles image picking, cropping, and platform-specific upload logic. It supports both profile and toki image uploads with configurable endpoints and behaviors.
 
 ### Fixes Applied Log
+- **Problem**: "Take Photo" button was opening the photo library instead of the camera.
+- **Solution**: Updated `handleImagePicker` to check the `useCamera` parameter and call `ImagePicker.launchCameraAsync()` when true, and `ImagePicker.launchImageLibraryAsync()` when false. Also updated `requestPermissions` to accept `useCamera` parameter and request camera permissions when using the camera.
+
 - **Problem**: iOS upload was failing with "Empty file" error from Cloudinary after the crop modal changes.
 - **Solution**: Changed iOS/React Native upload approach from FormData (which doesn't work reliably with local file URIs from ImageManipulator) to base64 + JSON, matching the web approach. Both platforms now convert the image to base64 using `ImageManipulator.manipulateAsync` with `base64: true` and send it as JSON with `Content-Type: application/json`.
 
@@ -17,6 +20,16 @@ This is a reusable component for image upload functionality. It handles image pi
 - **Solution**: Added a 1000ms (1 second) delay after closing the options modal before launching the image picker on iOS (100ms on other platforms). This allows the modal animation to complete before the picker opens. Also added detailed permission logging and timeout detection to help debug picker issues.
 
 ### How Fixes Were Implemented
+- **Problem**: The `handleImagePicker` function accepted a `useCamera` parameter but always called `ImagePicker.launchImageLibraryAsync()` regardless of the parameter value, causing "Take Photo" to open the library instead of the camera.
+- **Solution**:
+  1. Updated `requestPermissions` to accept a `useCamera` boolean parameter
+  2. When `useCamera` is true, request camera permissions using `ImagePicker.getCameraPermissionsAsync()` and `ImagePicker.requestCameraPermissionsAsync()`
+  3. When `useCamera` is false, request media library permissions (existing behavior)
+  4. Updated `handleImagePicker` to conditionally call the appropriate ImagePicker method:
+     - If `useCamera` is true: call `ImagePicker.launchCameraAsync()`
+     - If `useCamera` is false: call `ImagePicker.launchImageLibraryAsync()`
+  5. Updated the permission request call to pass the `useCamera` parameter to `requestPermissions`
+
 - **Problem**: The iOS version was using FormData with a local file URI (`file:///...`) from `ImageManipulator`, which the FormData API couldn't read properly, resulting in an empty file being sent to Cloudinary.
 - **Solution**:
   1. Removed the platform-specific FormData approach for React Native
