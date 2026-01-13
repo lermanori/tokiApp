@@ -60,6 +60,15 @@ export default function ImageUpload({
   const [showOptions, setShowOptions] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  // Add local state to track the displayed image URL for immediate updates
+  const [displayImageUrl, setDisplayImageUrl] = useState<string | undefined>(currentImageUrl);
+
+  // Sync displayImageUrl with currentImageUrl prop when it changes
+  React.useEffect(() => {
+    if (currentImageUrl !== displayImageUrl) {
+      setDisplayImageUrl(currentImageUrl);
+    }
+  }, [currentImageUrl]);
 
   // Debug state changes
   React.useEffect(() => {
@@ -353,6 +362,9 @@ export default function ImageUpload({
         const result = await uploadResponse.json();
         console.log('🔍 STEP 10 - Upload success result:', result);
         if (result.success) {
+          // Update local display state immediately for instant UI update
+          setDisplayImageUrl(result.data.imageUrl);
+          
           // Update the global state first
           dispatch({
             type: 'UPDATE_CURRENT_USER',
@@ -410,6 +422,7 @@ export default function ImageUpload({
           text: 'Remove',
           style: 'destructive',
           onPress: () => {
+            setDisplayImageUrl(undefined);
             onImageUpdate('');
           },
         },
@@ -428,8 +441,8 @@ export default function ImageUpload({
             borderRadius: circular ? size / 2 : 8,
           }
         ]}>
-          {currentImageUrl ? (
-            <Image source={{ uri: currentImageUrl }} style={styles.image} />
+          {displayImageUrl ? (
+            <Image source={{ uri: displayImageUrl }} style={styles.image} />
           ) : (
             <View style={[styles.placeholder, { borderRadius: circular ? size / 2 : 8 }]}>
               <ImageIcon size={size * 0.4} color="#9CA3AF" />

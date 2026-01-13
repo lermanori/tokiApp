@@ -4,6 +4,9 @@
 This is a reusable component for image upload functionality. It handles image picking, cropping, and platform-specific upload logic. It supports both profile and toki image uploads with configurable endpoints and behaviors.
 
 ### Fixes Applied Log
+- **Problem**: Image didn't refresh immediately after upload - required manual refresh to see the new image.
+- **Solution**: Added local `displayImageUrl` state that updates immediately after successful upload, ensuring the UI refreshes instantly without waiting for parent component re-render or backend data refresh. The state syncs with the `currentImageUrl` prop via useEffect.
+
 - **Problem**: "Take Photo" button was opening the photo library instead of the camera.
 - **Solution**: Updated `handleImagePicker` to check the `useCamera` parameter and call `ImagePicker.launchCameraAsync()` when true, and `ImagePicker.launchImageLibraryAsync()` when false. Also updated `requestPermissions` to accept `useCamera` parameter and request camera permissions when using the camera.
 
@@ -20,6 +23,15 @@ This is a reusable component for image upload functionality. It handles image pi
 - **Solution**: Added a 1000ms (1 second) delay after closing the options modal before launching the image picker on iOS (100ms on other platforms). This allows the modal animation to complete before the picker opens. Also added detailed permission logging and timeout detection to help debug picker issues.
 
 ### How Fixes Were Implemented
+- **Problem**: After uploading an image (especially from camera), the component didn't show the new image immediately - users had to manually refresh to see the updated image.
+- **Solution**:
+  1. Added `displayImageUrl` local state to track the displayed image URL independently from the prop
+  2. Added a `useEffect` hook to sync `displayImageUrl` with the `currentImageUrl` prop when it changes externally
+  3. Updated `uploadImage` function to immediately set `displayImageUrl` to the new image URL after successful upload (before calling callbacks)
+  4. Changed the render logic to use `displayImageUrl` instead of `currentImageUrl` for displaying the image
+  5. Updated `handleRemoveImage` to clear `displayImageUrl` when removing an image
+  6. This ensures instant UI updates without waiting for parent component re-renders or backend data refreshes
+
 - **Problem**: The `handleImagePicker` function accepted a `useCamera` parameter but always called `ImagePicker.launchImageLibraryAsync()` regardless of the parameter value, causing "Take Photo" to open the library instead of the camera.
 - **Solution**:
   1. Updated `requestPermissions` to accept a `useCamera` boolean parameter

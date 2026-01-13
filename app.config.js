@@ -12,12 +12,13 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "7",
+      buildNumber: "9",
       config: {},
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
         NSLocationWhenInUseUsageDescription: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you.",
-        NSLocationAlwaysUsageDescription: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you."
+        NSLocationAlwaysUsageDescription: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you.",
+        NSCameraUsageDescription: "The camera is used to take profile photos and to capture photos when creating or uploading an event, for example when adding images during event setup."
       },
       associatedDomains: [
         "applinks:toki-app.com"
@@ -60,7 +61,7 @@ module.exports = {
       url: "https://u.expo.dev/41a24d0b-1d53-429a-8753-acd4a5b9972c"
     },
     android: {
-      versionCode: 7,
+      versionCode: 9,
       permissions: [
         "android.permission.RECORD_AUDIO"
       ]
