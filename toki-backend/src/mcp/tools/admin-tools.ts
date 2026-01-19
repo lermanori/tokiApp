@@ -1,11 +1,11 @@
 import { pool } from '../../config/database';
 import { DbToki, SpecToki } from '../types';
 import { transformTokiToSpecFormat } from '../adapters/toki-adapter';
-import { validateAdminKey } from '../auth';
 import type { RegisteredTool } from './user-tools';
 import { ImageService } from '../../services/imageService';
 import logger from '../../utils/logger';
 import { buildShortLabel } from '../../routes/maps';
+import { MCPUserContext } from '../auth-mcp';
 
 /**
  * Convert time slot string to ISO 8601 scheduled time (matches frontend logic)
@@ -70,14 +70,6 @@ export const adminTools: RegisteredTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        api_key: {
-          type: 'string',
-          description: 'Admin MCP API key',
-        },
-        author_id: {
-          type: 'string',
-          description: 'Optional: ID of the user who will be the host of the Toki. If not provided, uses the user_id from the API key.',
-        },
         title: {
           type: 'string',
           description: 'Title of the Toki (required)',
@@ -149,11 +141,9 @@ export const adminTools: RegisteredTool[] = [
           description: 'Optional array of images. Each image can have: {url} for existing images (will be downloaded and reprocessed), {base64} for upload, and optional {aspectRatio} for cropping (1:1 or 4:3, defaults to 4:3)',
         },
       },
-      required: ['api_key', 'title', 'category', 'location', 'timeSlot'],
+      required: ['title', 'category', 'location', 'timeSlot'],
     },
     handler: async (args: {
-      api_key: string;
-      author_id?: string;
       title: string;
       description?: string;
       category: string;
@@ -168,10 +158,9 @@ export const adminTools: RegisteredTool[] = [
       tags?: string[];
       autoApprove?: boolean;
       images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
+      userContext: MCPUserContext;
     }) => {
       const {
-        api_key,
-        author_id,
         title,
         description,
         category,
@@ -186,23 +175,11 @@ export const adminTools: RegisteredTool[] = [
         tags,
         autoApprove,
         images,
+        userContext,
       } = args;
 
-      const valid = await validateAdminKey(api_key);
-      if (!valid) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: 'Invalid or missing MCP admin API key' }, null, 2),
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      // Use author_id from args if provided, otherwise use user_id from API key
-      const finalAuthorId = author_id || valid.user_id;
+      // Auto-set author_id from authenticated user
+      const finalAuthorId = userContext.userId;
 
       // Default visibility to 'public' unless explicitly specified (matches REST API)
       // Note: Only 'public' and 'private' are actually implemented in the backend
@@ -402,16 +379,12 @@ export const adminTools: RegisteredTool[] = [
   {
     name: 'update_toki',
     description: 'Update an existing Toki (admin only).',
-    inputSchema: {
+      inputSchema: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
           description: 'ID of the Toki to update',
-        },
-        api_key: {
-          type: 'string',
-          description: 'Admin MCP API key',
         },
         title: {
           type: 'string',
@@ -420,10 +393,6 @@ export const adminTools: RegisteredTool[] = [
         description: {
           type: 'string',
           description: 'New description (if provided)',
-        },
-        author_id: {
-          type: 'string',
-          description: 'New host/author id, if changing ownership',
         },
         category: {
           type: 'string',
@@ -458,14 +427,12 @@ export const adminTools: RegisteredTool[] = [
           description: 'Optional array of images. Each image can have: {url} for existing images (will be downloaded and reprocessed), {base64} for upload, and optional {aspectRatio} for cropping (1:1 or 4:3, defaults to 4:3)',
         },
       },
-      required: ['id', 'api_key'],
+      required: ['id'],
     },
     handler: async (args: {
       id: string;
-      api_key: string;
       title?: string;
       description?: string;
-      author_id?: string;
       category?: string;
       status?: string;
       location?: string;
@@ -478,13 +445,12 @@ export const adminTools: RegisteredTool[] = [
       longitude?: number;
       autoApprove?: boolean;
       images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
+      userContext: MCPUserContext;
     }) => {
       const {
-        api_key,
         id,
         title,
         description,
-        author_id,
         category,
         status,
         location,
@@ -497,20 +463,8 @@ export const adminTools: RegisteredTool[] = [
         longitude,
         autoApprove,
         images,
+        userContext,
       } = args;
-
-      const valid = await validateAdminKey(api_key);
-      if (!valid) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: 'Invalid or missing MCP admin API key' }, null, 2),
-            },
-          ],
-          isError: true,
-        };
-      }
 
       // Geocode location if coordinates not provided (matches profile update logic)
       let finalLatitude = latitude;
@@ -593,11 +547,7 @@ export const adminTools: RegisteredTool[] = [
         updateValues.push(finalLocation); // Use shortLabel if geocoded
       }
 
-      if (author_id !== undefined) {
-        paramCount++;
-        updateFields.push(`host_id = $${paramCount}`);
-        updateValues.push(author_id);
-      }
+      // Note: author_id/host_id changes are not allowed via MCP - use authenticated user only
 
       if (visibility !== undefined) {
         paramCount++;
@@ -776,39 +726,22 @@ export const adminTools: RegisteredTool[] = [
   {
     name: 'delete_toki',
     description: 'Delete a Toki (admin only).',
-    inputSchema: {
+      inputSchema: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
           description: 'ID of the Toki to delete',
         },
-        api_key: {
-          type: 'string',
-          description: 'Admin MCP API key',
-        },
         reason: {
           type: 'string',
           description: 'Optional reason for deletion (for logs or client display)',
         },
       },
-      required: ['id', 'api_key'],
+      required: ['id'],
     },
-    handler: async (args: { id: string; api_key: string; reason?: string }) => {
-      const { id, api_key, reason } = args;
-
-      const valid = await validateAdminKey(api_key);
-      if (!valid) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: 'Invalid or missing MCP admin API key' }, null, 2),
-            },
-          ],
-          isError: true,
-        };
-      }
+    handler: async (args: { id: string; reason?: string; userContext: MCPUserContext }) => {
+      const { id, reason } = args;
 
       const result = await pool.query('DELETE FROM tokis WHERE id = $1 RETURNING id', [id]);
 

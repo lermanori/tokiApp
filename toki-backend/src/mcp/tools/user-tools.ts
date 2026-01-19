@@ -1,6 +1,7 @@
 import { pool } from '../../config/database';
 import { DbToki } from '../types';
 import { transformTokiToSpecFormat } from '../adapters/toki-adapter';
+import { MCPUserContext } from '../auth-mcp';
 
 export interface RegisteredTool {
   name: string;
@@ -42,8 +43,9 @@ export const userTools: RegisteredTool[] = [
       },
       required: ['id'],
     },
-    handler: async (args: { id: string; expand?: string[] }) => {
+    handler: async (args: { id: string; expand?: string[]; userContext: MCPUserContext }) => {
       const { id, expand } = args;
+      // userContext is available but not needed for read operations
 
       const result = await pool.query('SELECT * FROM tokis WHERE id = $1', [id]);
 
@@ -80,7 +82,7 @@ export const userTools: RegisteredTool[] = [
         },
       },
     },
-    handler: async (args: { limit?: number; cursor?: string }) => {
+    handler: async (args: { limit?: number; cursor?: string; userContext: MCPUserContext }) => {
       const rawLimit = args.limit ?? 20;
       const limit = Math.max(1, Math.min(rawLimit, 100));
 
@@ -162,7 +164,7 @@ export const userTools: RegisteredTool[] = [
       },
       required: ['search_query'],
     },
-    handler: async (args: { search_query: string; limit?: number }) => {
+    handler: async (args: { search_query: string; limit?: number; userContext: MCPUserContext }) => {
       const { search_query } = args;
       const rawLimit = args.limit ?? 20;
       const limit = Math.max(1, Math.min(rawLimit, 100));
@@ -218,7 +220,7 @@ export const userTools: RegisteredTool[] = [
       },
       required: ['author_id'],
     },
-    handler: async (args: { author_id: string; limit?: number }) => {
+    handler: async (args: { author_id: string; limit?: number; userContext: MCPUserContext }) => {
       const { author_id } = args;
       const rawLimit = args.limit ?? 20;
       const limit = Math.max(1, Math.min(rawLimit, 100));

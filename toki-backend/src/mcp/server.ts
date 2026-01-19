@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { userTools } from './tools/user-tools';
 import { adminTools } from './tools/admin-tools';
 import { CATEGORY_CONFIG } from '../config/categories';
+import { authenticateMCPRequest, MCPUserContext } from './auth-mcp';
+import logger from '../utils/logger';
 
 // Extract category keys for enum from CATEGORY_CONFIG (single source of truth)
 const CATEGORY_KEYS = Object.keys(CATEGORY_CONFIG) as [string, ...string[]];
@@ -14,7 +16,7 @@ export function createMCPServer() {
     version: '1.0.0',
   });
 
-  // get_toki_by_id
+  // Read tools - require authentication
   const getById = userTools.find((t) => t.name === 'get_toki_by_id');
   if (getById) {
     server.registerTool(
@@ -22,6 +24,7 @@ export function createMCPServer() {
       {
         description: getById.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           id: z.string(),
           expand: z.array(z.string()).optional(),
         }),
@@ -29,12 +32,16 @@ export function createMCPServer() {
           readOnlyHint: true,
         },
       },
-      async ({ id, expand }: { id: string; expand?: string[] }) =>
-        getById.handler({ id, expand })
+      async ({ token, id, expand }: { token: string; id: string; expand?: string[] }) => {
+        const context = await authenticateMCPRequest(token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        return getById.handler({ id, expand, userContext: context });
+      }
     );
   }
 
-  // list_tokis
   const listTokis = userTools.find((t) => t.name === 'list_tokis');
   if (listTokis) {
     server.registerTool(
@@ -42,6 +49,7 @@ export function createMCPServer() {
       {
         description: listTokis.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           limit: z.number().int().optional(),
           cursor: z.string().optional(),
         }),
@@ -49,12 +57,16 @@ export function createMCPServer() {
           readOnlyHint: true,
         },
       },
-      async ({ limit, cursor }: { limit?: number; cursor?: string }) =>
-        listTokis.handler({ limit, cursor })
+      async ({ token, limit, cursor }: { token: string; limit?: number; cursor?: string }) => {
+        const context = await authenticateMCPRequest(token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        return listTokis.handler({ limit, cursor, userContext: context });
+      }
     );
   }
 
-  // search_tokis
   const searchTokis = userTools.find((t) => t.name === 'search_tokis');
   if (searchTokis) {
     server.registerTool(
@@ -62,6 +74,7 @@ export function createMCPServer() {
       {
         description: searchTokis.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           search_query: z.string(),
           limit: z.number().int().optional(),
         }),
@@ -69,12 +82,16 @@ export function createMCPServer() {
           readOnlyHint: true,
         },
       },
-      async ({ search_query, limit }: { search_query: string; limit?: number }) =>
-        searchTokis.handler({ search_query, limit })
+      async ({ token, search_query, limit }: { token: string; search_query: string; limit?: number }) => {
+        const context = await authenticateMCPRequest(token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        return searchTokis.handler({ search_query, limit, userContext: context });
+      }
     );
   }
 
-  // list_tokis_by_author
   const listByAuthor = userTools.find((t) => t.name === 'list_tokis_by_author');
   if (listByAuthor) {
     server.registerTool(
@@ -82,6 +99,7 @@ export function createMCPServer() {
       {
         description: listByAuthor.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           author_id: z.string(),
           limit: z.number().int().optional(),
         }),
@@ -89,13 +107,17 @@ export function createMCPServer() {
           readOnlyHint: true,
         },
       },
-      async ({ author_id, limit }: { author_id: string; limit?: number }) =>
-        listByAuthor.handler({ author_id, limit })
+      async ({ token, author_id, limit }: { token: string; author_id: string; limit?: number }) => {
+        const context = await authenticateMCPRequest(token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        return listByAuthor.handler({ author_id, limit, userContext: context });
+      }
     );
   }
 
-  // --- Admin tools (no API key yet; will be protected in Phase 3) ---
-
+  // Write tools - require admin
   const createAdmin = adminTools.find((t) => t.name === 'create_toki');
   if (createAdmin) {
     server.registerTool(
@@ -103,8 +125,7 @@ export function createMCPServer() {
       {
         description: createAdmin.description,
         inputSchema: z.object({
-          api_key: z.string().describe('Admin MCP API key'),
-          author_id: z.string().optional().describe('Optional: ID of the user who will be the host. If not provided, uses the user_id from the API key.'),
+          token: z.string().describe('JWT authentication token'),
           title: z.string().describe('Title of the Toki (required)'),
           description: z.string().optional().describe('Optional description of the Toki'),
           category: z.enum(CATEGORY_KEYS).describe('Category for the Toki (required)'),
@@ -122,6 +143,7 @@ export function createMCPServer() {
             url: z.string().url().optional().describe('URL of an existing image already uploaded to Cloudinary (use with publicId)'),
             publicId: z.string().optional().describe('Cloudinary public ID of an existing image (use with url)'),
             base64: z.string().optional().describe('Base64-encoded image data for upload. Accepts either: 1) Data URI format: "data:image/png;base64,iVBORw0KGgo..." or 2) Raw base64 string: "iVBORw0KGgo...". Supported formats: JPEG, PNG, WebP. Images are automatically uploaded to Cloudinary and resized to 800x600.'),
+            aspectRatio: z.enum(['1:1', '4:3']).optional().describe('Optional aspect ratio for cropping. Defaults to 4:3 if not specified.'),
           })).optional().describe('Optional array of images for the Toki. Each image object can be either: 1) Existing image: provide both {url, publicId} for images already in Cloudinary, or 2) New upload: provide {base64} with base64-encoded image data (data URI or raw base64 string). Multiple images can be provided.'),
         }),
         annotations: {
@@ -130,8 +152,7 @@ export function createMCPServer() {
         },
       },
       async (args: {
-        api_key: string;
-        author_id?: string;
+        token: string;
         title: string;
         description?: string;
         category: string;
@@ -145,8 +166,19 @@ export function createMCPServer() {
         external_url?: string;
         tags?: string[];
         autoApprove?: boolean;
-        images?: Array<{ url?: string; publicId?: string; base64?: string }>;
-      }) => createAdmin.handler(args)
+        images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
+      }) => {
+        const context = await authenticateMCPRequest(args.token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        if (!context.isAdmin) {
+          logger.warn(`[MCP] Forbidden: Non-admin user ${context.userId} attempted create_toki`);
+          throw new Error('Forbidden: Admin access required');
+        }
+        const { token: _, ...toolArgs } = args;
+        return createAdmin.handler({ ...toolArgs, userContext: context });
+      }
     );
   }
 
@@ -157,11 +189,10 @@ export function createMCPServer() {
       {
         description: updateAdmin.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           id: z.string().describe('ID of the Toki to update'),
-          api_key: z.string().describe('Admin MCP API key'),
           title: z.string().optional().describe('New title (if provided)'),
           description: z.string().optional().describe('New description (if provided)'),
-          author_id: z.string().optional().describe('New host/author id, if changing ownership'),
           category: z.enum(CATEGORY_KEYS).optional().describe('Category for the Toki'),
           timeSlot: z.string().optional().describe('Time slot description (e.g., "now", "30min", "tonight", or any custom text)'),
           scheduledTime: z.string().datetime().optional().describe('Optional scheduled time (ISO 8601 format)'),
@@ -175,6 +206,7 @@ export function createMCPServer() {
             url: z.string().url().optional().describe('URL of an existing image already uploaded to Cloudinary (use with publicId)'),
             publicId: z.string().optional().describe('Cloudinary public ID of an existing image (use with url)'),
             base64: z.string().optional().describe('Base64-encoded image data for upload. Accepts either: 1) Data URI format: "data:image/png;base64,iVBORw0KGgo..." or 2) Raw base64 string: "iVBORw0KGgo...". Supported formats: JPEG, PNG, WebP. Images are automatically uploaded to Cloudinary and resized to 800x600.'),
+            aspectRatio: z.enum(['1:1', '4:3']).optional().describe('Optional aspect ratio for cropping. Defaults to 4:3 if not specified.'),
           })).optional().describe('Optional array of images for the Toki. Each image object can be either: 1) Existing image: provide both {url, publicId} for images already in Cloudinary, or 2) New upload: provide {base64} with base64-encoded image data (data URI or raw base64 string). Multiple images can be provided.'),
         }),
         annotations: {
@@ -183,11 +215,10 @@ export function createMCPServer() {
         },
       },
       async (args: {
+        token: string;
         id: string;
-        api_key: string;
         title?: string;
         description?: string;
-        author_id?: string;
         category?: string;
         status?: string;
         location?: string;
@@ -197,8 +228,19 @@ export function createMCPServer() {
         scheduledTime?: string;
         maxAttendees?: number | null;
         autoApprove?: boolean;
-        images?: Array<{ url?: string; publicId?: string; base64?: string }>;
-      }) => updateAdmin.handler(args)
+        images?: Array<{ url?: string; publicId?: string; base64?: string; aspectRatio?: '1:1' | '4:3' }>;
+      }) => {
+        const context = await authenticateMCPRequest(args.token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        if (!context.isAdmin) {
+          logger.warn(`[MCP] Forbidden: Non-admin user ${context.userId} attempted update_toki`);
+          throw new Error('Forbidden: Admin access required');
+        }
+        const { token: _, ...toolArgs } = args;
+        return updateAdmin.handler({ ...toolArgs, userContext: context });
+      }
     );
   }
 
@@ -209,8 +251,8 @@ export function createMCPServer() {
       {
         description: deleteAdmin.description,
         inputSchema: z.object({
+          token: z.string().describe('JWT authentication token'),
           id: z.string(),
-          api_key: z.string(),
           reason: z.string().optional(),
         }),
         annotations: {
@@ -218,12 +260,25 @@ export function createMCPServer() {
           destructiveHint: true,
         },
       },
-      async (args: { id: string; api_key: string; reason?: string }) =>
-        deleteAdmin.handler(args)
+      async (args: { token: string; id: string; reason?: string }) => {
+        const context = await authenticateMCPRequest(args.token);
+        if (!context) {
+          throw new Error('Unauthorized: Invalid or missing token');
+        }
+        if (!context.isAdmin) {
+          logger.warn(`[MCP] Forbidden: Non-admin user ${context.userId} attempted delete_toki`);
+          throw new Error('Forbidden: Admin access required');
+        }
+        const { token: _, ...toolArgs } = args;
+        return deleteAdmin.handler({ ...toolArgs, userContext: context });
+      }
     );
   }
 
+  // Note: Tool discovery (tools/list) is handled by the MCP SDK internally.
+  // We cannot override it directly, but we enforce permissions at the tool handler level.
+  // All tools require authentication, and write tools additionally require admin role.
+  // This provides defense in depth - even if tools are visible, execution is blocked.
+
   return server;
 }
-
-

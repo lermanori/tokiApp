@@ -18,6 +18,10 @@ This file contains the Expo app configuration for the Toki application, includin
 - **solution**: Added NSCameraUsageDescription to the iOS infoPlist configuration with the text: "The camera is used to take profile photos and to capture photos when creating or uploading an event, for example when adding images during event setup."
 - **problem**: Build number bump needed for new release.
 - **solution**: Bumped iOS buildNumber from 8 to 9, and Android versionCode from 8 to 9 (version remains 1.0.18).
+- **problem**: Missing photo library permission purpose string (NSPhotoLibraryUsageDescription) required by iOS for photo library access requests.
+- **solution**: Added NSPhotoLibraryUsageDescription to the iOS infoPlist configuration with the text: "The photo library is used to select profile photos or photos to upload when creating or uploading an event."
+- **problem**: Build number bump needed for new release.
+- **solution**: Bumped iOS buildNumber from 9 to 10, and Android versionCode from 9 to 10 (version remains 1.0.18).
 
 ### How Fixes Were Implemented
 - **problem**: iOS requires explicit permission purpose strings in Info.plist to explain to users why the app needs location access. Without these strings, location permission requests may be ignored or the app may be rejected by Apple.

@@ -332,7 +332,7 @@ export default function RegisterScreen() {
                     {isLocating ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.useLocationText}>Use current</Text>
+                      <Text style={styles.useLocationText}>Add location</Text>
                     )}
                   </TouchableOpacity>
                 </View>

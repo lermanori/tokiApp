@@ -31,3 +31,9 @@ This file contains the user registration screen that allows users to create acco
   - Coordinates are already collected when user selects from autocomplete or uses current location
   - If user only types location string, backend will automatically geocode it to get coordinates
   - This ensures all new users have coordinates saved, preventing exMap failures
+
+- **problem**: Location button text "Use current" was vague and unclear
+- **solution**: Changed button text to "Add location" for better clarity and user understanding
+- **implementation**:
+  - Updated button text on line 335 from "Use current" to "Add location"
+  - New text is more descriptive and clearly indicates the action

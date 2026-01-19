@@ -46,7 +46,7 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:8081", "http://localhost:8082", "file://"],
+    origin: ["http://localhost:3000", "http://localhost:8081", "http://localhost:8082", "file://",'http://localhost:6274'],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -88,21 +88,152 @@ const originFunction: cors.CorsOptions['origin'] = function (origin, callback) {
     /https:\/\/.*\.netlify\.app$/,
     'https://toki-app.com',
     /https:\/\/.*\.railway\.app$/,
+    'http://localhost:6274'
   ];
+  
+  // Log the origin for debugging
+  if (origin) {
+    logger.info(`[CORS] Checking origin: ${origin}`);
+  } else {
+    logger.info('[CORS] Request with no origin (allowing)');
+  }
+  
   if (!origin) return callback(null, true);
+  
   const isAllowed = allowList.some(entry => {
     if (typeof entry === 'string') return origin === entry;
     return entry.test(origin);
   });
-  if (isAllowed) return callback(null, true);
+  
+  if (isAllowed) {
+    logger.info(`[CORS] Origin allowed: ${origin}`);
+    return callback(null, true);
+  }
+  
+  // Log blocked origin so you can add it to allowList
+  logger.warn(`[CORS] Origin blocked: ${origin} - Add this to allowList if needed`);
   return callback(new Error('Not allowed by CORS'));
 };
 
 const corsMiddleware = cors({
   origin: originFunction,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Add OPTIONS
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'User-Agent'], // Add common headers
+  exposedHeaders: ['Content-Type', 'Content-Length'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200,
+});
+
+// Logging middleware for MCP - placed BEFORE CORS to catch all requests
+app.use('/api/mcp', (req, res, next) => {
+  const requestedHeaders = req.headers['access-control-request-headers'];
+  const requestedMethod = req.headers['access-control-request-method'];
+  
+  // Log EVERY request to MCP endpoint with detailed info
+  console.log(`[MCP] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  console.log(`[MCP] Requested Headers: ${requestedHeaders || 'none'}`);
+  console.log(`[MCP] Requested Method: ${requestedMethod || 'none'}`);
+  
+  logger.info(`[MCP] ===== ${req.method} ${req.path} =====`, {
+    method: req.method,
+    path: req.path,
+    url: req.url,
+    origin: req.headers.origin,
+    requestedMethod,
+    requestedHeaders: requestedHeaders ? requestedHeaders.split(',').map((h: string) => h.trim()) : 'none',
+    'content-type': req.headers['content-type'],
+    'accept': req.headers['accept'],
+    body: req.body,
+    'all-headers': req.headers,
+  });
+  next();
+});
+
+// Custom CORS middleware for MCP that dynamically allows ALL requested headers
+const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const origin = req.headers.origin;
+  
+  // Check if origin is allowed
+  const allowList: (string | RegExp)[] = [
+    'http://localhost:3000',
+    'http://localhost:3002',
+    'http://localhost:8081',
+    'http://localhost:8082',
+    'https://tokiapp.netlify.app',
+    /https:\/\/.*\.netlify\.app$/,
+    'https://toki-app.com',
+    /https:\/\/.*\.railway\.app$/,
+    'http://localhost:6274'
+  ];
+  
+  if (origin) {
+    const isAllowed = allowList.some(entry => {
+      if (typeof entry === 'string') return origin === entry;
+      return entry.test(origin);
+    });
+    
+    if (isAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    const requestedHeaders = req.headers['access-control-request-headers'];
+    const requestedMethod = req.headers['access-control-request-method'];
+    
+    // Allow the requested method
+    if (requestedMethod) {
+      res.setHeader('Access-Control-Allow-Methods', requestedMethod);
+    } else {
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    }
+    
+    // Dynamically allow ALL requested headers
+    if (requestedHeaders) {
+      const headers = requestedHeaders.split(',').map((h: string) => h.trim());
+      console.log(`[MCP CORS] Preflight: Allowing requested headers: ${headers.join(', ')}`);
+      res.setHeader('Access-Control-Allow-Headers', requestedHeaders);
+    } else {
+      // Fallback to common headers
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    }
+    
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+    res.status(200).end();
+    return;
+  }
+  
+  // For non-OPTIONS requests, set headers but continue
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  const requestedHeaders = req.headers['access-control-request-headers'];
+  if (requestedHeaders) {
+    res.setHeader('Access-Control-Allow-Headers', requestedHeaders);
+  } else {
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  }
+  
+  next();
+};
+
+// Log CORS response headers after CORS middleware processes
+app.use('/api/mcp', (req, res, next) => {
+  res.on('finish', () => {
+    if (req.method === 'OPTIONS') {
+      logger.info('[MCP CORS] Preflight response sent:', {
+        statusCode: res.statusCode,
+        'access-control-allow-origin': res.getHeader('access-control-allow-origin'),
+        'access-control-allow-methods': res.getHeader('access-control-allow-methods'),
+        'access-control-allow-headers': res.getHeader('access-control-allow-headers'),
+        'access-control-allow-credentials': res.getHeader('access-control-allow-credentials'),
+      });
+    }
+  });
+  next();
 });
 
 // Body parsing middleware
@@ -175,12 +306,54 @@ app.use('/api/reports', corsMiddleware, reportsRoutes);
 
 // MCP HTTP endpoint (Streamable HTTP transport)
 // Route base: /api/mcp/toki and /api/mcp/toki/*
-app.all('/api/mcp/toki', corsMiddleware, (req, res) => {
-  void mcpTransport.handleRequest(req as any, res as any, (req as any).body);
+// Note: Token validation happens in individual tool handlers, not here
+// This allows initial connection/handshake to work without token
+app.all('/api/mcp/toki', mcpCorsMiddleware, (req, res) => {
+  logger.info(`[MCP] Request received: ${req.method} ${req.path}`, {
+    method: req.method,
+    body: req.body,
+    headers: req.headers,
+    'all-headers': Object.keys(req.headers),
+  });
+  
+  // Let the MCP transport handle the request directly
+  // It will parse the JSON-RPC request and route to appropriate handlers
+  void mcpTransport.handleRequest(req as any, res as any, req.body).catch((error) => {
+    logger.error('[MCP] Transport error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        id: req.body?.id || null,
+        error: {
+          code: -32603,
+          message: 'Internal error',
+        },
+      });
+    }
+  });
 });
 
-app.all('/api/mcp/toki/*', corsMiddleware, (req, res) => {
-  void mcpTransport.handleRequest(req as any, res as any, (req as any).body);
+app.all('/api/mcp/toki/*', mcpCorsMiddleware, (req, res) => {
+  logger.info(`[MCP] Request received: ${req.method} ${req.path}`, {
+    method: req.method,
+    body: req.body,
+    headers: req.headers,
+  });
+  
+  // Let the MCP transport handle the request directly
+  void mcpTransport.handleRequest(req as any, res as any, req.body).catch((error) => {
+    logger.error('[MCP] Transport error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        id: req.body?.id || null,
+        error: {
+          code: -32603,
+          message: 'Internal error',
+        },
+      });
+    }
+  });
 });
 
 app.get('/api', (req, res) => {
@@ -194,9 +367,22 @@ app.get('/api', (req, res) => {
       messages: '/api/messages',
       connections: '/api/connections',
       ratings: '/api/ratings',
-      blocks: '/api/blocks'
+      blocks: '/api/blocks',
+      mcp: '/api/mcp/toki'
     }
   });
+});
+
+// Debug: Log all requests to see what's coming in
+app.use((req, res, next) => {
+  if (req.path.includes('/api/mcp')) {
+    logger.info(`[DEBUG] Request to: ${req.method} ${req.path}`, {
+      origin: req.headers.origin,
+      'content-type': req.headers['content-type'],
+      body: req.body,
+    });
+  }
+  next();
 });
 
 // Error handling middleware
@@ -278,7 +464,7 @@ io.on('connection', (socket) => {
 });
 
 // Start server
-server.listen(PORT, async () => {
+server.listen(Number(PORT), '0.0.0.0', async () => {
   logger.info(`🚀 Toki Backend Server running on port ${PORT}`);
   logger.info(`📊 Health check: http://localhost:${PORT}/health`);
   logger.info(`🔗 API base: http://localhost:${PORT}/api`);
