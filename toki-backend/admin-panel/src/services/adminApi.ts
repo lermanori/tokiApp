@@ -3,12 +3,16 @@
 
 const API_BASE = '/api/admin';
 
-const getAuthHeaders = (): HeadersInit => {
+const getAuthHeaders = (includeContentType: boolean = true): HeadersInit => {
   const token = localStorage.getItem('admin_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
-  };
+  const headers: HeadersInit = {};
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 };
 
 const handleResponse = async <T>(response: Response): Promise<T> => {
@@ -224,6 +228,31 @@ export const adminApi = {
     const response = await fetch(`${API_BASE}/tokis/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  },
+
+  // Batch upload
+  previewBatchTokis: async (zipFile: File) => {
+    const formData = new FormData();
+    formData.append('zipFile', zipFile);
+    
+    const response = await fetch(`${API_BASE}/tokis/batch/preview`, {
+      method: 'POST',
+      headers: getAuthHeaders(false), // Don't set Content-Type for FormData
+      body: formData
+    });
+    return handleResponse(response);
+  },
+
+  createBatchTokis: async (zipFile: File) => {
+    const formData = new FormData();
+    formData.append('zipFile', zipFile);
+    
+    const response = await fetch(`${API_BASE}/tokis/batch/create`, {
+      method: 'POST',
+      headers: getAuthHeaders(false), // Don't set Content-Type for FormData
+      body: formData
     });
     return handleResponse(response);
   },

@@ -4,6 +4,7 @@ import TokiCreateModal from './TokiCreateModal';
 import TokiEditModal from './TokiEditModal';
 import DeleteConfirmDialog from '../shared/DeleteConfirmDialog';
 import TokiParticipantsModal from './TokiParticipantsModal';
+import BatchUploadModal from './BatchUploadModal';
 
 interface TokiRow {
   id: string;
@@ -22,6 +23,7 @@ function formatDate(iso?: string) { if (!iso) return ''; return new Date(iso).to
 
 export default function TokisTable() {
   const [creating, setCreating] = useState(false);
+  const [batchUploading, setBatchUploading] = useState(false);
   const [editing, setEditing] = useState<TokiRow | null>(null);
   const [deleting, setDeleting] = useState<TokiRow | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -72,7 +74,10 @@ export default function TokisTable() {
     <div className="glass-card" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
         <div style={{ color: '#1C1C1C', fontFamily: 'var(--font-semi)' }}>Tokis</div>
-        <button className="btn-primary" onClick={()=>setCreating(true)}>Create Toki</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-primary" onClick={()=>setBatchUploading(true)} style={{ background: 'linear-gradient(135deg,#4DC4AA,#10B981)' }}>Batch Upload</button>
+          <button className="btn-primary" onClick={()=>setCreating(true)}>Create Toki</button>
+        </div>
       </div>
       {/* Filters */}
       <div style={{ padding: 16, display: 'grid', gap: 12, gridTemplateColumns: '1fr 200px 200px auto' }}>
@@ -150,6 +155,12 @@ export default function TokisTable() {
       )}
       {participantsFor && (
         <TokiParticipantsModal tokiId={participantsFor.id} onClose={()=>setParticipantsFor(null)} />
+      )}
+      {batchUploading && (
+        <BatchUploadModal
+          onClose={()=>setBatchUploading(false)}
+          onSuccess={()=>{ setBatchUploading(false); loadTokis(); }}
+        />
       )}
     </div>
   );
