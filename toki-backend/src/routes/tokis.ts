@@ -1,3 +1,11 @@
+/**
+ * TIMEZONE CONTRACT:
+ * - All scheduled_time values are stored and returned as UTC
+ * - Format: "YYYY-MM-DD HH:MM" (without timezone suffix for frontend compatibility)
+ * - The time_slot column is DEPRECATED - kept for backward compatibility only
+ * - scheduledTime is the single source of truth for event timing
+ */
+
 import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { createSystemNotificationAndPush } from '../utils/notify';
@@ -57,11 +65,21 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
     const creatorLongitudeInput = toNumberOrNull(userLongitude);
 
     // Validate required fields
-    if (!title || !location || !timeSlot || !category) {
+    // scheduledTime is the single source of truth; timeSlot is deprecated but accepted for backward compatibility
+    if (!title || !location || !category) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        message: 'Title, location, time slot, and category are required'
+        message: 'Title, location, and category are required'
+      });
+    }
+
+    // scheduledTime is required (timeSlot alone is no longer sufficient)
+    if (!scheduledTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required field',
+        message: 'scheduledTime is required'
       });
     }
 

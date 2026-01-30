@@ -15,6 +15,8 @@ export interface MatchedToki {
   matchedImageNames: string[];
 }
 
+// DEPRECATED: timeSlot is kept for backward compatibility only
+// scheduledTime is now the single source of truth
 const VALID_TIME_SLOTS = ['now', '30min', '1hour', '2hours', '3hours', 'tonight', 'tomorrow', 'morning', 'afternoon', 'evening'];
 const VALID_VISIBILITY = ['public', 'connections', 'friends', 'private'];
 
@@ -68,7 +70,8 @@ function validateImageMagicBytes(buffer: Buffer): boolean {
  */
 export function validateRequiredFields(toki: any): string[] {
   const errors: string[] = [];
-  const required = ['title', 'location', 'timeSlot', 'category', 'host_id'];
+  // scheduledTime is now required; timeSlot is deprecated
+  const required = ['title', 'location', 'scheduledTime', 'category', 'host_id'];
 
   for (const field of required) {
     if (!toki[field] || (typeof toki[field] === 'string' && toki[field].trim() === '')) {
@@ -165,9 +168,12 @@ export async function validateTokiData(
     errors.push(`Invalid category: ${toki.category}. Must be one of: ${Object.keys(CATEGORY_CONFIG).join(', ')}`);
   }
 
-  // Validate timeSlot
-  if (toki.timeSlot && !VALID_TIME_SLOTS.includes(toki.timeSlot)) {
-    errors.push(`Invalid timeSlot: ${toki.timeSlot}. Must be one of: ${VALID_TIME_SLOTS.join(', ')}`);
+  // Validate timeSlot (deprecated - warn but don't error)
+  if (toki.timeSlot) {
+    if (!VALID_TIME_SLOTS.includes(toki.timeSlot)) {
+      warnings.push(`Invalid timeSlot: ${toki.timeSlot}. Must be one of: ${VALID_TIME_SLOTS.join(', ')}`);
+    }
+    warnings.push('timeSlot is deprecated - using scheduledTime as the source of truth');
   }
 
   // Validate visibility
