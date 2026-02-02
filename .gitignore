@@ -38,3 +38,11 @@ yarn-error.*
 # Local Netlify folder
 .netlify
 app.json
+
+# AI assistant configurations
+.agent/
+.agents/
+.claude/
+.cursor/skills/
+.gemini/
+.opencode/
