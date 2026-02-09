@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
@@ -106,55 +106,179 @@ export default function RegisterScreen() {
   const useCurrentLocation = async () => {
     try {
       setIsLocating(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please enable location permission to use current location.');
-        return;
-      }
 
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude: lat, longitude: lng } = pos.coords;
-
-      let label = location || '';
-      try {
-        const resp = await fetch(`${getBackendUrl()}/api/maps/reverse-geocode?lat=${lat}&lng=${lng}`);
-        const json = await resp.json();
-        if (resp.ok && json?.success) {
-          label = json.data?.shortLabel || json.data?.formatted_address || '';
-        } else {
-          const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-          const r = results?.[0];
-          const neighborhood = r?.district || (r as any)?.subregion || '';
-          const city = r?.city || '';
-          const region = r?.region || '';
-          const streetish = r?.name || r?.street || '';
-          label = neighborhood || city || region || streetish || '';
+      if (Platform.OS === 'web') {
+        // Web: Use browser's native Geolocation API
+        if (!navigator.geolocation) {
+          Toast.show({
+            type: 'error',
+            text1: 'Location Not Supported',
+            text2: 'Your browser does not support geolocation',
+            visibilityTime: 4000,
+          });
+          setIsLocating(false);
+          return;
         }
-      } catch {}
 
-      setLocation(label);
-      setLatitude(lat);
-      setLongitude(lng);
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude: lat, longitude: lng } = position.coords;
+
+            // Reverse geocode to get address label
+            let label = '';
+            try {
+              const resp = await fetch(`${getBackendUrl()}/api/maps/reverse-geocode?lat=${lat}&lng=${lng}`);
+              const json = await resp.json();
+              if (resp.ok && json?.success) {
+                label = json.data?.shortLabel || json.data?.formatted_address || '';
+              }
+            } catch {}
+
+            setLocation(label);
+            setLatitude(lat);
+            setLongitude(lng);
+            setIsLocating(false);
+          },
+          (error) => {
+            setIsLocating(false);
+            let errorMessage = 'Could not get your location';
+            if (error.code === error.PERMISSION_DENIED) {
+              errorMessage = 'Please allow location access in your browser';
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+              errorMessage = 'Location information is unavailable';
+            } else if (error.code === error.TIMEOUT) {
+              errorMessage = 'Location request timed out. Please try again.';
+            }
+            Toast.show({
+              type: 'error',
+              text1: 'Location Error',
+              text2: errorMessage,
+              visibilityTime: 4000,
+            });
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      } else {
+        // Native (iOS/Android): Use expo-location
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Toast.show({
+            type: 'error',
+            text1: 'Permission Needed',
+            text2: 'Please enable location permission in your device settings',
+            visibilityTime: 4000,
+          });
+          setIsLocating(false);
+          return;
+        }
+
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const { latitude: lat, longitude: lng } = pos.coords;
+
+        let label = location || '';
+        try {
+          const resp = await fetch(`${getBackendUrl()}/api/maps/reverse-geocode?lat=${lat}&lng=${lng}`);
+          const json = await resp.json();
+          if (resp.ok && json?.success) {
+            label = json.data?.shortLabel || json.data?.formatted_address || '';
+          } else {
+            const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+            const r = results?.[0];
+            const neighborhood = r?.district || (r as any)?.subregion || '';
+            const city = r?.city || '';
+            const region = r?.region || '';
+            const streetish = r?.name || r?.street || '';
+            label = neighborhood || city || region || streetish || '';
+          }
+        } catch {}
+
+        setLocation(label);
+        setLatitude(lat);
+        setLongitude(lng);
+        setIsLocating(false);
+      }
     } catch (e) {
-      Alert.alert('Location error', 'Could not fetch your current location.');
-    } finally {
+      Toast.show({
+        type: 'error',
+        text1: 'Location Error',
+        text2: 'Could not fetch your current location. Please try again.',
+        visibilityTime: 4000,
+      });
       setIsLocating(false);
     }
   };
 
   const handleRegister = async () => {
     if (!termsAccepted) {
-      Alert.alert('Error', 'You must accept the Terms of Use and Privacy Policy to create an account');
+      Toast.show({
+        type: 'error',
+        text1: 'Terms Required',
+        text2: 'Please accept the Terms of Use and Privacy Policy to continue',
+        visibilityTime: 4000,
+      });
       return;
     }
-    
-    if (!email || !password || !name) {
-      Alert.alert('Error', 'Please fill in all required fields');
+
+    if (!name) {
+      Toast.show({
+        type: 'error',
+        text1: 'Name Required',
+        text2: 'Please enter your full name',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    if (!email) {
+      Toast.show({
+        type: 'error',
+        text1: 'Email Required',
+        text2: 'Please enter your email address',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Email',
+        text2: 'Please enter a valid email address',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    if (!password) {
+      Toast.show({
+        type: 'error',
+        text1: 'Password Required',
+        text2: 'Please enter a password',
+        visibilityTime: 3000,
+      });
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      Toast.show({
+        type: 'error',
+        text1: 'Password Too Short',
+        text2: 'Password must be at least 6 characters',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    // Require location with valid coordinates
+    if (!location || !latitude || !longitude) {
+      Toast.show({
+        type: 'error',
+        text1: 'Location Required',
+        text2: 'Select from the dropdown or tap "Add location"',
+        visibilityTime: 4000,
+      });
       return;
     }
 
@@ -221,18 +345,49 @@ export default function RegisterScreen() {
       }
 
       if (response.success) {
-        // Navigate to login immediately
-        router.replace('/login');
-        // Show success message after a brief delay to ensure navigation happens
+        // Show success toast and navigate to login
+        Toast.show({
+          type: 'success',
+          text1: 'Account Created!',
+          text2: 'Please log in to continue',
+          visibilityTime: 3000,
+        });
+        // Navigate to login after a brief delay so user sees the toast
         setTimeout(() => {
-          Alert.alert('Success', 'Account created successfully! Please log in to continue.');
-        }, 100);
+          router.replace('/login');
+        }, 500);
       } else {
-        Alert.alert('Error', response.message || 'Registration failed');
+        // Parse backend error message for user-friendly display
+        const errorMessage = response.message || 'Registration failed';
+        Toast.show({
+          type: 'error',
+          text1: 'Registration Failed',
+          text2: errorMessage,
+          visibilityTime: 4000,
+        });
       }
     } catch (error: any) {
       console.error('Registration error:', error);
-      Alert.alert('Error', error.message || 'Registration failed. Please try again.');
+      // Handle specific error cases
+      let errorTitle = 'Registration Failed';
+      let errorMessage = 'Please try again later';
+
+      if (error.message?.includes('already exists')) {
+        errorTitle = 'Email Already Registered';
+        errorMessage = 'An account with this email already exists. Try logging in instead.';
+      } else if (error.message?.includes('network') || error.message?.includes('Network')) {
+        errorTitle = 'Connection Error';
+        errorMessage = 'Please check your internet connection and try again';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Toast.show({
+        type: 'error',
+        text1: errorTitle,
+        text2: errorMessage,
+        visibilityTime: 4000,
+      });
     } finally {
       setLoading(false);
     }
@@ -317,16 +472,16 @@ export default function RegisterScreen() {
                   <MapPin size={20} color="#8B5CF6" style={styles.locationIcon} />
                   <TextInput
                     style={styles.locationInput}
-                    placeholder="Location (optional)"
+                    placeholder="Location *"
                     placeholderTextColor="#666"
                     value={location}
                     onChangeText={handleLocationTextChange}
                     onFocus={() => setShowAutocomplete(true)}
                     autoCapitalize="words"
                   />
-                  <TouchableOpacity 
-                    style={styles.useLocationButton} 
-                    onPress={useCurrentLocation} 
+                  <TouchableOpacity
+                    style={styles.useLocationButton}
+                    onPress={useCurrentLocation}
                     disabled={isLocating}
                   >
                     {isLocating ? (
@@ -336,6 +491,11 @@ export default function RegisterScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
+                {!latitude || !longitude ? (
+                  <Text style={styles.locationHint}>
+                    Select from dropdown or tap "Add location" button
+                  </Text>
+                ) : null}
                 {showAutocomplete && placesPredictions.length > 0 && (
                   <View style={styles.autocompleteContainer}>
                     {placesPredictions.map((p, index) => (
@@ -668,6 +828,14 @@ const styles = StyleSheet.create({
     color: '#8B5CF6',
     fontFamily: 'Inter-SemiBold',
     textDecorationLine: 'underline',
+  },
+  locationHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#8B5CF6',
+    marginTop: -12,
+    marginBottom: 16,
+    marginLeft: 16,
   },
 });
 

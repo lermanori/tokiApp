@@ -2,8 +2,9 @@ import '@/utils/logger';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Stack, useRouter, useSegments, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Platform, View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import * as Linking from 'expo-linking';
+import Toast from 'react-native-toast-message';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
@@ -122,6 +123,8 @@ function RootLayoutNav() {
   const [hasHandledInitialUrl, setHasHandledInitialUrl] = useState(false);
   const [initialUrl, setInitialUrl] = useState<string | null>(null);
   const [isWaitingForInitialUrl, setIsWaitingForInitialUrl] = useState(false);
+  // Store parsed initial URL params to use as fallback in auth check
+  const [initialUrlParams, setInitialUrlParams] = useState<Record<string, string> | null>(null);
   const lastProcessedSegmentsRef = useRef<string>('');
   
   // Create a stable string representation of segments for dependency comparison
@@ -407,23 +410,29 @@ function RootLayoutNav() {
     const urlInfo = extractPathFromUrl();
     if (urlInfo && urlInfo.path) {
       const { path, params } = urlInfo;
-      
+
       console.log('🔗 [INITIAL URL] Handling universal link - navigating to:', path, params);
       console.log('🔗 [INITIAL URL] Params keys:', Object.keys(params));
       console.log('🔗 [INITIAL URL] Params values:', params);
-      
+
       const hasParams = Object.keys(params).length > 0;
-      
+
       // On native, if we extracted a path but have no params and initialUrl hasn't been set yet,
       // wait for initialUrl before navigating (it likely has the params)
       if (Platform.OS !== 'web' && !hasParams && initialUrl === null) {
         console.log('⏳ [INITIAL URL] Found path but no params on native, waiting for initialUrl to be captured...');
         return; // Don't navigate yet, wait for initialUrl
       }
-      
+
+      // Store params for use in auth check (fallback if searchParams not available yet)
+      if (hasParams) {
+        setInitialUrlParams(params);
+        console.log('🔗 [INITIAL URL] Stored params for auth check fallback:', params);
+      }
+
       // Mark as handled
       setHasHandledInitialUrl(true);
-      
+
       // Navigate using object form with params (more reliable than query string)
       if (hasParams) {
         // Use object form for better param handling
@@ -552,6 +561,13 @@ function RootLayoutNav() {
       const pathIsLogin = path.startsWith('/login');
       const isOnNotFound = segments[0] === '+not-found';
 
+      // Skip auth check if we're still waiting for initial URL to be captured on native
+      // This prevents the auth check from running before we know the deep link target
+      if (Platform.OS !== 'web' && isWaitingForInitialUrl) {
+        console.log('⏸️ [AUTH CHECK] Waiting for initial URL to be captured on native');
+        return;
+      }
+
       // If we're on not-found screen, skip auth check and let initial URL handler run first
       if (isOnNotFound && !hasHandledInitialUrl) {
         console.log('⏸️ [AUTH CHECK] On not-found screen, skipping auth check to let initial URL handler run');
@@ -626,37 +642,33 @@ function RootLayoutNav() {
         const inSupportScreen = segments[0] === 'support' || path.startsWith('/support');
         
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen) {
-          // If user has tokens but isAuthenticated is false, it's likely a race condition
-          // Don't preserve the path - just redirect to login and let fast redirect handle it
-          const hasTokens = apiService.hasToken();
-          if (hasTokens) {
-            console.log('⚠️ [FLOW DEBUG] [AUTH CHECK] Race condition detected: has tokens but not authenticated, redirecting to login without preserving path');
-            router.replace('/login');
-            return;
-          }
-          
           // Check if we're on toki-details page - preserve the tokiId parameter
           // Cross-platform: check both path (web) and segments (native)
           const isTokiDetailsPage = path.startsWith('/toki-details') || segments[0] === 'toki-details';
           
           if (isTokiDetailsPage) {
             // Extract all URL parameters including tokiId
-            // Cross-platform: use searchParams (works on both web and native) with urlParams fallback (web only)
+            // Cross-platform: use searchParams (works on both web and native) with initialUrlParams and urlParams as fallbacks
             const returnParams: Record<string, string> = {};
-            
-            // Get tokiId: priority is searchParams (works on both platforms), then urlParams (web only)
-            const tokiId = (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined) || urlParams.tokiId;
+
+            // Get tokiId: priority is searchParams, then initialUrlParams (from deep link), then urlParams (web only)
+            const tokiId = (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined) || initialUrlParams?.tokiId || urlParams.tokiId;
             if (tokiId) returnParams.tokiId = tokiId;
-            
-            // Preserve other parameters if they exist (check searchParams first for cross-platform support)
-            const title = (typeof searchParams.title === 'string' ? searchParams.title : Array.isArray(searchParams.title) ? searchParams.title[0] : undefined) || urlParams.title;
-            const location = (typeof searchParams.location === 'string' ? searchParams.location : Array.isArray(searchParams.location) ? searchParams.location[0] : undefined) || urlParams.location;
-            const time = (typeof searchParams.time === 'string' ? searchParams.time : Array.isArray(searchParams.time) ? searchParams.time[0] : undefined) || urlParams.time;
-            
+
+            // Preserve other parameters if they exist (check searchParams first, then initialUrlParams, then urlParams)
+            const title = (typeof searchParams.title === 'string' ? searchParams.title : Array.isArray(searchParams.title) ? searchParams.title[0] : undefined) || initialUrlParams?.title || urlParams.title;
+            const location = (typeof searchParams.location === 'string' ? searchParams.location : Array.isArray(searchParams.location) ? searchParams.location[0] : undefined) || initialUrlParams?.location || urlParams.location;
+            const time = (typeof searchParams.time === 'string' ? searchParams.time : Array.isArray(searchParams.time) ? searchParams.time[0] : undefined) || initialUrlParams?.time || urlParams.time;
+
             if (title) returnParams.title = title;
             if (location) returnParams.location = location;
             if (time) returnParams.time = time;
-            
+
+            // Clear initialUrlParams after use (we've captured them in returnParams)
+            if (initialUrlParams) {
+              setInitialUrlParams(null);
+            }
+
             // Redirect to login with returnTo and parameters
             const loginUrl = `/login?returnTo=/toki-details${Object.keys(returnParams).length > 0 ? '&' + new URLSearchParams(returnParams).toString() : ''}`;
             console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving toki-details parameters, redirecting to:', loginUrl);
@@ -1084,10 +1096,32 @@ export default function RootLayout() {
     return null;
   }
 
+  const toastConfig = {
+    success: (props: any) => (
+      <View style={styles.toastSuccess}>
+        <Text style={styles.toastTitle}>{props.text1}</Text>
+        {props.text2 && <Text style={styles.toastMessage}>{props.text2}</Text>}
+      </View>
+    ),
+    error: (props: any) => (
+      <View style={styles.toastError}>
+        <Text style={styles.toastTitle}>{props.text1}</Text>
+        {props.text2 && <Text style={styles.toastMessage}>{props.text2}</Text>}
+      </View>
+    ),
+    info: (props: any) => (
+      <View style={styles.toastInfo}>
+        <Text style={styles.toastTitle}>{props.text1}</Text>
+        {props.text2 && <Text style={styles.toastMessage}>{props.text2}</Text>}
+      </View>
+    ),
+  };
+
   return (
     <AppProvider>
       <RootLayoutNav />
       <StatusBar style="dark" />
+      <Toast config={toastConfig} topOffset={60} />
     </AppProvider>
   );
 }
@@ -1098,5 +1132,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
+  },
+  toastSuccess: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  toastError: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  toastInfo: {
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  toastTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  toastMessage: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
   },
 });
