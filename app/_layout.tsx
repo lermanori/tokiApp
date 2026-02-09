@@ -122,7 +122,9 @@ function RootLayoutNav() {
   const [hasCheckedFastRedirect, setHasCheckedFastRedirect] = useState(false);
   const [hasHandledInitialUrl, setHasHandledInitialUrl] = useState(false);
   const [initialUrl, setInitialUrl] = useState<string | null>(null);
-  const [isWaitingForInitialUrl, setIsWaitingForInitialUrl] = useState(false);
+  // On native, start as true because Linking.getInitialURL() is async and we need to wait for it
+  // On web, start as false because we can get URL synchronously from window.location
+  const [isWaitingForInitialUrl, setIsWaitingForInitialUrl] = useState(Platform.OS !== 'web');
   // Store parsed initial URL params to use as fallback in auth check
   const [initialUrlParams, setInitialUrlParams] = useState<Record<string, string> | null>(null);
   const lastProcessedSegmentsRef = useRef<string>('');
@@ -131,26 +133,29 @@ function RootLayoutNav() {
   // Use JSON.stringify to create a stable key that only changes when segments actually change
   const segmentsKey = useMemo(() => JSON.stringify(segments), [segments.length, segments[0], segments[1]]);
 
-  // Handle initial URL when app opens from universal link (not-found case)
+  // Handle initial URL when app opens from deep link (custom scheme or universal link)
   useEffect(() => {
-    // Only run if we're on not-found screen and haven't handled it yet
+    // Skip if already handled
     if (hasHandledInitialUrl) {
       return;
     }
-    
-    // Check if we're on not-found screen
-    const isOnNotFound = segments[0] === '+not-found';
-    if (!isOnNotFound) {
-      return;
-    }
-    
+
     // On native, wait for initialUrl to be captured before proceeding
     if (Platform.OS !== 'web' && isWaitingForInitialUrl) {
       console.log('⏳ [INITIAL URL] Waiting for initialUrl to be captured...');
       return;
     }
 
-    console.log('🔗 [INITIAL URL] Detected not-found screen, extracting path...');
+    // For native: process if we have an initialUrl (custom scheme like tokimap://)
+    // For web: only process if on +not-found screen (universal links)
+    const isOnNotFound = segments[0] === '+not-found';
+    const hasNativeDeepLink = Platform.OS !== 'web' && initialUrl;
+
+    if (!isOnNotFound && !hasNativeDeepLink) {
+      return; // Nothing to process
+    }
+
+    console.log('🔗 [INITIAL URL] Processing deep link...', { isOnNotFound, hasNativeDeepLink, initialUrl });
     console.log('🔗 [INITIAL URL] initialUrl state:', initialUrl);
     console.log('🔗 [INITIAL URL] searchParams:', searchParams);
     console.log('🔗 [INITIAL URL] effectiveOtherParams:', effectiveOtherParams);
@@ -563,8 +568,18 @@ function RootLayoutNav() {
 
       // Skip auth check if we're still waiting for initial URL to be captured on native
       // This prevents the auth check from running before we know the deep link target
+      // Still set isReady so the app can render while waiting
       if (Platform.OS !== 'web' && isWaitingForInitialUrl) {
         console.log('⏸️ [AUTH CHECK] Waiting for initial URL to be captured on native');
+        setIsReady(true); // Allow app to render while waiting
+        return;
+      }
+
+      // Skip auth check if we have an initial URL that hasn't been handled yet
+      // This prevents the auth check from redirecting before the deep link is processed
+      if (Platform.OS !== 'web' && initialUrl && !hasHandledInitialUrl) {
+        console.log('⏸️ [AUTH CHECK] Initial URL exists but not handled yet, waiting:', initialUrl);
+        setIsReady(true); // Allow app to render while waiting
         return;
       }
 
@@ -644,9 +659,12 @@ function RootLayoutNav() {
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen) {
           // Check if we're on toki-details page - preserve the tokiId parameter
           // Cross-platform: check both path (web) and segments (native)
+          // Also check initialUrlParams - if it has tokiId, we're doing a deep link to toki-details
+          // (navigation might not have completed yet, so path/segments might not reflect the destination)
           const isTokiDetailsPage = path.startsWith('/toki-details') || segments[0] === 'toki-details';
-          
-          if (isTokiDetailsPage) {
+          const hasDeepLinkToTokiDetails = !!initialUrlParams?.tokiId;
+
+          if (isTokiDetailsPage || hasDeepLinkToTokiDetails) {
             // Extract all URL parameters including tokiId
             // Cross-platform: use searchParams (works on both web and native) with initialUrlParams and urlParams as fallbacks
             const returnParams: Record<string, string> = {};
@@ -966,7 +984,7 @@ function RootLayoutNav() {
     };
     
     checkAuth();
-  }, [segmentsKey]); // Use memoized segments key to prevent infinite loops from array reference changes
+  }, [segmentsKey, isWaitingForInitialUrl, initialUrl, hasHandledInitialUrl]); // Re-run when segments change or when initial URL is captured/handled
 
   // Handle redirection when user data becomes available
   useEffect(() => {

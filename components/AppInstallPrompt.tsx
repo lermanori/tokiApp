@@ -66,12 +66,15 @@ export default function AppInstallPrompt({
     if (!url) return;
 
     console.log('🚀 [APP PROMPT] User clicked "Open in App" with URL:', url);
-    
+
     // For Chrome on iOS, try custom scheme first (more reliable)
     // Then fallback to universal link via visible link click
     try {
       // First, try custom scheme (tokimap://) - works better in Chrome on iOS
-      const customSchemeUrl = url.replace('https://', 'tokimap://').replace('http://', 'tokimap://');
+      // Custom scheme format: tokimap://path?params (no domain)
+      // Extract path and params from the URL
+      const urlObj = new URL(url);
+      const customSchemeUrl = `tokimap:/${urlObj.pathname}${urlObj.search}`;
       console.log('🔄 [APP PROMPT] Trying custom scheme first:', customSchemeUrl);
       
       Linking.openURL(customSchemeUrl).catch((schemeError) => {
