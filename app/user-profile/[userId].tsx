@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Calendar, Users, Heart, MessageCircle, UserPlus, Clock, Instagram, Linkedin, Facebook, Flag, UserX, UserCheck } from 'lucide-react-native';
@@ -70,6 +70,33 @@ export default function UserProfileScreen() {
         return <Facebook size={16} color="#1877F2" />;
       default:
         return null;
+    }
+  };
+
+  // Helper function to handle social link press
+  const handleSocialPress = (platform: string, username?: string) => {
+    if (!username) return;
+
+    let url = '';
+    switch (platform.toLowerCase()) {
+      case 'instagram':
+        url = `https://instagram.com/${username.replace('@', '')}`;
+        break;
+      case 'linkedin':
+        url = `https://linkedin.com/in/${username}`;
+        break;
+      case 'facebook':
+        url = `https://facebook.com/${username}`;
+        break;
+      case 'tiktok':
+        url = `https://tiktok.com/@${username.replace('@', '')}`;
+        break;
+    }
+
+    if (url) {
+      Linking.openURL(url).catch(() => {
+        Alert.alert('Cannot open link', `Unable to open ${platform} profile. Please check if the app is installed.`);
+      });
     }
   };
 
@@ -499,10 +526,14 @@ export default function UserProfileScreen() {
                 <View style={styles.socialLinksContainer}>
                   {Object.entries(userProfile.socialLinks).map(([platform, username]) => (
                     username && (
-                      <View key={platform} style={styles.socialLink}>
+                      <TouchableOpacity
+                        key={platform}
+                        style={styles.socialLink}
+                        onPress={() => handleSocialPress(platform, username)}
+                      >
                         {getPlatformIcon(platform)}
                         <Text style={styles.socialUsername}>{username}</Text>
-                      </View>
+                      </TouchableOpacity>
                     )
                   ))}
                 </View>
