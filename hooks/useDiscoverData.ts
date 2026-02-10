@@ -3,6 +3,7 @@ import { useApp } from '@/contexts/AppContext';
 import { TokiEvent, MapRegion } from '@/utils/discoverTypes';
 import { transformTokiToEvent } from '@/utils/discoverHelpers';
 import { geocodingService } from '@/services/geocoding';
+import Toast from 'react-native-toast-message';
 
 const DEFAULT_REGION: MapRegion = {
   latitude: 32.0853, // Tel Aviv
@@ -129,6 +130,12 @@ export const useDiscoverData = () => {
     
     if (!currentLat || !currentLng) {
       console.log('⚠️ [DISCOVER] No location available');
+      Toast.show({
+        type: 'error',
+        text1: 'Location unavailable',
+        text2: 'Unable to find nearby Tokis. Please enable location services or set your location in your profile.',
+        visibilityTime: 4000,
+      });
       return;
     }
 
