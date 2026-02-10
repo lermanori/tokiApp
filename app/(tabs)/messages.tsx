@@ -8,6 +8,7 @@ import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { getInitials } from '@/utils/tokiUtils';
+import TappableAvatar from '@/components/TappableAvatar';
 
 
 interface Conversation {
@@ -402,19 +403,15 @@ export default function MessagesScreen() {
               >
                 <View style={styles.conversationAvatar}>
                   {chat.type === 'individual' ? (
-                    (chat as Conversation).other_user_avatar ? (
-                      <Image
-                        source={{ uri: (chat as Conversation).other_user_avatar }}
-                        style={styles.avatarImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.avatarFallback}>
-                        <Text style={styles.avatarInitials}>
-                          {getInitials((chat as Conversation).other_user_name || 'Unknown')}
-                        </Text>
-                      </View>
-                    )
+                    <TappableAvatar
+                      userId={(chat as Conversation).other_user_id}
+                      userName={(chat as Conversation).other_user_name || 'Unknown'}
+                      avatarUrl={(chat as Conversation).other_user_avatar}
+                      size={60}
+                      imageStyle={styles.avatarImage}
+                      fallbackStyle={styles.avatarFallback}
+                      initialsStyle={styles.avatarInitials}
+                    />
                   ) : (
                     // Toki group chat - show image circles
                     (() => {

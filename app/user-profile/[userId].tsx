@@ -9,6 +9,7 @@ import { apiService } from '@/services/api';
 import TokiCard from '@/components/TokiCard';
 import AppInstallPrompt from '@/components/AppInstallPrompt';
 import ReportModal from '@/components/ReportModal';
+import TappableAvatar from '@/components/TappableAvatar';
 
 interface ConnectionStatus {
   status: 'none' | 'pending' | 'accepted' | 'declined';
@@ -484,19 +485,15 @@ export default function UserProfileScreen() {
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              {userProfile.avatar ? (
-                <Image
-                  source={{ uri: userProfile.avatar }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitials}>
-                    {getUserInitials(userProfile.name)}
-                  </Text>
-                </View>
-              )}
+              <TappableAvatar
+                userId={userProfile.id}
+                userName={userProfile.name}
+                avatarUrl={userProfile.avatar}
+                size={80}
+                imageStyle={styles.avatarImage}
+                fallbackStyle={styles.avatarFallback}
+                initialsStyle={styles.avatarInitials}
+              />
               {userProfile.verified && (
                 <View style={styles.verifiedBadge}>
                   <Text style={styles.verifiedText}>✓</Text>

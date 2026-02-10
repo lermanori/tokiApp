@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import RedirectionGuard from '@/components/RedirectionGuard';
+import { UserPhotoViewerProvider } from '@/components/UserPhotoViewer/UserPhotoViewerContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -1137,9 +1138,11 @@ export default function RootLayout() {
 
   return (
     <AppProvider>
-      <RootLayoutNav />
-      <StatusBar style="dark" />
-      <Toast config={toastConfig} topOffset={60} />
+      <UserPhotoViewerProvider>
+        <RootLayoutNav />
+        <StatusBar style="dark" />
+        <Toast config={toastConfig} topOffset={60} />
+      </UserPhotoViewerProvider>
     </AppProvider>
   );
 }

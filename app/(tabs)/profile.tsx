@@ -8,9 +8,11 @@ import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
 import ProfileImageUpload from '@/components/ProfileImageUpload';
 import TokiCard from '@/components/TokiCard';
+import { useUserPhotoViewer } from '@/components/UserPhotoViewer/UserPhotoViewerContext';
 
 export default function ProfileScreen() {
   const { state, actions, dispatch } = useApp();
+  const { openUserPhoto } = useUserPhotoViewer();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -569,12 +571,21 @@ export default function ProfileScreen() {
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
-              <ProfileImageUpload
-                currentImageUrl={state.currentUser.avatar}
-                onImageUpdate={handleProfileImageUpdate}
-                size={80}
-                showEditButton={true}
-              />
+              <TouchableOpacity
+                onLongPress={() => {
+                  if (state.currentUser.avatar) {
+                    openUserPhoto(state.currentUser.id, state.currentUser.name, state.currentUser.avatar);
+                  }
+                }}
+                activeOpacity={1}
+              >
+                <ProfileImageUpload
+                  currentImageUrl={state.currentUser.avatar}
+                  onImageUpdate={handleProfileImageUpdate}
+                  size={80}
+                  showEditButton={true}
+                />
+              </TouchableOpacity>
               {state.currentUser.verified && (
                 <View style={styles.verifiedBadge}>
                   <Text style={styles.verifiedText}>✓</Text>

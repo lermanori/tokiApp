@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, TextInput } from 'react-native';
 import { X, UserMinus } from 'lucide-react-native';
+import TappableAvatar from './TappableAvatar';
 
 export interface Participant {
   id: string;
@@ -77,18 +78,15 @@ const ParticipantsModal: React.FC<ParticipantsModalProps> = ({
                 return (
                   <View key={participant.id} style={styles.participantRow}>
                     <View style={styles.participantInfo}>
-                      {participant.avatar ? (
-                        <Image
-                          source={{ uri: participant.avatar }}
-                          style={styles.participantAvatar}
-                        />
-                      ) : (
-                        <View style={[styles.participantAvatar, styles.participantFallbackAvatar]}>
-                          <Text style={styles.participantFallbackInitials}>
-                            {initials}
-                          </Text>
-                        </View>
-                      )}
+                      <TappableAvatar
+                        userId={participant.id}
+                        userName={participant.name}
+                        avatarUrl={participant.avatar}
+                        size={40}
+                        containerStyle={{ marginRight: 12 }}
+                        fallbackStyle={styles.participantFallbackAvatar}
+                        initialsStyle={styles.participantFallbackInitials}
+                      />
                       <View style={styles.participantDetails}>
                         <Text style={styles.participantName}>{participant.name}</Text>
                         {participant.isHost && (
