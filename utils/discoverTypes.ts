@@ -27,6 +27,7 @@ export interface TokiEvent {
   algorithmScore?: number | null;
   createdAt?: string;
   friendsGoing?: Array<{ id: string; name: string; avatar?: string }>;
+  isPaid?: boolean;
 }
 
 export interface DiscoverFilters {
@@ -38,6 +39,7 @@ export interface DiscoverFilters {
   dateFrom: string;
   dateTo: string;
   radius: string;
+  isPaid: string;
 }
 
 export interface MapRegion {

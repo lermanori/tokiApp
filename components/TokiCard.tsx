@@ -37,6 +37,7 @@ export interface TokiCardProps {
         visibility?: 'public' | 'private' | 'connections' | 'friends';
         isSaved?: boolean;
         friendsGoing?: Array<{ id: string; name: string; avatar?: string }>; // Friends who are attending
+        isPaid?: boolean;
     };
     onPress: () => void;
     onHostPress?: () => void;

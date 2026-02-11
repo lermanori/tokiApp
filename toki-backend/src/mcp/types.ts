@@ -20,6 +20,7 @@ export interface DbToki {
   scheduled_time: Date | string | null;
   max_attendees: number | null;
   time_slot: string | null;
+  is_paid: boolean;
 }
 
 /**

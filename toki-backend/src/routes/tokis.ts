@@ -52,7 +52,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       externalLink,
       userLatitude,
       userLongitude,
-      autoApprove
+      autoApprove,
+      isPaid
     } = req.body;
 
     const toNumberOrNull = (value: any): number | null => {
@@ -115,6 +116,15 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       }
     }
 
+    // Validate isPaid if provided
+    if (isPaid !== undefined && typeof isPaid !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid isPaid value',
+        message: 'isPaid must be a boolean value'
+      });
+    }
+
     // Start a database transaction
     const client = await pool.connect();
     
@@ -125,8 +135,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
       const tokiResult = await client.query(
         `INSERT INTO tokis (
           host_id, title, description, location, latitude, longitude,
-          time_slot, scheduled_time, max_attendees, category, visibility, external_link, auto_approve
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          time_slot, scheduled_time, max_attendees, category, visibility, external_link, auto_approve, is_paid
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *`,
         [
           req.user!.id,
@@ -141,7 +151,8 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
           category,
           visibility || 'public',
           externalLink || null,
-          autoApprove || false
+          autoApprove || false,
+          isPaid || false
         ]
       );
 
@@ -1013,7 +1024,8 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       limit = '50',
       page = '1',
       category,
-      timeSlot
+      timeSlot,
+      isPaid
     } = req.query;
 
     // Validate required coordinates
@@ -1094,6 +1106,14 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       baseParams.push(timeSlot);
     }
 
+    // Add isPaid filter
+    if (isPaid !== undefined && isPaid !== 'all') {
+      paramCount++;
+      const isPaidBool = isPaid === 'true';
+      whereConditions += ` AND t.is_paid = $${paramCount}`;
+      baseParams.push(isPaidBool);
+    }
+
     // First, get the total count
     const countQuery = `
       SELECT COUNT(DISTINCT t.id) as total
@@ -1105,19 +1125,20 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
 
     // Build the main query with distance calculation
     let query = `
-      SELECT 
+      SELECT
         t.*,
         t.image_urls,
+        t.is_paid,
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
         COALESCE(1 + COUNT(tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         (
           6371 * acos(
-            cos(radians($1)) * 
-            cos(radians(t.latitude)) * 
-            cos(radians(t.longitude) - radians($2)) + 
-            sin(radians($1)) * 
+            cos(radians($1)) *
+            cos(radians(t.latitude)) *
+            cos(radians(t.longitude) - radians($2)) +
+            sin(radians($1)) *
             sin(radians(t.latitude))
           )
         ) as distance_km`;
@@ -1397,15 +1418,16 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
 
     // Build query to get all tokis where user is host OR participant
     let query = `
-      SELECT 
+      SELECT
         t.*,
+        t.is_paid,
         u.name as host_name,
         u.avatar_url as host_avatar,
         ARRAY_AGG(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
         COALESCE(1 + COUNT(DISTINCT tp.user_id) FILTER (WHERE tp.status = 'approved'), 1) as current_attendees,
         COALESCE(jp.status, CASE WHEN t.host_id = $${userIdParamPos} THEN 'hosting' ELSE 'not_joined' END) as join_status,
         EXISTS(
-          SELECT 1 FROM saved_tokis st 
+          SELECT 1 FROM saved_tokis st
           WHERE st.toki_id = t.id AND st.user_id = $${userIdParamPos}
         ) as is_saved`;
 
@@ -1483,6 +1505,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       tags: row.tags || [],
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
+      isPaid: row.is_paid || false,
     }));
 
     return res.status(200).json({
@@ -1523,15 +1546,16 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     // Build query with distance calculation if user has coordinates
     let query = `
-      SELECT 
+      SELECT
         t.*,
+        t.is_paid,
         u.name as host_name,
         u.avatar_url as host_avatar,
         u.bio as host_bio,
         u.location as host_location,
         ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags,
         EXISTS(
-          SELECT 1 FROM saved_tokis st 
+          SELECT 1 FROM saved_tokis st
           WHERE st.toki_id = t.id AND st.user_id = $2
         ) as is_saved`;
     
@@ -1672,6 +1696,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       tags: toki.tags || [],
       joinStatus: joinStatus,
       is_saved: toki.is_saved || false,
+      isPaid: toki.is_paid || false,
       participants: participantsResult.rows.map(p => ({
         id: p.id,
         name: p.name,
@@ -1764,7 +1789,8 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
       visibility,
       tags,
       externalLink,
-      autoApprove
+      autoApprove,
+      isPaid
     } = req.body;
 
     // Check if Toki exists and user is the host
@@ -1906,6 +1932,12 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
         paramCount++;
         updateFields.push(`external_link = $${paramCount}`);
         updateValues.push(externalLink || null);
+      }
+
+      if (isPaid !== undefined) {
+        paramCount++;
+        updateFields.push(`is_paid = $${paramCount}`);
+        updateValues.push(isPaid);
       }
 
       // Always update the updated_at timestamp

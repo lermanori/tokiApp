@@ -50,6 +50,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
     algorithmScore: typeof toki.algorithmScore === 'number' ? toki.algorithmScore : null,
     createdAt: toki.createdAt,
     friendsGoing: toki.friendsGoing || [],
+    isPaid: toki.isPaid || false,
   };
 };
 
@@ -141,7 +142,14 @@ export const filterEvents = (
       return true;
     })();
 
-    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime;
+    const matchesIsPaid = (() => {
+      if (selectedFilters.isPaid === 'all') return true;
+      if (selectedFilters.isPaid === 'free') return event.isPaid === false;
+      if (selectedFilters.isPaid === 'paid') return event.isPaid === true;
+      return true;
+    })();
+
+    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime && matchesIsPaid;
   });
 };
 

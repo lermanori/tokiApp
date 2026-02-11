@@ -10,7 +10,8 @@ const DEFAULT_FILTERS: DiscoverFilters = {
   participants: 'all',
   dateFrom: '',
   dateTo: '',
-  radius: '500'
+  radius: '500',
+  isPaid: 'all'
 };
 
 export const useDiscoverFilters = (

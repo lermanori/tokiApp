@@ -103,6 +103,17 @@ export async function validateHostId(hostId: string): Promise<boolean> {
 }
 
 /**
+ * Validate isPaid field (optional boolean)
+ */
+export function validateIsPaid(isPaid: any): boolean {
+  // If not provided, it's valid (will default to false)
+  if (isPaid === undefined || isPaid === null) return true;
+
+  // Must be a boolean
+  return typeof isPaid === 'boolean';
+}
+
+/**
  * Match images to tokis by filename
  */
 export function matchImagesToTokis(
@@ -189,6 +200,13 @@ export async function validateTokiData(
 
     if (isNaN(maxAttendeesNum) || maxAttendeesNum < 1 || maxAttendeesNum > 1000) {
       errors.push('maxAttendees must be between 1 and 1000, or null for unlimited');
+    }
+  }
+
+  // Validate isPaid
+  if (toki.isPaid !== undefined && toki.isPaid !== null) {
+    if (!validateIsPaid(toki.isPaid)) {
+      errors.push('isPaid must be a boolean value');
     }
   }
 

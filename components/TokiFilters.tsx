@@ -21,6 +21,7 @@ export interface TokiFiltersProps {
     radius?: string;
     sortBy?: string;
     sortOrder?: string;
+    isPaid?: string;
   };
   onFilterChange: (filterType: string, value: string) => void;
   onClearAll: () => void;
@@ -105,6 +106,11 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
       key: 'time',
       options: ['all', 'today', 'tomorrow', 'custom'],
     },
+    {
+      title: 'Event Type',
+      key: 'isPaid',
+      options: ['all', 'free', 'paid'],
+    },
   ];
 
   const advancedFilterSections = [
@@ -136,6 +142,11 @@ const TokiFilters: React.FC<TokiFiltersProps> = ({
     }
     if (sectionKey === 'visibility' && option === 'hosted_by_me') {
       return 'Hosted by me';
+    }
+    if (sectionKey === 'isPaid') {
+      if (option === 'all') return 'All Events';
+      if (option === 'free') return 'Free Events';
+      if (option === 'paid') return 'Paid Events';
     }
     return option.charAt(0).toUpperCase() + option.slice(1);
   };

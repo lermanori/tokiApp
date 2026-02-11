@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import * as Clipboard from 'expo-clipboard';
@@ -70,6 +70,7 @@ interface TokiDetails {
     name: string;
     avatar?: string;
   }>;
+  isPaid?: boolean;
 }
 
 // Fallback data for different Tokis
@@ -409,6 +410,7 @@ export default function TokiDetailsScreen() {
             avatar: p?.user?.avatar || p?.avatar || undefined,
           })),
           friendsAttending: friendsAttending, // Include friends data in initial object
+          isPaid: tokiData.isPaid || false,
         };
 
         setToki(transformedToki);
@@ -1582,11 +1584,11 @@ export default function TokiDetailsScreen() {
             {toki.link && (
               <View style={styles.eventInfoItem}>
                 <Link size={18} color="#B49AFF" />
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => Linking.openURL(toki.link!)}
                   style={styles.linkContainer}
                 >
-                  <Text 
+                  <Text
                     style={[styles.eventInfoText, styles.linkText]}
                     numberOfLines={1}
                     ellipsizeMode="tail"
@@ -1596,6 +1598,12 @@ export default function TokiDetailsScreen() {
                 </TouchableOpacity>
               </View>
             )}
+            <View style={styles.eventInfoItem}>
+              <Tag size={18} color="#B49AFF" />
+              <Text style={styles.eventInfoText}>
+                {toki.isPaid ? 'Paid Event' : 'Free Event'}
+              </Text>
+            </View>
           </View>
 
           {/* Participants Section */}

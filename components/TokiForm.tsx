@@ -59,6 +59,7 @@ interface TokiFormProps {
     visibility?: 'public' | 'private' | 'connections' | 'friends';
     externalLink?: string;
     autoApprove?: boolean;
+    isPaid?: boolean;
   };
   onSubmit: (data: any) => Promise<string | boolean | null>;
   onCancel: () => void;
@@ -106,6 +107,7 @@ export default function TokiForm({
   const [webTimeTemp, setWebTimeTemp] = useState<string>('');
   const [isPrivate, setIsPrivate] = useState(!!initialData && initialData.visibility === 'private');
   const [externalLink, setExternalLink] = useState(initialData.externalLink || '');
+  const [isPaid, setIsPaid] = useState(initialData.isPaid || false);
 
   // Keep privacy toggle in sync when editing existing Toki
   useEffect(() => {
@@ -189,6 +191,7 @@ export default function TokiForm({
       if (initialData.tags) setCustomTags(initialData.tags);
       if (initialData.customDateTime) setCustomDateTime(initialData.customDateTime);
       if (initialData.externalLink) setExternalLink(initialData.externalLink);
+      if (initialData.isPaid !== undefined) setIsPaid(initialData.isPaid);
 
       // If we have a custom date/time, mark the time as custom
       if (initialData.customDateTime && initialData.time) {
@@ -580,6 +583,7 @@ export default function TokiForm({
       images: preparedImages,
       externalLink: externalLink.trim() || null,
       autoApprove: autoApprove,
+      isPaid: isPaid,
       userLatitude: state.currentUser?.latitude ?? null,
       userLongitude: state.currentUser?.longitude ?? null,
     };
@@ -969,6 +973,22 @@ export default function TokiForm({
           </TouchableOpacity>
           <Text style={styles.autoApproveHint}>
             When enabled, users who join will be automatically approved without requiring your confirmation
+          </Text>
+        </View>
+
+        {/* Paid/Free toggle */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Event Type</Text>
+          <TouchableOpacity
+            style={[styles.isPaidToggle, isPaid && styles.isPaidToggleOn]}
+            onPress={() => setIsPaid(!isPaid)}
+          >
+            <Text style={[styles.isPaidToggleText, isPaid && styles.isPaidToggleTextOn]}>
+              {isPaid ? 'Paid Event' : 'Free Event'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.isPaidHint}>
+            Let participants know if this event requires payment
           </Text>
         </View>
 
@@ -1588,5 +1608,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-Medium',
     color: '#1C1C1C',
+  },
+  isPaidToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  isPaidToggleOn: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  isPaidToggleText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#666666',
+  },
+  isPaidToggleTextOn: {
+    color: '#FFFFFF',
+  },
+  isPaidHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginTop: 8,
   },
 });

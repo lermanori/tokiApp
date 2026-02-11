@@ -69,6 +69,7 @@ export default function EditTokiScreen() {
             publicId: toki.image_public_ids?.[index] || `temp-${index}`,
           })) || [],
           externalLink: toki.externalLink || '',
+          isPaid: toki.isPaid || false,
         };
         
         console.log('🖼️ [EDIT TOKI] Setting initial data:', initialDataObj);
@@ -103,6 +104,7 @@ export default function EditTokiScreen() {
         tags: tokiData.tags,
         externalLink: tokiData.externalLink,
         autoApprove: tokiData.autoApprove,
+        isPaid: tokiData.isPaid,
       };
 
       await actions.updateTokiBackend(tokiId as string, updatedTokiData);

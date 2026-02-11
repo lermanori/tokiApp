@@ -298,6 +298,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 18: Add is_paid field to tokis
+    try {
+      console.log('📝 Migration 18: Adding is_paid field to tokis table...');
+      const isPaidSql = readFileSync(
+        join(sqlDir, 'add-is-paid-field.sql'),
+        'utf-8'
+      );
+      await pool.query(isPaidSql);
+      console.log('✅ is_paid field migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  is_paid column already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

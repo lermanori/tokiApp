@@ -37,6 +37,7 @@ export interface Toki {
   joinStatus?: 'not_joined' | 'pending' | 'approved';
   externalLink?: string;
   friendsAttending?: Array<{ id: string; name: string; avatar?: string }>;
+  isPaid?: boolean;
 }
 
 export interface User {
@@ -671,6 +672,7 @@ class ApiService {
     userLongitude?: number | null;
     externalLink?: string | null;
     autoApprove?: boolean;
+    isPaid?: boolean;
   }): Promise<Toki> {
     const response = await this.makeRequest<{ success: boolean; data: Toki }>('/tokis', {
       method: 'POST',
@@ -961,6 +963,7 @@ class ApiService {
     page?: number;
     category?: string;
     timeSlot?: string;
+    isPaid?: string;
   }): Promise<{ tokis: Toki[]; pagination: any; searchParams: any }> {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
