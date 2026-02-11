@@ -1,7 +1,7 @@
 {
   "name": "toki-social-map",
   "main": "expo-router/entry",
-  "version": "1.0.19",
+  "version": "1.1.2",
   "private": true,
   "scripts": {
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
@@ -80,6 +80,8 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~19.1.10",
     "concurrently": "^8.2.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~10.0.0",
     "gh-pages": "^6.3.0",
     "typescript": "~5.9.2"
   }

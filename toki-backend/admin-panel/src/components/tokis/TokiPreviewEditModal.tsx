@@ -400,46 +400,70 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: 14,
-                  fontFamily: 'var(--font-semi)',
-                  color: '#1C1C1C',
-                  marginBottom: 8
-                }}>
-                  Latitude
-                </label>
-                <input
-                  className="input-glass"
-                  type="number"
-                  step="any"
-                  value={formData.latitude}
-                  onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                  style={{ width: '100%' }}
-                />
-              </div>
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-semi)',
+                    color: '#1C1C1C',
+                    marginBottom: 8
+                  }}>
+                    Latitude
+                  </label>
+                  <input
+                    className="input-glass"
+                    type="number"
+                    step="any"
+                    min="-90"
+                    max="90"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                    style={{ width: '100%' }}
+                    placeholder="-90 to 90"
+                  />
+                </div>
 
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: 14,
-                  fontFamily: 'var(--font-semi)',
-                  color: '#1C1C1C',
-                  marginBottom: 8
-                }}>
-                  Longitude
-                </label>
-                <input
-                  className="input-glass"
-                  type="number"
-                  step="any"
-                  value={formData.longitude}
-                  onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                  style={{ width: '100%' }}
-                />
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-semi)',
+                    color: '#1C1C1C',
+                    marginBottom: 8
+                  }}>
+                    Longitude
+                  </label>
+                  <input
+                    className="input-glass"
+                    type="number"
+                    step="any"
+                    min="-180"
+                    max="180"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                    style={{ width: '100%' }}
+                    placeholder="-180 to 180"
+                  />
+                </div>
               </div>
+              {(!formData.latitude || !formData.longitude) && (
+                <div style={{
+                  marginTop: 8,
+                  padding: 8,
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: '#F59E0B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <span>⚠</span>
+                  <span>Coordinates are recommended for the toki to appear on the map</span>
+                </div>
+              )}
             </div>
 
             <div>

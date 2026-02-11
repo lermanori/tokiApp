@@ -99,6 +99,15 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     }
 
+    // IMPORTANT: Require coordinates for registration (needed for nearby feature)
+    if (!latNumber || !lngNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location required',
+        message: 'Please provide a valid location with coordinates. Select from the dropdown or use your current location.'
+      });
+    }
+
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     const result = await pool.query(
@@ -243,7 +252,7 @@ router.post('/register/invite', async (req: Request, res: Response) => {
     const lngProvided = longitude !== undefined && longitude !== null && longitude !== '';
     let latNumber: number | null = null;
     let lngNumber: number | null = null;
-    
+
     if (latProvided && lngProvided) {
       const parsedLat = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
       const parsedLng = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
@@ -251,8 +260,39 @@ router.post('/register/invite', async (req: Request, res: Response) => {
         latNumber = parsedLat;
         lngNumber = parsedLng;
       }
+    } else if (location && typeof location === 'string' && location.trim().length > 0) {
+      // Try to geocode location if coordinates not provided
+      try {
+        const key = process.env.GOOGLE_MAPS_API_KEY;
+        if (key) {
+          const params = new URLSearchParams({ address: location.trim(), key, language: 'en' });
+          const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+          const resp = await fetch(url);
+          const data: any = await resp.json();
+          if (data.status === 'OK') {
+            const r = (data.results || [])[0];
+            const lat = r?.geometry?.location?.lat;
+            const lng = r?.geometry?.location?.lng;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              latNumber = lat;
+              lngNumber = lng;
+            }
+          }
+        }
+      } catch (e) {
+        logger.error('Error geocoding location in /register/invite:', e);
+      }
     }
-    
+
+    // IMPORTANT: Require coordinates for registration (needed for nearby feature)
+    if (!latNumber || !lngNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location required',
+        message: 'Please provide a valid location with coordinates. Select from the dropdown or use your current location.'
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, name, bio, location, latitude, longitude, verified)
        VALUES ($1, $2, $3, $4, $5, $6, $7, false)

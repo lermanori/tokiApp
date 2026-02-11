@@ -297,7 +297,7 @@ export default function FindPeopleScreen() {
             <View style={styles.userCardHeader}>
               <Image
                 source={{ 
-                  uri: user.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=2'
+                  uri: user.avatar || 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg'
                 }}
                 style={styles.userAvatar}
               />

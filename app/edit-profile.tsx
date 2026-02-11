@@ -182,19 +182,6 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     console.log('🔵 handleSave called');
-    
-    // Validate that at least one social media link is provided
-    const hasAtLeastOneSocial = Object.values(profile.socialLinks).some(link => link && link.trim());
-    console.log('🔵 Social links check:', { hasAtLeastOneSocial, socialLinks: profile.socialLinks });
-    
-    if (!hasAtLeastOneSocial) {
-      console.log('🔵 Blocked: No social links');
-      Alert.alert(
-        'Social Media Required',
-        'Please add at least one social media link (Instagram, TikTok, LinkedIn, or Facebook).'
-      );
-      return;
-    }
 
     console.log('🔵 Connection check:', { isConnected: state.isConnected });
     if (!state.isConnected) {
@@ -324,15 +311,12 @@ export default function EditProfileScreen() {
 
   // Helper to check if save is allowed
   const canSave = () => {
-    const hasAtLeastOneSocial = Object.values(profile.socialLinks || {}).some(link => link && link.trim());
-    return hasAtLeastOneSocial && state.isConnected && hasChanges && !isSaving;
+    return state.isConnected && hasChanges && !isSaving;
   };
 
   // Get descriptive button text based on state
   const getSaveButtonText = () => {
     if (isSaving) return 'Saving...';
-    const hasAtLeastOneSocial = Object.values(profile.socialLinks || {}).some(link => link && link.trim());
-    if (!hasAtLeastOneSocial) return 'Add Social Link';
     if (!hasChanges) return 'No Changes';
     if (!state.isConnected) return 'No Connection';
     return 'Save';
@@ -474,7 +458,7 @@ export default function EditProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Social Media Links</Text>
           <Text style={styles.sectionSubtitle}>
-            Add at least one social media link so people can connect with you *
+            Add your social media links so people can connect with you (optional)
           </Text>
           
           {/* Always show all social platforms */}

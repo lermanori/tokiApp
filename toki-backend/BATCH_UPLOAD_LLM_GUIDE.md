@@ -8,6 +8,9 @@ The batch upload feature allows admins to upload multiple tokis at once via a ZI
 1. A JSON file with toki data (e.g., `tokis.json`)
 2. Image files referenced in the JSON
 
+**KEY PRINCIPLE FOR LLMs:**
+When helping users create batch upload JSON, coordinates (latitude and longitude) are **optional** but recommended. The backend will **automatically geocode** location strings to coordinates using Google Maps API if coordinates are missing. However, for best accuracy, users can include coordinates if they have them.
+
 ## Step-by-Step Process
 
 ### 1. Understanding the Structure
@@ -60,8 +63,8 @@ The JSON file must have this structure:
 
 These fields are optional but recommended:
 - `description` (string): Detailed description
-- `latitude` (number): Latitude coordinate
-- `longitude` (number): Longitude coordinate
+- **`latitude` (number): Latitude coordinate (-90 to 90) - HIGHLY RECOMMENDED**
+- **`longitude` (number): Longitude coordinate (-180 to 180) - HIGHLY RECOMMENDED**
 - `scheduledTime` (string): ISO 8601 datetime (e.g., "2025-11-15T09:00:00Z")
 - `maxAttendees` (number | null): Maximum attendees (1-1000, or null for unlimited)
 - `visibility` (string): One of: "public", "connections", "friends", "private" (default: "public")
@@ -70,6 +73,33 @@ These fields are optional but recommended:
 - `images` (array of strings): Array of image filenames (for multiple images)
 - `externalLink` (string): External URL
 - `autoApprove` (boolean): Auto-approve join requests (default: false)
+
+**⚠️ IMPORTANT NOTE ABOUT COORDINATES:**
+
+**Automatic Geocoding:**
+The batch upload system **automatically geocodes** location strings to coordinates using Google Maps API. When coordinates are missing, the system will:
+- Use the `location` field to look up coordinates
+- Automatically populate `latitude` and `longitude`
+- Show a warning that coordinates were auto-geocoded
+
+**When to manually include coordinates:**
+While automatic geocoding works well, you may want to include coordinates manually when:
+1. You need precise coordinates for a specific spot (e.g., exact meeting point in a large park)
+2. The location name is ambiguous (e.g., "Springfield" exists in multiple states)
+3. You want to avoid relying on the geocoding API
+
+**Coordinate validation:**
+If you include coordinates manually, ensure:
+- Latitude must be between -90 and 90
+- Longitude must be between -180 and 180
+- Coordinates should match the location name for accuracy
+
+**Best practice for location strings:**
+For best geocoding results, use complete location strings:
+- ✅ Good: "Central Park, New York, NY"
+- ✅ Good: "Eiffel Tower, Paris, France"
+- ❌ Poor: "The park" (too vague)
+- ❌ Poor: "Downtown" (not specific enough)
 
 ### 5. Valid Categories
 
@@ -236,6 +266,9 @@ Here's a complete example with all fields:
 - Invalid visibility value
 - Invalid maxAttendees (must be 1-1000 or null)
 - Missing or invalid host_id (user doesn't exist)
+- Invalid latitude (must be between -90 and 90)
+- Invalid longitude (must be between -180 and 180)
+- Missing coordinates (will show a warning and toki won't appear on map)
 
 **Image Errors:**
 - Image filename in JSON doesn't match actual filename (case-sensitive!)
@@ -301,6 +334,26 @@ When the user uploads the ZIP:
 **"host_id does not exist"**
 - Verify the user ID in the admin panel
 - Use UUID format, not email or name
+
+**"latitude must be between -90 and 90"**
+- Check that latitude values are within valid range
+- Latitude ranges from -90 (South Pole) to +90 (North Pole)
+
+**"longitude must be between -180 and 180"**
+- Check that longitude values are within valid range
+- Longitude ranges from -180 to +180 (wraps around the globe)
+
+**"No coordinates provided - this toki will not appear on the map"**
+- This warning appears when automatic geocoding fails or is unavailable
+- Check that `GOOGLE_MAPS_API_KEY` is configured in the backend
+- Ensure the location string is specific enough (e.g., "Central Park, New York" not just "park")
+- As a last resort, manually add latitude and longitude to the JSON
+
+**"Coordinates auto-geocoded from location..."**
+- This is an informational warning (not an error)
+- The system successfully geocoded the location string to coordinates
+- The toki will appear on the map at the geocoded location
+- If coordinates are incorrect, you can manually edit them in the preview step
 
 ### 16. Best Practices
 

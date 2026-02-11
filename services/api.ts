@@ -530,7 +530,7 @@ class ApiService {
     return this.makeRequest(`/invitations/validate/${code}`);
   }
 
-  async registerWithInvitation(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number; invitationCode: string }): Promise<AuthResponse> {
+  async registerWithInvitation(userData: { name: string; email: string; password: string; bio?: string; location?: string; latitude?: number; longitude?: number; invitationCode: string; termsAccepted: boolean }): Promise<AuthResponse> {
     const response = await this.makeRequest<AuthResponse>('/auth/register/invite', {
       method: 'POST',
       body: JSON.stringify(userData),

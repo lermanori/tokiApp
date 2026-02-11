@@ -183,12 +183,31 @@ export async function validateTokiData(
 
   // Validate maxAttendees
   if (toki.maxAttendees !== null && toki.maxAttendees !== undefined) {
-    const maxAttendeesNum = typeof toki.maxAttendees === 'number' 
-      ? toki.maxAttendees 
+    const maxAttendeesNum = typeof toki.maxAttendees === 'number'
+      ? toki.maxAttendees
       : parseInt(toki.maxAttendees);
-    
+
     if (isNaN(maxAttendeesNum) || maxAttendeesNum < 1 || maxAttendeesNum > 1000) {
       errors.push('maxAttendees must be between 1 and 1000, or null for unlimited');
+    }
+  }
+
+  // Validate latitude and longitude
+  if (toki.latitude !== null && toki.latitude !== undefined && toki.latitude !== '') {
+    const lat = typeof toki.latitude === 'number' ? toki.latitude : parseFloat(toki.latitude);
+    if (isNaN(lat)) {
+      errors.push('latitude must be a valid number');
+    } else if (lat < -90 || lat > 90) {
+      errors.push('latitude must be between -90 and 90');
+    }
+  }
+
+  if (toki.longitude !== null && toki.longitude !== undefined && toki.longitude !== '') {
+    const lon = typeof toki.longitude === 'number' ? toki.longitude : parseFloat(toki.longitude);
+    if (isNaN(lon)) {
+      errors.push('longitude must be a valid number');
+    } else if (lon < -180 || lon > 180) {
+      errors.push('longitude must be between -180 and 180');
     }
   }
 
@@ -237,6 +256,18 @@ export async function validateTokiData(
   }
   if (!imageRefs.length) {
     warnings.push('No images provided');
+  }
+
+  // Warning for missing coordinates (critical for map-based app)
+  const hasLatitude = toki.latitude !== null && toki.latitude !== undefined && toki.latitude !== '';
+  const hasLongitude = toki.longitude !== null && toki.longitude !== undefined && toki.longitude !== '';
+
+  if (!hasLatitude && !hasLongitude) {
+    warnings.push('No coordinates provided - this toki will not appear on the map');
+  } else if (!hasLatitude) {
+    warnings.push('Missing latitude - this toki will not appear on the map');
+  } else if (!hasLongitude) {
+    warnings.push('Missing longitude - this toki will not appear on the map');
   }
 
   return {

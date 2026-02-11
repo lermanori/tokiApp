@@ -222,7 +222,7 @@ const initialUser: User = {
   name: 'Maya Cohen',
   bio: 'Love exploring Tel Aviv\'s hidden gems ✨ Always up for coffee and good vibes',
   location: 'Tel Aviv, Israel',
-  avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
+  avatar: 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg',
   verified: true,
   socialLinks: {
     instagram: '@maya_tlv',
@@ -2240,7 +2240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         email: user.email,
         bio: user.bio || '',
         location: user.location || '',
-        avatar: user.avatar || 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
+        avatar: user.avatar || 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg',
         verified: response.verified,
         socialLinks: response.socialLinks || {},
         memberSince: user.memberSince,

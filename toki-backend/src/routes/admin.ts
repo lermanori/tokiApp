@@ -11,6 +11,7 @@ import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordR
 import logger from '../utils/logger';
 import { validateTokiData, matchImagesToTokis } from '../utils/batchUploadValidation';
 import { ImageService } from '../services/imageService';
+import { geocodingService } from '../services/geocodingService';
 
 const router = Router();
 
@@ -2473,6 +2474,31 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
 
     // Match images to tokis and validate (use fixedTokis)
     const matched = matchImagesToTokis(fixedTokis, imageMap);
+
+    // Auto-geocode missing coordinates using Google Maps API
+    if (geocodingService.isAvailable()) {
+      for (const matchedToki of matched) {
+        const toki = matchedToki.toki;
+        const hasLatitude = toki.latitude !== null && toki.latitude !== undefined && toki.latitude !== '';
+        const hasLongitude = toki.longitude !== null && toki.longitude !== undefined && toki.longitude !== '';
+
+        // If coordinates are missing but location string exists, attempt geocoding
+        if ((!hasLatitude || !hasLongitude) && toki.location) {
+          try {
+            const geocodeResult = await geocodingService.geocode(toki.location);
+            if (geocodeResult) {
+              toki.latitude = geocodeResult.latitude;
+              toki.longitude = geocodeResult.longitude;
+              toki._geocoded = true; // Flag for adding warning later
+              logger.info(`Auto-geocoded "${toki.location}" to (${geocodeResult.latitude}, ${geocodeResult.longitude})`);
+            }
+          } catch (error) {
+            logger.warn(`Failed to geocode location "${toki.location}":`, error);
+          }
+        }
+      }
+    }
+
     const valid: any[] = [];
     const invalid: any[] = [];
 
@@ -2488,6 +2514,16 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
         }
         validation.warnings.push(
           `Host ID was invalid or missing. Using default host: ${defaultHost?.name || 'Current User'}`
+        );
+      }
+
+      // Add info if coordinates were auto-geocoded
+      if (matchedToki.toki._geocoded) {
+        if (!validation.warnings) {
+          validation.warnings = [];
+        }
+        validation.warnings.push(
+          `Coordinates auto-geocoded from location "${matchedToki.toki.location}"`
         );
       }
 
@@ -2648,6 +2684,30 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
 
     // Match and validate (use fixedTokis)
     const matched = matchImagesToTokis(fixedTokis, imageMap);
+
+    // Auto-geocode missing coordinates using Google Maps API
+    if (geocodingService.isAvailable()) {
+      for (const matchedToki of matched) {
+        const toki = matchedToki.toki;
+        const hasLatitude = toki.latitude !== null && toki.latitude !== undefined && toki.latitude !== '';
+        const hasLongitude = toki.longitude !== null && toki.longitude !== undefined && toki.longitude !== '';
+
+        // If coordinates are missing but location string exists, attempt geocoding
+        if ((!hasLatitude || !hasLongitude) && toki.location) {
+          try {
+            const geocodeResult = await geocodingService.geocode(toki.location);
+            if (geocodeResult) {
+              toki.latitude = geocodeResult.latitude;
+              toki.longitude = geocodeResult.longitude;
+              logger.info(`Auto-geocoded "${toki.location}" to (${geocodeResult.latitude}, ${geocodeResult.longitude})`);
+            }
+          } catch (error) {
+            logger.warn(`Failed to geocode location "${toki.location}":`, error);
+          }
+        }
+      }
+    }
+
     const created: any[] = [];
     const failed: any[] = [];
 
