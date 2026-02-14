@@ -1080,6 +1080,10 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
           SELECT 1 FROM user_hidden_activities uha
           WHERE uha.toki_id = t.id AND uha.user_id = $4
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM toki_hidden_users thu
+          WHERE thu.toki_id = t.id AND thu.user_id = $4
+        )
       `;
     }
 
@@ -1451,7 +1455,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'approved'
       LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${userIdParamPos}
-      WHERE (t.status = 'active' OR t.host_id = $${userIdParamPos})
+      WHERE t.status = 'active'
         AND (
           t.host_id = $${userIdParamPos}
           OR EXISTS (
@@ -1467,6 +1471,10 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
         AND NOT EXISTS (
           SELECT 1 FROM toki_hidden_users hu
           WHERE hu.toki_id = t.id AND hu.user_id = $${userIdParamPos}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM user_hidden_activities uha
+          WHERE uha.toki_id = t.id AND uha.user_id = $${userIdParamPos}
         )
         AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
       GROUP BY t.id, u.name, u.avatar_url, t.latitude, t.longitude, jp.status, t.host_id

@@ -68,7 +68,7 @@ router.get('/me/activity', authenticateToken, async (req: Request, res: Response
           t.visibility <> 'private'
           OR t.host_id = $1
         )
-        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW())
+        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
       GROUP BY 
         t.id, t.title, t.image_urls, t.image_url, t.category, t.location, t.latitude, t.longitude, t.time_slot, t.current_attendees, t.max_attendees,
         t.scheduled_time, t.created_at, t.visibility, t.status, u2.id, u2.name, u2.avatar_url
@@ -170,7 +170,7 @@ router.get('/users/:userId/activity', authenticateToken, async (req: Request, re
           t.visibility <> 'private'
           OR t.host_id = $1
         )
-        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW())
+        AND (t.scheduled_time IS NULL OR t.scheduled_time >= NOW() - INTERVAL '12 hours')
         AND NOT EXISTS (
           SELECT 1 FROM user_hidden_activities uha
           WHERE uha.user_id = $1 AND uha.toki_id = t.id
