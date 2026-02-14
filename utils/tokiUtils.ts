@@ -64,36 +64,33 @@ export const formatTimeDisplay = (time: string | undefined, scheduledTime?: stri
   // If we have scheduled time, use it for smart display
   if (scheduledTime) {
     try {
-      // Parse the scheduled time as UTC to avoid timezone conversion issues
-      // The backend sends time in format "YYYY-MM-DD HH:MM" which should be treated as UTC
-      const date = new Date(scheduledTime + 'Z'); // Add 'Z' to indicate UTC
+      // Backend returns UTC time in "YYYY-MM-DD HH:MM" format
+      // Add 'Z' to parse as UTC, then display in user's local timezone
+      const date = new Date(scheduledTime.includes('Z') ? scheduledTime : scheduledTime + 'Z');
       const now = new Date();
-      // Create today and tomorrow in UTC for consistent comparison
-      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      const tomorrowUTC = new Date(todayUTC);
-      tomorrowUTC.setUTCDate(tomorrowUTC.getUTCDate() + 1);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Create eventDate in UTC to match the UTC date
-      const eventDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      const eventDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
       // Format time as HH:MM
       const timeString = date.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true,
-        timeZone: 'UTC' // Display time in UTC to match input
+        hour12: true
       });
 
-      // Check if it's today, tomorrow, or later (all in UTC for consistent comparison)
-      if (eventDate.getTime() === todayUTC.getTime()) {
+      // Check if it's today, tomorrow, or later
+      if (eventDate.getTime() === today.getTime()) {
         return `today at ${timeString}`;
-      } else if (eventDate.getTime() === tomorrowUTC.getTime()) {
+      } else if (eventDate.getTime() === tomorrow.getTime()) {
         return `tomorrow at ${timeString}`;
       } else {
-        // Format as DD/MM/YY HH:MM using UTC methods
-        const day = date.getUTCDate().toString().padStart(2, '0');
-        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-        const year = date.getUTCFullYear().toString().slice(-2);
+        // Format as DD/MM/YY at HH:MM
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString().slice(-2);
         return `${day}/${month}/${year} at ${timeString}`;
       }
     } catch (error) {

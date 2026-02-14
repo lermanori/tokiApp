@@ -58,11 +58,17 @@ export default function EditTokiScreen() {
           visibility: toki.visibility || 'public',
           autoApprove: toki.autoApprove || false,
           tags: toki.tags?.filter((tag: string) => tag !== toki.category) || [],
-          // Convert scheduledTime to customDateTime format if available
-          customDateTime: toki.scheduledTime ? 
-            new Date(toki.scheduledTime).toISOString().split('T')[0] + ' ' + 
-            new Date(toki.scheduledTime).toTimeString().slice(0, 5) : 
-            undefined,
+          // Convert scheduledTime (UTC) to customDateTime format in local timezone
+          customDateTime: toki.scheduledTime ? (() => {
+            const utcTime = toki.scheduledTime.includes('Z') ? toki.scheduledTime : toki.scheduledTime + 'Z';
+            const date = new Date(utcTime);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const mins = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${mins}`;
+          })() : undefined,
           // Add images data
           images: toki.image_urls?.map((url: string, index: number) => ({
             url,
@@ -97,7 +103,10 @@ export default function EditTokiScreen() {
         latitude: tokiData.latitude,
         longitude: tokiData.longitude,
         timeSlot: tokiData.time,
-        scheduledTime: tokiData.customDateTime,
+        // Convert local time to UTC before sending
+        scheduledTime: tokiData.customDateTime
+          ? new Date(tokiData.customDateTime).toISOString()
+          : null,
         category: tokiData.activity,
         maxAttendees: tokiData.maxAttendees,
         visibility: tokiData.visibility || 'public',

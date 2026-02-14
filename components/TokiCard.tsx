@@ -145,7 +145,9 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
     // If we have scheduled time, use it for smart display
     if (scheduledTime) {
         try {
-            const date = new Date(scheduledTime);
+            // Backend returns UTC time in "YYYY-MM-DD HH:MM" format
+            // Add 'Z' to parse as UTC, then display in user's local timezone
+            const date = new Date(scheduledTime.includes('Z') ? scheduledTime : scheduledTime + 'Z');
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const tomorrow = new Date(today);

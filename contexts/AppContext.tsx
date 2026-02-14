@@ -1409,10 +1409,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      // Convert time slot to scheduled time
+      // Convert time slot to scheduled time (returns UTC ISO string)
       const getScheduledTimeFromSlot = (timeSlot: string): string => {
         const now = new Date();
-        
+
         switch (timeSlot) {
           case 'Now':
             return now.toISOString();
@@ -1426,12 +1426,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString();
           case 'Tonight':
             const tonight = new Date(now);
-            tonight.setHours(19, 0, 0, 0); // 7:00 PM
+            tonight.setHours(19, 0, 0, 0); // 7:00 PM local
             return tonight.toISOString();
           case 'Tomorrow':
             const tomorrow = new Date(now);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(10, 0, 0, 0); // 10:00 AM
+            tomorrow.setHours(10, 0, 0, 0); // 10:00 AM local
             return tomorrow.toISOString();
           default:
             // Handle specific time slots like "9:00 AM", "2:00 PM"
@@ -1439,18 +1439,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
               const [time, period] = timeSlot.split(' ');
               const [hours, minutes] = time.split(':').map(Number);
               let hour24 = hours;
-              
+
               if (period === 'PM' && hours !== 12) hour24 += 12;
               if (period === 'AM' && hours === 12) hour24 = 0;
-              
+
               const scheduledTime = new Date(now);
               scheduledTime.setHours(hour24, minutes, 0, 0);
-              
+
               // If the time has passed today, schedule for tomorrow
               if (scheduledTime <= now) {
                 scheduledTime.setDate(scheduledTime.getDate() + 1);
               }
-              
+
               return scheduledTime.toISOString();
             }
             return now.toISOString();
@@ -1465,7 +1465,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         longitude: tokiData.longitude || null,
         placeId: tokiData.placeId || null,
         timeSlot: tokiData.time,
-        scheduledTime: tokiData.customDateTime || getScheduledTimeFromSlot(tokiData.time), // Use custom date/time if provided
+        // Convert to UTC: custom datetime needs conversion, preset slots already return ISO
+        scheduledTime: tokiData.customDateTime
+          ? new Date(tokiData.customDateTime).toISOString()
+          : getScheduledTimeFromSlot(tokiData.time),
         category: tokiData.activity,
         maxAttendees: tokiData.maxAttendees !== undefined ? tokiData.maxAttendees : 10,
         visibility: tokiData.visibility || 'public',

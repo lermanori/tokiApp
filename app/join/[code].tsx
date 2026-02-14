@@ -367,7 +367,7 @@ export default function JoinByCode() {
             <View style={styles.detailRow}>
               <Clock size={16} color="#666666" />
               <Text style={styles.detailText}>
-                {display.scheduledTime ? new Date(display.scheduledTime).toLocaleString() : 'Time TBD'}
+                {display.scheduledTime ? new Date(display.scheduledTime.includes('Z') ? display.scheduledTime : display.scheduledTime + 'Z').toLocaleString() : 'Time TBD'}
               </Text>
             </View>
 
