@@ -13,6 +13,7 @@ import ParticipantsModal from '@/components/ParticipantsModal';
 import FriendsGoingModal from '@/components/FriendsGoingModal';
 import FriendsGoingOverlay from '@/components/FriendsGoingOverlay';
 import ReportModal from '@/components/ReportModal';
+import ConfirmModal from '@/components/ConfirmModal';
 import { apiService } from '@/services/api';
 import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
@@ -243,6 +244,7 @@ export default function TokiDetailsScreen() {
     }
   };
   const [isJoining, setIsJoining] = useState(false);
+  const [showCancelRequestModal, setShowCancelRequestModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRatingPrompt, setShowRatingPrompt] = useState(false);
@@ -574,7 +576,7 @@ export default function TokiDetailsScreen() {
           break;
 
         case 'pending':
-          Alert.alert('Request Pending', 'Your join request is waiting for host approval.');
+          setShowCancelRequestModal(true);
           break;
       }
     } catch (error) {
@@ -582,6 +584,25 @@ export default function TokiDetailsScreen() {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setIsJoining(false);
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    if (!toki) return;
+
+    setShowCancelRequestModal(false);
+
+    try {
+      const success = await actions.cancelJoinRequest(toki.id);
+      if (success) {
+        setToki(prev => prev ? ({ ...prev, joinStatus: 'not_joined' }) : null);
+        console.log('✅ Join request cancelled for Toki:', toki.id);
+      } else {
+        Alert.alert('Error', 'Failed to cancel join request. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Error cancelling join request:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -2232,6 +2253,17 @@ export default function TokiDetailsScreen() {
         title="Report Toki"
         subtitle="Please let us know why this Toki is inappropriate. This helps us maintain a safe community."
         contentType="Toki"
+      />
+      <ConfirmModal
+        visible={showCancelRequestModal}
+        title="Request Pending"
+        message="Your join request is waiting for host approval."
+        icon="clock"
+        confirmLabel="Cancel Request"
+        cancelLabel="Keep Waiting"
+        confirmStyle="destructive"
+        onConfirm={handleCancelRequest}
+        onCancel={() => setShowCancelRequestModal(false)}
       />
       </SafeAreaView>
     </>

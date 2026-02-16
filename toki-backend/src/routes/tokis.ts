@@ -1498,6 +1498,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       visibility: row.visibility,
       autoApprove: row.auto_approve || false,
       imageUrl: row.image_urls && row.image_urls.length > 0 ? row.image_urls[0] : row.image_url,
+      images: row.image_urls ? row.image_urls.map((url: string) => ({ url, publicId: '' })) : [],
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -1514,6 +1515,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
       isPaid: row.is_paid || false,
+      externalLink: row.external_link || null,
     }));
 
     return res.status(200).json({
@@ -2629,6 +2631,81 @@ router.put('/:id/join/:requestId/decline', authenticateToken, async (req: Reques
       success: false,
       error: 'Server error',
       message: 'Failed to decline join request'
+    });
+  }
+});
+
+// Cancel own pending join request (by user)
+router.delete('/:id/join', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    // Check if Toki exists
+    const tokiResult = await pool.query(
+      'SELECT id FROM tokis WHERE id = $1 AND status = $2',
+      [id, 'active']
+    );
+
+    if (tokiResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist or is not active'
+      });
+    }
+
+    // Check if user has a pending join request
+    const requestResult = await pool.query(
+      'SELECT id, status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No join request found',
+        message: 'You have not requested to join this Toki'
+      });
+    }
+
+    const request = requestResult.rows[0];
+
+    if (request.status === 'approved') {
+      return res.status(400).json({
+        success: false,
+        error: 'Already approved',
+        message: 'You are already a participant. Use leave functionality instead.'
+      });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status',
+        message: 'Only pending requests can be cancelled'
+      });
+    }
+
+    // Delete the pending request
+    await pool.query(
+      'DELETE FROM toki_participants WHERE id = $1',
+      [request.id]
+    );
+
+    console.log(`✅ User ${userId} cancelled join request for Toki ${id}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Join request cancelled successfully'
+    });
+
+  } catch (error) {
+    console.error('Cancel join request error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to cancel join request'
     });
   }
 });

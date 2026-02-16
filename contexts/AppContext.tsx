@@ -585,6 +585,7 @@ interface AppContextType {
     searchUsers: (query?: string) => Promise<any[]>;
     // Toki join actions
     sendJoinRequest: (id: string) => Promise<'approved' | 'pending' | null>;
+    cancelJoinRequest: (tokiId: string) => Promise<boolean>;
     approveJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     declineJoinRequest: (tokiId: string, requestId: string) => Promise<boolean>;
     getJoinRequests: (tokiId: string) => Promise<any[]>;
@@ -1178,6 +1179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           avatar: apiToki.host.avatar || '',
         },
         image: apiToki.imageUrl || '',
+        images: (apiToki as any).images || [],
         distance: formatDistanceString(apiToki.distance),
         isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
         joinStatus: apiToki.joinStatus || 'not_joined',
@@ -1188,6 +1190,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
         friendsGoing: (apiToki as any).friendsAttending || [],
+        isPaid: (apiToki as any).isPaid || false,
+        autoApprove: (apiToki as any).autoApprove || false,
+        externalLink: (apiToki as any).externalLink || '',
       }));
       
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1477,7 +1482,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         images: tokiData.images || [],
         userLatitude: tokiData.userLatitude ?? state.currentUser?.latitude ?? null,
         userLongitude: tokiData.userLongitude ?? state.currentUser?.longitude ?? null,
-        autoApprove: tokiData.autoApprove !== undefined ? tokiData.autoApprove : false,  // ADD THIS LINE
+        autoApprove: tokiData.autoApprove !== undefined ? tokiData.autoApprove : false,
+        isPaid: tokiData.isPaid || false,
       };
 
       const apiToki = await apiService.createToki(apiTokiData);
@@ -1625,6 +1631,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('❌ Failed to send join request:', error);
       return null;
+    }
+  };
+
+  const cancelJoinRequest = async (tokiId: string): Promise<boolean> => {
+    try {
+      console.log('🔄 Cancelling join request for Toki:', tokiId);
+
+      const response = await apiService.cancelJoinRequest(tokiId);
+
+      if (response.success) {
+        // Update local state to reflect cancellation
+        dispatch({
+          type: 'UPDATE_TOKI',
+          payload: {
+            id: tokiId,
+            updates: {
+              joinStatus: 'not_joined',
+            },
+          },
+        });
+
+        console.log('✅ Join request cancelled successfully');
+        return true;
+      } else {
+        console.error('❌ Failed to cancel join request:', response.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Failed to cancel join request:', error);
+      return false;
     }
   };
 
@@ -3043,6 +3079,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     searchUsers,
     // Toki join actions
     sendJoinRequest,
+    cancelJoinRequest,
     approveJoinRequest,
     declineJoinRequest,
     getJoinRequests,

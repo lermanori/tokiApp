@@ -795,6 +795,14 @@ class ApiService {
     return response;
   }
 
+  async cancelJoinRequest(tokiId: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.makeRequest<{ success: boolean; message: string }>(
+      `/tokis/${tokiId}/join`,
+      { method: 'DELETE' }
+    );
+    return response;
+  }
+
   async approveJoinRequest(tokiId: string, requestId: string): Promise<{ success: boolean; message: string; data: any }> {
     const response = await this.makeRequest<{ success: boolean; message: string; data: any }>(
       `/tokis/${tokiId}/join/${requestId}/approve`,
