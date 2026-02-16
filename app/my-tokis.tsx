@@ -62,6 +62,9 @@ const transformTokiToInitialData = (toki: any) => {
     customDateTime: toki.scheduledTime || '',
     images: toki.images || (toki.image ? [{ url: toki.image, publicId: '' }] : []),
     visibility: toki.visibility || 'public',
+    externalLink: toki.externalLink || '',
+    autoApprove: toki.autoApprove || false,
+    isPaid: toki.isPaid || false,
   };
 };
 
