@@ -209,6 +209,23 @@ export interface AuthResponse {
   };
 }
 
+export interface OAuthResponse {
+  success: boolean;
+  isNewUser: boolean;
+  requiresProfileCompletion: boolean;
+  message: string;
+  data: {
+    user: User & {
+      hasPassword: boolean;
+      profileCompleted: boolean;
+    };
+    tokens: {
+      accessToken: string;
+      refreshToken: string;
+    };
+  };
+}
+
 // API Service Class
 class ApiService {
   private accessToken: string | null = null;
@@ -275,13 +292,18 @@ class ApiService {
       this.authCache = null; // Clear auth cache
       this.userCache = null; // Clear user cache
       await AsyncStorage.removeItem('auth_tokens');
-      
+
       // Verify tokens are cleared
       const remainingTokens = await AsyncStorage.getItem('auth_tokens');
       console.log('🔍 Tokens after clearing:', remainingTokens ? 'STILL EXIST' : 'CLEARED SUCCESSFULLY');
     } catch (error) {
       console.error('Error clearing tokens:', error);
     }
+  }
+
+  // Public method to set tokens (used by OAuth login flows)
+  async setTokens(accessToken: string, refreshToken: string) {
+    await this.saveTokens(accessToken, refreshToken);
   }
 
   private clearUserCache() {
@@ -464,6 +486,63 @@ class ApiService {
 
     if (response.success && response.data.tokens) {
       await this.saveTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+    }
+
+    return response;
+  }
+
+  // OAuth Methods
+  async loginWithApple(params: {
+    identityToken: string;
+    authorizationCode?: string;
+    user?: { email?: string; name?: { firstName?: string; lastName?: string } };
+    nonce?: string;
+    isWeb?: boolean;
+  }): Promise<OAuthResponse> {
+    const response = await this.makeRequest<OAuthResponse>('/auth/oauth/apple', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+
+    if (response.success && response.data.tokens) {
+      await this.saveTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+    }
+
+    return response;
+  }
+
+  async loginWithGoogle(params: {
+    idToken: string;
+    accessToken?: string;
+  }): Promise<OAuthResponse> {
+    const response = await this.makeRequest<OAuthResponse>('/auth/oauth/google', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+
+    if (response.success && response.data.tokens) {
+      await this.saveTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+    }
+
+    return response;
+  }
+
+  async completeProfile(profileData: {
+    name?: string;
+    location: string;
+    latitude: number;
+    longitude: number;
+    bio?: string;
+    termsAccepted: boolean;
+  }): Promise<{ success: boolean; message: string; data: { user: User & { hasPassword: boolean; profileCompleted: boolean } } }> {
+    const response = await this.makeRequest<{ success: boolean; message: string; data: { user: User & { hasPassword: boolean; profileCompleted: boolean } } }>('/auth/complete-profile', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    });
+
+    // Clear user cache to force refresh with new profile data
+    if (response.success) {
+      this.clearUserCache();
     }
 
     return response;

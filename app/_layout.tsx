@@ -656,8 +656,9 @@ function RootLayoutNav() {
         const inTermsOfUseScreen = segments[0] === 'terms-of-use' || path.startsWith('/terms-of-use');
         const inPrivacyPolicyScreen = segments[0] === 'privacy-policy' || path.startsWith('/privacy-policy');
         const inSupportScreen = segments[0] === 'support' || path.startsWith('/support');
-        
-        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen) {
+        const inCompleteProfileScreen = segments[0] === 'complete-profile' || path.startsWith('/complete-profile');
+
+        if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen && !inCompleteProfileScreen) {
           // Check if we're on toki-details page - preserve the tokiId parameter
           // Cross-platform: check both path (web) and segments (native)
           // Also check initialUrlParams - if it has tokiId, we're doing a deep link to toki-details
@@ -820,7 +821,7 @@ function RootLayoutNav() {
         } else if (isAuthenticated && inJoinScreen) {
           // If user is already on join page and authenticated, don't redirect
           // This prevents redirect loops with invalid invite codes
-        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen) {
+        } else if (isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen && !inCompleteProfileScreen) {
           // IMPORTANT: Don't redirect authenticated users if they're on a valid page
           // List of valid authenticated routes (both deep links and regular authenticated routes)
           const validAuthenticatedRoutes = [
@@ -834,6 +835,7 @@ function RootLayoutNav() {
             'edit-profile',
             'my-tokis',
             'saved-tokis',
+            'complete-profile',
           ];
           
           const isOnValidPage = 
@@ -973,8 +975,8 @@ function RootLayoutNav() {
       } catch (error) {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
-        // Only redirect if we're not on the login, join, health, waitlist, set-password, reset-password, or terms-of-use screen and have no current user
-        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (segments[0] as string) !== 'terms-of-use' && (segments[0] as string) !== 'privacy-policy' && (segments[0] as string) !== 'support' && (!state.currentUser || !state.currentUser.id)) {
+        // Only redirect if we're not on the login, join, health, waitlist, set-password, reset-password, terms-of-use, or complete-profile screen and have no current user
+        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (segments[0] as string) !== 'terms-of-use' && (segments[0] as string) !== 'privacy-policy' && (segments[0] as string) !== 'support' && (segments[0] as string) !== 'complete-profile' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -1086,6 +1088,7 @@ function RootLayoutNav() {
         <Stack.Screen name="health" options={{ headerShown: false }} />
         <Stack.Screen name="set-password" options={{ headerShown: false }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+        <Stack.Screen name="complete-profile" options={{ headerShown: false }} />
         <Stack.Screen name="terms-of-use" options={{ headerShown: false }} />
         <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
         <Stack.Screen name="support" options={{ headerShown: false }} />

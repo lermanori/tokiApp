@@ -8,6 +8,8 @@ import { sendEmail, generateVerificationEmail, generateWelcomeEmail, generatePas
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordReset';
+import { verifyAppleToken, exchangeAppleCode } from '../utils/appleAuth';
+import { verifyGoogleToken } from '../utils/googleAuth';
 
 const router = Router();
 
@@ -434,6 +436,435 @@ router.post('/login', async (req: Request, res: Response) => {
       success: false,
       error: 'Login failed',
       message: 'Internal server error during login'
+    });
+  }
+});
+
+// Apple OAuth login
+router.post('/oauth/apple', async (req: Request, res: Response) => {
+  try {
+    const { identityToken, authorizationCode, user: appleUser, nonce, isWeb } = req.body;
+
+    if (!identityToken && !authorizationCode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing credentials',
+        message: 'Identity token or authorization code is required'
+      });
+    }
+
+    let appleResult;
+
+    // If we have an identity token (from popup flow or native), verify it directly
+    // Only exchange authorization code if we don't have an identity token
+    if (identityToken) {
+      appleResult = await verifyAppleToken(identityToken, { nonce });
+    } else if (authorizationCode) {
+      // Fallback: exchange authorization code for tokens (redirect flow)
+      const redirectUri = req.body.redirectUri || process.env.APPLE_REDIRECT_URI || `${process.env.FRONTEND_URL}/auth/apple/callback`;
+      const tokenResult = await exchangeAppleCode(authorizationCode, redirectUri);
+
+      if (!tokenResult) {
+        return res.status(401).json({
+          success: false,
+          error: 'Apple authentication failed',
+          message: 'Failed to exchange authorization code'
+        });
+      }
+
+      appleResult = await verifyAppleToken(tokenResult.idToken, { nonce });
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing credentials',
+        message: 'Identity token or authorization code is required'
+      });
+    }
+
+    if (!appleResult.success || !appleResult.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'Apple authentication failed',
+        message: appleResult.error || 'Invalid Apple token'
+      });
+    }
+
+    // Get email from token or from user object (Apple only sends user info on first sign-in)
+    const email = appleResult.email || appleUser?.email;
+    const name = appleUser?.name
+      ? `${appleUser.name.firstName || ''} ${appleUser.name.lastName || ''}`.trim()
+      : null;
+
+    // Try to find user by Apple sub
+    let userResult = await pool.query(
+      'SELECT * FROM users WHERE apple_sub = $1',
+      [appleResult.sub]
+    );
+
+    let user = userResult.rows[0];
+    let isNewUser = false;
+
+    if (!user && email) {
+      // Try to find user by email for account linking
+      userResult = await pool.query(
+        'SELECT * FROM users WHERE email = $1',
+        [email.toLowerCase()]
+      );
+      user = userResult.rows[0];
+
+      if (user) {
+        // Link Apple account to existing user
+        await pool.query(
+          `UPDATE users
+           SET apple_sub = $1,
+               auth_provider = CASE
+                 WHEN auth_provider = 'email' THEN 'apple+email'
+                 WHEN auth_provider = 'google' THEN 'apple+google'
+                 WHEN auth_provider = 'google+email' THEN 'apple+google+email'
+                 ELSE auth_provider
+               END
+           WHERE id = $2`,
+          [appleResult.sub, user.id]
+        );
+        logger.info(`🔗 [AUTH] Linked Apple account to existing user ${user.id}`);
+      }
+    }
+
+    if (!user) {
+      // Create new user
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email required',
+          message: 'Email is required for registration. Please try signing in again.'
+        });
+      }
+
+      const result = await pool.query(
+        `INSERT INTO users (
+          email, name, apple_sub, auth_provider, has_password,
+          profile_completed, verified, terms_accepted_at, terms_version
+        )
+        VALUES ($1, $2, $3, 'apple', false, false, false, NULL, NULL)
+        RETURNING *`,
+        [email.toLowerCase(), name || 'Toki User', appleResult.sub]
+      );
+
+      user = result.rows[0];
+      isNewUser = true;
+
+      // Create user stats record
+      await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
+      logger.info(`✨ [AUTH] Created new user via Apple Sign-In: ${user.id}`);
+    }
+
+    // Check if profile is completed (has location)
+    const requiresProfileCompletion = !user.latitude || !user.longitude || !user.terms_accepted_at;
+
+    // Generate tokens
+    const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+
+    // Log login event
+    try {
+      await pool.query(
+        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+        [user.id, isNewUser ? 'oauth_register_apple' : 'oauth_login_apple']
+      );
+    } catch (logError) {
+      logger.error('Error logging Apple auth event:', logError);
+    }
+
+    return res.json({
+      success: true,
+      isNewUser,
+      requiresProfileCompletion,
+      message: isNewUser ? 'Account created successfully' : 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          bio: user.bio,
+          location: user.location,
+          latitude: user.latitude,
+          longitude: user.longitude,
+          verified: user.verified,
+          rating: user.rating,
+          memberSince: user.member_since,
+          hasPassword: user.has_password,
+          profileCompleted: !requiresProfileCompletion
+        },
+        tokens
+      }
+    });
+  } catch (error) {
+    logger.error('Apple OAuth error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Authentication failed',
+      message: 'Internal server error during Apple authentication'
+    });
+  }
+});
+
+// Google OAuth login
+router.post('/oauth/google', async (req: Request, res: Response) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing credentials',
+        message: 'Google ID token is required'
+      });
+    }
+
+    const googleResult = await verifyGoogleToken(idToken);
+
+    if (!googleResult.success || !googleResult.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'Google authentication failed',
+        message: googleResult.error || 'Invalid Google token'
+      });
+    }
+
+    if (!googleResult.email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email required',
+        message: 'Email is required for authentication'
+      });
+    }
+
+    // Try to find user by Google sub
+    let userResult = await pool.query(
+      'SELECT * FROM users WHERE google_sub = $1',
+      [googleResult.sub]
+    );
+
+    let user = userResult.rows[0];
+    let isNewUser = false;
+
+    if (!user) {
+      // Try to find user by email for account linking
+      userResult = await pool.query(
+        'SELECT * FROM users WHERE email = $1',
+        [googleResult.email.toLowerCase()]
+      );
+      user = userResult.rows[0];
+
+      if (user) {
+        // Link Google account to existing user
+        await pool.query(
+          `UPDATE users
+           SET google_sub = $1,
+               auth_provider = CASE
+                 WHEN auth_provider = 'email' THEN 'google+email'
+                 WHEN auth_provider = 'apple' THEN 'apple+google'
+                 WHEN auth_provider = 'apple+email' THEN 'apple+google+email'
+                 ELSE auth_provider
+               END
+           WHERE id = $2`,
+          [googleResult.sub, user.id]
+        );
+        logger.info(`🔗 [AUTH] Linked Google account to existing user ${user.id}`);
+      }
+    }
+
+    if (!user) {
+      // Create new user
+      const name = googleResult.name ||
+        `${googleResult.givenName || ''} ${googleResult.familyName || ''}`.trim() ||
+        'Toki User';
+
+      const result = await pool.query(
+        `INSERT INTO users (
+          email, name, google_sub, avatar_url, auth_provider, has_password,
+          profile_completed, verified, terms_accepted_at, terms_version
+        )
+        VALUES ($1, $2, $3, $4, 'google', false, false, false, NULL, NULL)
+        RETURNING *`,
+        [googleResult.email.toLowerCase(), name, googleResult.sub, googleResult.picture || null]
+      );
+
+      user = result.rows[0];
+      isNewUser = true;
+
+      // Create user stats record
+      await pool.query('INSERT INTO user_stats (user_id) VALUES ($1)', [user.id]);
+      logger.info(`✨ [AUTH] Created new user via Google Sign-In: ${user.id}`);
+    }
+
+    // Check if profile is completed (has location)
+    const requiresProfileCompletion = !user.latitude || !user.longitude || !user.terms_accepted_at;
+
+    // Generate tokens
+    const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+
+    // Log login event
+    try {
+      await pool.query(
+        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
+        [user.id, isNewUser ? 'oauth_register_google' : 'oauth_login_google']
+      );
+    } catch (logError) {
+      logger.error('Error logging Google auth event:', logError);
+    }
+
+    return res.json({
+      success: true,
+      isNewUser,
+      requiresProfileCompletion,
+      message: isNewUser ? 'Account created successfully' : 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          bio: user.bio,
+          location: user.location,
+          latitude: user.latitude,
+          longitude: user.longitude,
+          avatar: user.avatar_url,
+          verified: user.verified,
+          rating: user.rating,
+          memberSince: user.member_since,
+          hasPassword: user.has_password,
+          profileCompleted: !requiresProfileCompletion
+        },
+        tokens
+      }
+    });
+  } catch (error) {
+    logger.error('Google OAuth error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Authentication failed',
+      message: 'Internal server error during Google authentication'
+    });
+  }
+});
+
+// Complete profile for OAuth users (set location, name, and accept terms)
+router.post('/complete-profile', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const { name, location, latitude, longitude, bio, termsAccepted } = req.body;
+
+    // Validate terms acceptance
+    if (!termsAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Terms not accepted',
+        message: 'You must accept the Terms of Use and Privacy Policy'
+      });
+    }
+
+    // Validate coordinates
+    const latProvided = latitude !== undefined && latitude !== null && latitude !== '';
+    const lngProvided = longitude !== undefined && longitude !== null && longitude !== '';
+    let latNumber: number | null = null;
+    let lngNumber: number | null = null;
+
+    if (latProvided && lngProvided) {
+      const parsedLat = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
+      const parsedLng = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        if (parsedLat >= -90 && parsedLat <= 90 && parsedLng >= -180 && parsedLng <= 180) {
+          latNumber = parsedLat;
+          lngNumber = parsedLng;
+        }
+      }
+    } else if (location && typeof location === 'string' && location.trim().length > 0) {
+      // Geocode location if coordinates not provided
+      try {
+        const key = process.env.GOOGLE_MAPS_API_KEY;
+        if (key) {
+          const params = new URLSearchParams({ address: location.trim(), key, language: 'en' });
+          const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+          const resp = await fetch(url);
+          const data: any = await resp.json();
+          if (data.status === 'OK') {
+            const r = (data.results || [])[0];
+            const lat = r?.geometry?.location?.lat;
+            const lng = r?.geometry?.location?.lng;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              latNumber = lat;
+              lngNumber = lng;
+            }
+          }
+        }
+      } catch (e) {
+        logger.error('Error geocoding location in /complete-profile:', e);
+      }
+    }
+
+    // Require coordinates
+    if (!latNumber || !lngNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Location required',
+        message: 'Please provide a valid location with coordinates'
+      });
+    }
+
+    // Update user profile
+    const result = await pool.query(
+      `UPDATE users
+       SET name = COALESCE($1, name),
+           location = $2,
+           latitude = $3,
+           longitude = $4,
+           bio = COALESCE($5, bio),
+           profile_completed = true,
+           terms_accepted_at = NOW(),
+           terms_version = $6,
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING id, email, name, bio, location, latitude, longitude, avatar_url, verified, rating, member_since, has_password`,
+      [name || null, location || null, latNumber, lngNumber, bio || null, CURRENT_TERMS_VERSION, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    const user = result.rows[0];
+
+    logger.info(`✅ [AUTH] User ${userId} completed profile`);
+
+    return res.json({
+      success: true,
+      message: 'Profile completed successfully',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          bio: user.bio,
+          location: user.location,
+          latitude: user.latitude,
+          longitude: user.longitude,
+          avatar: user.avatar_url,
+          verified: user.verified,
+          rating: user.rating,
+          memberSince: user.member_since,
+          hasPassword: user.has_password,
+          profileCompleted: true
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Complete profile error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to complete profile',
+      message: 'Internal server error'
     });
   }
 });

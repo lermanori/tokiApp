@@ -13,6 +13,7 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
       buildNumber: "1",
+      usesAppleSignIn: true,
       config: {},
       infoPlist: {
         UIBackgroundModes: ["remote-notification"],
@@ -35,6 +36,7 @@ module.exports = {
       "expo-font",
       "expo-web-browser",
       "expo-notifications",
+      "expo-apple-authentication",
       [
         "expo-image-picker",
         {
@@ -47,6 +49,9 @@ module.exports = {
     },
     extra: {
       EXPO_PUBLIC_API_URL: 'https://backend-production-d8ec.up.railway.app',
+      // Google OAuth client IDs - set these via environment variables
+      GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
+      GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID,
       router: {},
       eas: {
         projectId: "41a24d0b-1d53-429a-8753-acd4a5b9972c"

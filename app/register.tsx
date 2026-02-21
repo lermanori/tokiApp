@@ -14,11 +14,12 @@ import Toast from 'react-native-toast-message';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
-import { apiService } from '../services/api';
+import { apiService, OAuthResponse } from '../services/api';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, MapPin } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { getBackendUrl } from '@/services/config';
+import SocialLoginButtons from '../components/SocialLoginButtons';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -35,7 +36,8 @@ export default function RegisterScreen() {
   const [placesSessionToken, setPlacesSessionToken] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const { dispatch, actions } = useApp();
+  const [socialLoading, setSocialLoading] = useState(false);
+  const { dispatch } = useApp();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   // Silently support invitation codes via URL (hidden from UI)
@@ -132,7 +134,7 @@ export default function RegisterScreen() {
               if (resp.ok && json?.success) {
                 label = json.data?.shortLabel || json.data?.formatted_address || '';
               }
-            } catch {}
+            } catch { }
 
             setLocation(label);
             setLatitude(lat);
@@ -190,7 +192,7 @@ export default function RegisterScreen() {
             const streetish = r?.name || r?.street || '';
             label = neighborhood || city || region || streetish || '';
           }
-        } catch {}
+        } catch { }
 
         setLocation(label);
         setLatitude(lat);
@@ -285,7 +287,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       let response;
-      
+
       // Silently use invitation flow if code present in URL (hidden from UI)
       if (inviteCode) {
         try {
@@ -393,6 +395,46 @@ export default function RegisterScreen() {
     }
   };
 
+  // Handle social login success
+  const handleSocialLoginSuccess = async (response: OAuthResponse) => {
+    console.log('🔐 [SOCIAL REGISTER] Success:', { isNewUser: response.isNewUser, requiresProfileCompletion: response.requiresProfileCompletion });
+
+    // IMPORTANT: Store tokens FIRST before any redirect
+    // The OAuth response contains tokens that need to be saved for authenticated API calls
+    if (response.data?.tokens) {
+      await apiService.setTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+      console.log('🔐 [SOCIAL REGISTER] Tokens stored');
+    }
+
+    // OAuth users always need to complete profile (set location)
+    if (response.requiresProfileCompletion) {
+      router.replace({
+        pathname: '/complete-profile',
+        params: { name: response.data.user.name },
+      });
+    } else {
+      // Profile already complete, go to main app
+      apiService.clearAuthCache();
+      const user = {
+        ...response.data.user,
+        rating: parseFloat(response.data.user.rating) || 0,
+      };
+      dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
+      router.replace('/(tabs)');
+    }
+  };
+
+  // Handle social login error
+  const handleSocialLoginError = (error: Error, provider: 'apple' | 'google') => {
+    console.error(`❌ [SOCIAL REGISTER] ${provider} error:`, error);
+    Toast.show({
+      type: 'error',
+      text1: `${provider === 'apple' ? 'Apple' : 'Google'} Sign-In Failed`,
+      text2: error.message || 'Please try again',
+      visibilityTime: 4000,
+    });
+  };
+
   return (
     <LinearGradient colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']} style={styles.gradient}>
       <SafeAreaView style={styles.container}>
@@ -413,151 +455,159 @@ export default function RegisterScreen() {
                 <Text style={styles.title}>Create Account</Text>
 
                 <View style={styles.form}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Full Name *"
-                  placeholderTextColor="#666"
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                  textContentType="name"
-                />
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email *"
-                  placeholderTextColor="#666"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                />
-
-                <View style={styles.passwordContainer}>
                   <TextInput
-                    style={styles.passwordInput}
-                    placeholder="Password *"
+                    style={styles.input}
+                    placeholder="Full Name *"
                     placeholderTextColor="#666"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoComplete="new-password"
-                    textContentType="newPassword"
-                  />
-                  <TouchableOpacity
-                    style={styles.passwordToggle}
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <Text style={styles.passwordToggleText}>
-                      {showPassword ? '🙈' : '👁️'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Bio (optional)"
-                  placeholderTextColor="#666"
-                  value={bio}
-                  onChangeText={setBio}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-
-                <View style={styles.locationContainer}>
-                  <MapPin size={20} color="#8B5CF6" style={styles.locationIcon} />
-                  <TextInput
-                    style={styles.locationInput}
-                    placeholder="Location *"
-                    placeholderTextColor="#666"
-                    value={location}
-                    onChangeText={handleLocationTextChange}
-                    onFocus={() => setShowAutocomplete(true)}
+                    value={name}
+                    onChangeText={setName}
                     autoCapitalize="words"
+                    autoComplete="name"
+                    textContentType="name"
                   />
-                  <TouchableOpacity
-                    style={styles.useLocationButton}
-                    onPress={useCurrentLocation}
-                    disabled={isLocating}
-                  >
-                    {isLocating ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.useLocationText}>Add location</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {!latitude || !longitude ? (
-                  <Text style={styles.locationHint}>
-                    Select from dropdown or tap "Add location" button
-                  </Text>
-                ) : null}
-                {showAutocomplete && placesPredictions.length > 0 && (
-                  <View style={styles.autocompleteContainer}>
-                    {placesPredictions.map((p, index) => (
-                      <TouchableOpacity
-                        key={`${p.place_id}-${index}`}
-                        style={styles.autocompleteItem}
-                        onPress={() => handlePredictionSelect(p)}
-                      >
-                        <MapPin size={16} color="#666666" />
-                        <View style={styles.autocompleteTextContainer}>
-                          <Text style={styles.autocompleteText} numberOfLines={1}>
-                            {p.structured?.mainText || p.description}
-                          </Text>
-                          {p.structured?.secondaryText && (
-                            <Text style={styles.autocompleteSecondaryText} numberOfLines={1}>
-                              {p.structured.secondaryText}
-                            </Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
 
-                <View style={styles.termsContainer}>
-                  <TouchableOpacity
-                    style={styles.checkboxContainer}
-                    onPress={() => setTermsAccepted(!termsAccepted)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-                      {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email *"
+                    placeholderTextColor="#666"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                  />
+
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder="Password *"
+                      placeholderTextColor="#666"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoComplete="new-password"
+                      textContentType="newPassword"
+                    />
+                    <TouchableOpacity
+                      style={styles.passwordToggle}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <Text style={styles.passwordToggleText}>
+                        {showPassword ? '🙈' : '👁️'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Bio (optional)"
+                    placeholderTextColor="#666"
+                    value={bio}
+                    onChangeText={setBio}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+
+                  <View style={styles.locationContainer}>
+                    <MapPin size={20} color="#8B5CF6" style={styles.locationIcon} />
+                    <TextInput
+                      style={styles.locationInput}
+                      placeholder="Location *"
+                      placeholderTextColor="#666"
+                      value={location}
+                      onChangeText={handleLocationTextChange}
+                      onFocus={() => setShowAutocomplete(true)}
+                      autoCapitalize="words"
+                    />
+                    <TouchableOpacity
+                      style={styles.useLocationButton}
+                      onPress={useCurrentLocation}
+                      disabled={isLocating}
+                    >
+                      {isLocating ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.useLocationText}>Add location</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  {!latitude || !longitude ? (
+                    <Text style={styles.locationHint}>
+                      Select from dropdown or tap "Add location" button
+                    </Text>
+                  ) : null}
+                  {showAutocomplete && placesPredictions.length > 0 && (
+                    <View style={styles.autocompleteContainer}>
+                      {placesPredictions.map((p, index) => (
+                        <TouchableOpacity
+                          key={`${p.place_id}-${index}`}
+                          style={styles.autocompleteItem}
+                          onPress={() => handlePredictionSelect(p)}
+                        >
+                          <MapPin size={16} color="#666666" />
+                          <View style={styles.autocompleteTextContainer}>
+                            <Text style={styles.autocompleteText} numberOfLines={1}>
+                              {p.structured?.mainText || p.description}
+                            </Text>
+                            {p.structured?.secondaryText && (
+                              <Text style={styles.autocompleteSecondaryText} numberOfLines={1}>
+                                {p.structured.secondaryText}
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      ))}
                     </View>
-                    <Text style={styles.termsLabel}>
-                      I agree to the{' '}
-                      <Text
-                        style={styles.termsLink}
-                        onPress={() => router.push('/terms-of-use')}
-                      >
-                        Terms of Use
+                  )}
+
+                  <View style={styles.termsContainer}>
+                    <TouchableOpacity
+                      style={styles.checkboxContainer}
+                      onPress={() => setTermsAccepted(!termsAccepted)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                        {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={styles.termsLabel}>
+                        I agree to the{' '}
+                        <Text
+                          style={styles.termsLink}
+                          onPress={() => router.push('/terms-of-use')}
+                        >
+                          Terms of Use
+                        </Text>
+                        {' '}and{' '}
+                        <Text
+                          style={styles.termsLink}
+                          onPress={() => router.push('/privacy-policy')}
+                        >
+                          Privacy Policy
+                        </Text>
                       </Text>
-                      {' '}and{' '}
-                      <Text
-                        style={styles.termsLink}
-                        onPress={() => router.push('/privacy-policy')}
-                      >
-                        Privacy Policy
-                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.button, (loading || !termsAccepted) && styles.buttonDisabled]}
+                    onPress={handleRegister}
+                    disabled={loading || !termsAccepted}
+                  >
+                    <Text style={styles.buttonText}>
+                      {loading ? 'Creating Account...' : 'Create Account'}
                     </Text>
                   </TouchableOpacity>
-                </View>
 
-                <TouchableOpacity
-                  style={[styles.button, (loading || !termsAccepted) && styles.buttonDisabled]}
-                  onPress={handleRegister}
-                  disabled={loading || !termsAccepted}
-                >
-                  <Text style={styles.buttonText}>
-                    {loading ? 'Creating Account...' : 'Create Account'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  {/* Social Login Buttons */}
+                  <SocialLoginButtons
+                    onSuccess={handleSocialLoginSuccess}
+                    onError={handleSocialLoginError}
+                    onLoading={setSocialLoading}
+                    disabled={loading || socialLoading}
+                  />
+                </View>
               </View>
             </View>
           </ScrollView>

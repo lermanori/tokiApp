@@ -13,9 +13,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
-import { apiService } from '../services/api';
+import { apiService, OAuthResponse } from '../services/api';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TermsAgreementModal from '../components/TermsAgreementModal';
+import SocialLoginButtons from '../components/SocialLoginButtons';
 
 // Dev environment user credentials
 const DEV_USERS = [
@@ -36,6 +37,7 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState(''); // New state for error messages
   const [isDevMode, setIsDevMode] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
   const { dispatch, actions } = useApp();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -283,6 +285,93 @@ export default function LoginScreen() {
     }
   };
 
+  // Handle social login success
+  const handleSocialLoginSuccess = async (response: OAuthResponse) => {
+    console.log('🔐 [SOCIAL LOGIN] Success:', { isNewUser: response.isNewUser, requiresProfileCompletion: response.requiresProfileCompletion });
+
+    // IMPORTANT: Store tokens FIRST before any redirect
+    // The OAuth response contains tokens that need to be saved for authenticated API calls
+    if (response.data?.tokens) {
+      apiService.setTokens(response.data.tokens.accessToken, response.data.tokens.refreshToken);
+      console.log('🔐 [SOCIAL LOGIN] Tokens stored');
+    }
+
+    // Check if profile completion is required (new OAuth users need to set location)
+    if (response.requiresProfileCompletion) {
+      console.log('🔐 [SOCIAL LOGIN] Profile completion required, redirecting...');
+      router.replace({
+        pathname: '/complete-profile',
+        params: { name: response.data.user.name },
+      });
+      return;
+    }
+
+    // Clear auth cache to force fresh authentication check
+    apiService.clearAuthCache();
+    console.log('🔐 [SOCIAL LOGIN] Cleared auth cache after successful login');
+
+    // Convert API user to frontend user format
+    const user = {
+      ...response.data.user,
+      rating: parseFloat(response.data.user.rating) || 0,
+      tokisCreated: 0,
+      tokisJoined: 0,
+      connections: 0,
+    };
+
+    // Update the app state with the authenticated user
+    dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
+    console.log('🔐 [SOCIAL LOGIN] Updated current user in state:', user.id);
+
+    // Load user data
+    setLoadingData(true);
+    try {
+      const userData = await apiService.getCurrentUser();
+      const updatedUser = {
+        ...user,
+        tokisCreated: userData.stats?.tokis_created || 0,
+        tokisJoined: userData.stats?.tokis_joined || 0,
+        connections: userData.stats?.connections_count || 0,
+      };
+      dispatch({ type: 'UPDATE_CURRENT_USER', payload: updatedUser });
+      console.log('✅ [SOCIAL LOGIN] User data loaded, redirecting...');
+    } catch (error) {
+      console.error('⚠️ [SOCIAL LOGIN] Data loading failed, redirecting anyway:', error);
+    } finally {
+      setLoadingData(false);
+    }
+
+    // Handle return URL if present
+    if (returnTo) {
+      const cleanParams = Object.fromEntries(
+        Object.entries(returnParams)
+          .filter(([_, value]) => value !== undefined)
+          .map(([key, value]) => [key, Array.isArray(value) ? value[0] : value])
+      );
+      const returnToPath = Array.isArray(returnTo) ? returnTo[0] : returnTo;
+
+      if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
+        let redirectUrl = returnToPath;
+        if (Object.keys(cleanParams).length > 0) {
+          const queryString = new URLSearchParams(cleanParams);
+          redirectUrl += `?${queryString.toString()}`;
+        }
+        router.replace(redirectUrl as any);
+      } else {
+        actions.setRedirection(returnToPath, cleanParams);
+        router.replace('/(tabs)');
+      }
+    } else {
+      router.replace('/(tabs)');
+    }
+  };
+
+  // Handle social login error
+  const handleSocialLoginError = (error: Error, provider: 'apple' | 'google') => {
+    console.error(`❌ [SOCIAL LOGIN] ${provider} error:`, error);
+    setErrorMessage(error.message || `${provider === 'apple' ? 'Apple' : 'Google'} Sign-In failed. Please try again.`);
+  };
+
   return (
     <LinearGradient
       colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
@@ -385,7 +474,15 @@ export default function LoginScreen() {
                     </Text>
                   </Text>
                 </View>
-                
+
+                {/* Social Login Buttons */}
+                <SocialLoginButtons
+                  onSuccess={handleSocialLoginSuccess}
+                  onError={handleSocialLoginError}
+                  onLoading={setSocialLoading}
+                  disabled={loading || loadingData || socialLoading}
+                />
+
                 {loadingData && (
                   <Text style={styles.loadingMessage}>
                     🚀 Loading your Tokis, connections, and profile data...
