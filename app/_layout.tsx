@@ -4,6 +4,7 @@ import { Stack, useRouter, useSegments, useLocalSearchParams } from 'expo-router
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import Toast from 'react-native-toast-message';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -13,6 +14,11 @@ import { apiService } from '@/services/api';
 import RedirectionGuard from '@/components/RedirectionGuard';
 import { UserPhotoViewerProvider } from '@/components/UserPhotoViewer/UserPhotoViewerContext';
 
+// IMPORTANT: Must be called at the top level BEFORE any component renders.
+// This allows the Google OAuth popup to detect it's a redirect and close itself
+// instead of rendering the full app in the popup window.
+WebBrowser.maybeCompleteAuthSession();
+
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
@@ -21,7 +27,7 @@ function RootLayoutNav() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const { returnTo, code, ...otherParams } = searchParams;
-  
+
   // Capture the initial URL before Expo Router processes it (runs only once on mount)
   useEffect(() => {
     const captureInitialUrl = async () => {
@@ -29,11 +35,11 @@ function RootLayoutNav() {
         // Web: use window.location and sessionStorage
         if (typeof window !== 'undefined' && window.location?.href && typeof sessionStorage !== 'undefined') {
           const url = window.location.href;
-          const isDeepLink = url.includes('?') || 
-                            url.includes('/toki-details') || 
-                            url.includes('/join/') || 
-                            url.includes('/user-profile/');
-          
+          const isDeepLink = url.includes('?') ||
+            url.includes('/toki-details') ||
+            url.includes('/join/') ||
+            url.includes('/user-profile/');
+
           if (isDeepLink && url !== 'http://localhost:8081/' && url !== 'http://localhost:8081') {
             const stored = sessionStorage.getItem('toki-initial-url');
             if (!stored) {
@@ -63,10 +69,10 @@ function RootLayoutNav() {
         }
       }
     };
-    
+
     captureInitialUrl();
   }, []); // Run only once on mount
-  
+
   // Parse URL parameters directly for cases where useLocalSearchParams doesn't work
   const getUrlParams = () => {
     if (typeof window === 'undefined') return {};
@@ -84,16 +90,16 @@ function RootLayoutNav() {
       return {};
     }
   };
-  
+
   // Memoize urlParams to prevent creating new object on every render
   // This prevents infinite loops in useEffect hooks that depend on it
   const urlParams = useMemo(() => {
     return getUrlParams();
   }, [typeof window !== 'undefined' && typeof window.location !== 'undefined' ? window.location.href : null]);
-  
+
   const effectiveReturnTo = returnTo || urlParams.returnTo;
   const effectiveCode = code || urlParams.code;
-  
+
   // Memoize effectiveOtherParams to prevent creating new object on every render
   // This prevents infinite loops in useEffect hooks that depend on it
   // Create a stable key from searchParams entries (excluding returnTo and code) for comparison
@@ -101,13 +107,13 @@ function RootLayoutNav() {
     const entries = Object.entries(searchParams).filter(([key]) => key !== 'returnTo' && key !== 'code');
     return entries.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join('|');
   }, [searchParams]);
-  
+
   // Create a stable urlParams key for comparison
   const urlParamsKey = useMemo(() => {
     const entries = Object.entries(urlParams).filter(([key]) => key !== 'returnTo' && key !== 'code');
     return entries.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}:${v}`).join('|');
   }, [urlParams]);
-  
+
   const effectiveOtherParams = useMemo(() => {
     // Always create a new object from the values to ensure stability
     // Use otherParams if it has keys, otherwise use filtered urlParams
@@ -129,7 +135,7 @@ function RootLayoutNav() {
   // Store parsed initial URL params to use as fallback in auth check
   const [initialUrlParams, setInitialUrlParams] = useState<Record<string, string> | null>(null);
   const lastProcessedSegmentsRef = useRef<string>('');
-  
+
   // Create a stable string representation of segments for dependency comparison
   // Use JSON.stringify to create a stable key that only changes when segments actually change
   const segmentsKey = useMemo(() => JSON.stringify(segments), [segments.length, segments[0], segments[1]]);
@@ -171,12 +177,12 @@ function RootLayoutNav() {
         try {
           // Handle custom scheme URLs (tokimap://) and regular URLs
           let urlToParse = initialUrl;
-          
+
           // If it's a custom scheme, convert to http for parsing
           if (urlToParse.startsWith('tokimap://')) {
             urlToParse = urlToParse.replace('tokimap://', 'http://');
           }
-          
+
           // For native, the URL might be a full URL or just a path
           let url: URL;
           if (urlToParse.startsWith('http://') || urlToParse.startsWith('https://')) {
@@ -185,7 +191,7 @@ function RootLayoutNav() {
             // For native, if it's just a path, construct a full URL for parsing
             url = new URL(urlToParse, 'https://toki-app.com');
           }
-          
+
           const pathname = url.pathname;
           if (pathname && pathname !== '/' && pathname !== '/+not-found') {
             const params: Record<string, string> = {};
@@ -204,7 +210,7 @@ function RootLayoutNav() {
           console.error('❌ [INITIAL URL] Error parsing initialUrl state:', error);
         }
       }
-      
+
       // Second priority: check effectiveOtherParams.path (contains the original URL with query params)
       const pathParam = effectiveOtherParams.path;
       if (pathParam) {
@@ -216,15 +222,15 @@ function RootLayoutNav() {
             if (!pathToParse.startsWith('http://') && !pathToParse.startsWith('https://')) {
               pathToParse = `http://${pathToParse}`;
             }
-            
+
             const url = new URL(pathToParse);
             const extractedPath = url.pathname;
             const params: Record<string, string> = {};
-            
+
             url.searchParams.forEach((value, key) => {
               params[key] = value;
             });
-            
+
             if (extractedPath && extractedPath !== '/') {
               console.log('🔗 [INITIAL URL] Extracted from effectiveOtherParams.path:', extractedPath, params);
               return { path: extractedPath, params };
@@ -234,7 +240,7 @@ function RootLayoutNav() {
           }
         }
       }
-      
+
       // Fallback: try sessionStorage for web
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
         const storedInitialUrl = sessionStorage.getItem('toki-initial-url');
@@ -256,13 +262,13 @@ function RootLayoutNav() {
           }
         }
       }
-      
+
       // Fallback: try to get the path directly from window.location.href (most reliable)
       if (typeof window !== 'undefined' && window.location?.href) {
         try {
           const url = new URL(window.location.href);
           const pathname = url.pathname;
-          
+
           // If pathname is valid and not just '/', use it
           if (pathname && pathname !== '/' && pathname !== '/+not-found') {
             const params: Record<string, string> = {};
@@ -276,12 +282,12 @@ function RootLayoutNav() {
           console.error('❌ [INITIAL URL] Error parsing window.location.href:', error);
         }
       }
-      
+
       // Check if we have path info in searchParams or effectiveOtherParams
       // The path might be split into an array like ["localhost:8081", "toki-details"]
       const notFoundArray = searchParams['not-found'] || effectiveOtherParams['not-found'];
       const pathSource = searchParams.path || effectiveOtherParams.path;
-      
+
       // If we have a not-found array, reconstruct the path
       if (notFoundArray && Array.isArray(notFoundArray) && notFoundArray.length >= 2) {
         try {
@@ -289,10 +295,10 @@ function RootLayoutNav() {
           const host = notFoundArray[0];
           const pathPart = notFoundArray.slice(1).join('/');
           const reconstructedPath = `${host}/${pathPart}`;
-          
+
           // Get query params from the original URL - try multiple sources
           let params: Record<string, string> = {};
-          
+
           // First, try to get from window.location.search (if URL hasn't changed yet)
           if (typeof window !== 'undefined' && window.location?.search) {
             const urlParams = new URLSearchParams(window.location.search);
@@ -300,7 +306,7 @@ function RootLayoutNav() {
               params[key] = value;
             });
           }
-          
+
           // Also check if there's a full URL in the path param that might have query params
           // The path param contains the original full URL like "localhost:8081/toki-details?tokiId=..."
           const pathParam = searchParams.path || effectiveOtherParams.path;
@@ -333,21 +339,21 @@ function RootLayoutNav() {
           } else {
             console.log('🔗 [INITIAL URL] No path param found');
           }
-          
+
           // Parse the reconstructed path
           let pathToParse = reconstructedPath;
           if (!pathToParse.startsWith('http://') && !pathToParse.startsWith('https://')) {
             pathToParse = `http://${pathToParse}`;
           }
-          
+
           const url = new URL(pathToParse);
           const extractedPath = url.pathname;
-          
+
           // Merge params from URL if any (though reconstructed path likely won't have query params)
           url.searchParams.forEach((value, key) => {
             params[key] = value;
           });
-          
+
           if (extractedPath && extractedPath !== '/') {
             console.log('🔗 [INITIAL URL] Extracted path from not-found array:', extractedPath, params);
             return { path: extractedPath, params };
@@ -356,7 +362,7 @@ function RootLayoutNav() {
           console.error('❌ [INITIAL URL] Error parsing not-found array:', error);
         }
       }
-      
+
       // Fallback: check pathSource (single string)
       if (pathSource) {
         const pathStr = Array.isArray(pathSource) ? pathSource[0] : pathSource;
@@ -365,20 +371,20 @@ function RootLayoutNav() {
             // Handle paths with or without protocol
             // Format could be: "localhost:8081/toki-details?..." or "https://toki-app.com/toki-details?..."
             let pathToParse = pathStr;
-            
+
             // If it doesn't start with http, add it for parsing
             if (!pathToParse.startsWith('http://') && !pathToParse.startsWith('https://')) {
               pathToParse = `http://${pathToParse}`;
             }
-            
+
             const url = new URL(pathToParse);
             const extractedPath = url.pathname;
             const params: Record<string, string> = {};
-            
+
             url.searchParams.forEach((value, key) => {
               params[key] = value;
             });
-            
+
             if (extractedPath && extractedPath !== '/') {
               console.log('🔗 [INITIAL URL] Extracted path from path param:', extractedPath, params);
               return { path: extractedPath, params };
@@ -392,14 +398,14 @@ function RootLayoutNav() {
                 const extractedPath = match[1];
                 const queryString = match[2];
                 const params: Record<string, string> = {};
-                
+
                 if (queryString) {
                   const urlParams = new URLSearchParams(queryString);
                   urlParams.forEach((value, key) => {
                     params[key] = value;
                   });
                 }
-                
+
                 console.log('🔗 [INITIAL URL] Extracted path using regex fallback:', extractedPath, params);
                 return { path: extractedPath, params };
               }
@@ -409,7 +415,7 @@ function RootLayoutNav() {
           }
         }
       }
-      
+
       return null;
     };
 
@@ -454,14 +460,14 @@ function RootLayoutNav() {
       }
     } else {
       console.log('⚠️ [INITIAL URL] Could not extract path from URL');
-      
+
       // If initialUrl is still being captured (async on native), don't mark as handled yet
       // The effect will re-run when initialUrl changes
       if (!initialUrl && Platform.OS !== 'web') {
         console.log('⏳ [INITIAL URL] initialUrl not ready yet (async on native), will retry when it becomes available');
         return; // Don't mark as handled, let it retry
       }
-      
+
       // If we couldn't extract and initialUrl is available (web), mark as handled to prevent infinite loops
       if (Platform.OS === 'web') {
         setHasHandledInitialUrl(true);
@@ -480,7 +486,7 @@ function RootLayoutNav() {
     if (hasValidTokens) {
       console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Valid tokens found, redirecting immediately to:', effectiveReturnTo);
       setHasCheckedFastRedirect(true);
-      
+
       // Special handling for join route: construct /join/[code] path
       let redirectUrl = effectiveReturnTo;
       if (effectiveReturnTo === 'join' && effectiveCode) {
@@ -490,11 +496,11 @@ function RootLayoutNav() {
         router.replace(redirectUrl as any);
         return;
       }
-      
+
       // Build the redirect URL with parameters
       // For toki-details, we need to preserve all URL parameters
       const paramsToInclude: Record<string, string> = {};
-      
+
       // Include effectiveOtherParams, but filter out internal params like 'screen' and 'params'
       Object.entries(effectiveOtherParams).forEach(([key, value]) => {
         if (key !== 'screen' && key !== 'params' && value !== undefined && value !== null) {
@@ -505,7 +511,7 @@ function RootLayoutNav() {
           }
         }
       });
-      
+
       // Also check urlParams for any missing parameters (especially for toki-details)
       if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
         Object.entries(urlParams).forEach(([key, value]) => {
@@ -514,12 +520,12 @@ function RootLayoutNav() {
           }
         });
       }
-      
+
       if (Object.keys(paramsToInclude).length > 0) {
         const queryString = new URLSearchParams(paramsToInclude);
         redirectUrl += `?${queryString.toString()}`;
       }
-      
+
       console.log('⚡ [FLOW DEBUG] [FAST REDIRECT] Full redirect URL with params:', redirectUrl);
       router.replace(redirectUrl as any);
       return;
@@ -534,7 +540,7 @@ function RootLayoutNav() {
         console.log('⏭️ [AUTH CHECK] Skipping - segments unchanged:', segmentsKey);
         return;
       }
-      
+
       // Cross-platform path detection: prefer segments over window.location for accuracy
       // Segments are more reliable during navigation transitions
       const getCurrentPath = () => {
@@ -558,9 +564,9 @@ function RootLayoutNav() {
         }
         return '';
       };
-      
+
       const path = getCurrentPath();
-      
+
       // Build path from segments for validation
       const segmentsPath = segments.length > 0 ? `/${segments.join('/')}` : '';
       const pathIsJoin = path.startsWith('/join');
@@ -594,17 +600,17 @@ function RootLayoutNav() {
       if (isCheckingAuth) {
         return;
       }
-      
+
       // Debounce auth checks - only run once every 5 seconds
       const now = Date.now();
       if (now - lastAuthCheck < 5000) {
         return;
       }
-      
+
       // Mark these segments as processed BEFORE any async operations or redirects
       lastProcessedSegmentsRef.current = segmentsKey;
       console.log('📝 [AUTH CHECK] Marked segments as processed:', segmentsKey);
-      
+
       // If we are navigating directly to a join link, do not block initial render
       // Let the join page fetch public invite info and handle login flow
       if (pathIsJoin) {
@@ -625,7 +631,7 @@ function RootLayoutNav() {
       try {
         setIsCheckingAuth(true);
         setLastAuthCheck(now);
-        
+
         // 🔍 LOG: Initial state when auth check runs
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Starting auth check');
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Current path:', path);
@@ -633,11 +639,11 @@ function RootLayoutNav() {
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] effectiveReturnTo:', effectiveReturnTo);
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] urlParams:', urlParams);
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] effectiveOtherParams:', effectiveOtherParams);
-        
+
         const isAuthenticated = await apiService.isAuthenticated();
         const hasUserData = state.currentUser && state.currentUser.id;
         const inLoginScreen = segments[0] === 'login';
-        
+
         console.log('🔍 [FLOW DEBUG] [AUTH CHECK] Auth status:', {
           isAuthenticated,
           hasUserData,
@@ -697,7 +703,7 @@ function RootLayoutNav() {
             // Preserve join link path - extract code from path
             const pathParts = path.split('/');
             const codeFromPath = pathParts[pathParts.length - 1]; // Get last part of path (the code)
-            
+
             if (codeFromPath && codeFromPath !== 'join') {
               // Redirect to login with returnTo=join and code parameter
               const loginUrl = `/login?returnTo=join&code=${codeFromPath}`;
@@ -712,7 +718,7 @@ function RootLayoutNav() {
             // For other pages, preserve the path as returnTo
             // Use segments path if available and consistent, otherwise use window path
             let preservedPath = segmentsPath || path;
-            
+
             // Validate: if we have both segments and window path, they should match
             // If they don't match, it might be a stale path from a previous navigation
             if (segmentsPath && path && segmentsPath !== path && path !== '/' && segmentsPath !== '/') {
@@ -720,7 +726,7 @@ function RootLayoutNav() {
               // Prefer segments path as it's more reliable during navigation
               preservedPath = segmentsPath;
             }
-            
+
             // Don't preserve paths that are clearly invalid or stale
             // Skip if path is a tab route that doesn't match current segments
             if (preservedPath && preservedPath !== '/login' && preservedPath !== '/') {
@@ -732,7 +738,7 @@ function RootLayoutNav() {
                 router.replace('/login');
                 return;
               }
-              
+
               const loginUrl = `/login?returnTo=${encodeURIComponent(preservedPath)}`;
               console.log('🔗 [FLOW DEBUG] [DEEP LINK] Preserving path, redirecting to:', loginUrl);
               router.replace(loginUrl as any);
@@ -745,17 +751,17 @@ function RootLayoutNav() {
           // Redirect to main app if authenticated
           // Respect returnTo params (e.g., invite flow)
           const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
-          
+
           // Handle join paths - check both 'join' and '/join/[code]' formats
           if ((effectiveReturnTo === 'join' && typeof effectiveCode === 'string' && effectiveCode.length > 0) ||
-              (returnToPath && returnToPath.startsWith('/join/'))) {
+            (returnToPath && returnToPath.startsWith('/join/'))) {
             // Extract code from path if it's a full path like /join/ABC123
             let codeToUse = effectiveCode;
             if (returnToPath && returnToPath.startsWith('/join/')) {
               const pathParts = returnToPath.split('/');
               codeToUse = pathParts[pathParts.length - 1];
             }
-            
+
             if (codeToUse) {
               const codeValue = Array.isArray(codeToUse) ? codeToUse[0] : codeToUse;
               console.log('🔄 [FLOW DEBUG] [AUTH REDIRECT] Navigating to join page with code:', codeValue);
@@ -763,7 +769,7 @@ function RootLayoutNav() {
               return;
             }
           }
-          
+
           if (effectiveReturnTo && effectiveReturnTo !== 'join' && !returnToPath?.startsWith('/join/')) {
             // Handle other returnTo paths
             const cleanParams = Object.fromEntries(
@@ -778,7 +784,7 @@ function RootLayoutNav() {
                 .map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)])
             );
             const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
-            
+
             // For toki-details, also check searchParams and urlParams for any missing parameters (cross-platform)
             if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
               // Check searchParams first (works on both platforms)
@@ -795,7 +801,7 @@ function RootLayoutNav() {
                 }
               });
             }
-            
+
             // If returnTo is toki-details, navigate directly instead of going through tabs
             if (returnToPath === '/toki-details' || returnToPath?.includes('toki-details')) {
               let redirectUrl = returnToPath;
@@ -837,8 +843,8 @@ function RootLayoutNav() {
             'saved-tokis',
             'complete-profile',
           ];
-          
-          const isOnValidPage = 
+
+          const isOnValidPage =
             validAuthenticatedRoutes.some(route => segments[0] === route) ||
             path.startsWith('/toki-details') ||
             path.startsWith('/user-profile/') ||
@@ -849,25 +855,25 @@ function RootLayoutNav() {
             path.startsWith('/edit-profile') ||
             path.startsWith('/my-tokis') ||
             path.startsWith('/saved-tokis');
-          
+
           // Also check if we're still handling initial URL (on native, this might take a moment)
           const isHandlingInitialUrl = isOnNotFound && !hasHandledInitialUrl;
-          
+
           if (isOnValidPage || isHandlingInitialUrl) {
             console.log('✅ [AUTH CHECK] Authenticated user on valid page, staying put');
             console.log('✅ [AUTH CHECK] isOnValidPage:', isOnValidPage, 'isHandlingInitialUrl:', isHandlingInitialUrl, 'segments:', segments, 'path:', path);
             return; // Don't redirect, let them stay on the valid page
           }
-          
+
           // If we get here, user is authenticated but on an unrecognized page
           // Only redirect to tabs if we're not in the middle of initial URL handling
           // AND we're not already on tabs (check segments to avoid redirect loops)
           // On web, path '/' is the root and should be treated as "on tabs" to prevent redirect loops
-          const isOnTabs = segments[0] === '(tabs)' || 
-                          (segments as string[]).includes('(tabs)') || 
-                          path.startsWith('/(tabs)') || 
-                          (path === '/' && Platform.OS === 'web'); // Root path on web = tabs
-          
+          const isOnTabs = segments[0] === '(tabs)' ||
+            (segments as string[]).includes('(tabs)') ||
+            path.startsWith('/(tabs)') ||
+            (path === '/' && Platform.OS === 'web'); // Root path on web = tabs
+
           if ((hasHandledInitialUrl || Platform.OS === 'web') && !isOnTabs) {
             console.log('🔄 [AUTH CHECK] Authenticated user on unrecognized page, redirecting to tabs');
             console.log('🔄 [AUTH CHECK] Current segments:', segments, 'path:', path);
@@ -885,15 +891,15 @@ function RootLayoutNav() {
           // Handle pending redirection after login
           // Use hasUserData as fallback if isAuthenticated check hasn't updated yet
           const { returnTo, returnParams } = state.redirection;
-          
-          console.log('🔄 [FLOW DEBUG] [REDIRECTION] Processing redirection:', { 
-            returnTo, 
+
+          console.log('🔄 [FLOW DEBUG] [REDIRECTION] Processing redirection:', {
+            returnTo,
             returnParams,
             isAuthenticated,
             hasUserData,
             currentUserId: state.currentUser?.id
           });
-          
+
           // Special handling for join route: construct /join/[code] path
           let redirectUrl = returnTo;
           if (returnTo === 'join' && returnParams?.code) {
@@ -909,7 +915,7 @@ function RootLayoutNav() {
             const queryString = new URLSearchParams(returnParams);
             redirectUrl += `?${queryString.toString()}`;
           }
-          
+
           console.log('🔄 [FLOW DEBUG] [REDIRECTION] Final redirect URL:', redirectUrl);
           console.log('🔄 [FLOW DEBUG] [REDIRECTION] Executing redirect now...');
           router.replace(redirectUrl as any);
@@ -921,7 +927,7 @@ function RootLayoutNav() {
             console.log('⚠️ [FLOW DEBUG] [AUTH REDIRECT] Ignoring stale returnTo when navigating from authenticated screen:', effectiveReturnTo, 'current segments:', segments);
             return; // Don't redirect, let normal navigation proceed
           }
-          
+
           // Handle direct redirection for authenticated users (only on login screen)
           const cleanParams = Object.fromEntries(
             Object.entries(effectiveOtherParams)
@@ -934,7 +940,7 @@ function RootLayoutNav() {
               })
               .map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)])
           );
-          
+
           // For toki-details, also check searchParams and urlParams for any missing parameters (cross-platform)
           if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
             // Check searchParams first (works on both platforms)
@@ -951,7 +957,7 @@ function RootLayoutNav() {
               }
             });
           }
-          
+
           // Special handling for join route: construct /join/[code] path
           let redirectUrl = effectiveReturnTo;
           if (effectiveReturnTo === 'join' && code) {
@@ -968,7 +974,7 @@ function RootLayoutNav() {
             const queryString = new URLSearchParams(cleanParams);
             redirectUrl += `?${queryString.toString()}`;
           }
-          
+
           console.log('🔄 [FLOW DEBUG] [AUTH REDIRECT] Redirecting authenticated user to:', redirectUrl);
           router.replace(redirectUrl as any);
         }
@@ -985,7 +991,7 @@ function RootLayoutNav() {
         setIsReady(true);
       }
     };
-    
+
     checkAuth();
   }, [segmentsKey, isWaitingForInitialUrl, initialUrl, hasHandledInitialUrl]); // Re-run when segments change or when initial URL is captured/handled
 
@@ -1021,7 +1027,7 @@ function RootLayoutNav() {
 
       if (effectiveReturnTo && effectiveReturnTo !== 'join') {
         console.log('🔄 [FLOW DEBUG] [USER DATA] User data loaded, redirecting to:', effectiveReturnTo);
-        
+
         // Build the redirect URL with parameters
         // effectiveOtherParams should already contain all params except returnTo and code
         // Filter out internal params like 'screen' and 'params'
@@ -1031,7 +1037,7 @@ function RootLayoutNav() {
             paramsToInclude[key] = value;
           }
         });
-        
+
         // Ensure we have all parameters from the URL (double-check for toki-details)
         if (effectiveReturnTo === '/toki-details' || effectiveReturnTo?.includes('toki-details')) {
           Object.entries(urlParams).forEach(([key, value]) => {
@@ -1040,13 +1046,13 @@ function RootLayoutNav() {
             }
           });
         }
-        
+
         let redirectUrl = effectiveReturnTo;
         if (Object.keys(paramsToInclude).length > 0) {
           const queryString = new URLSearchParams(paramsToInclude);
           redirectUrl += `?${queryString.toString()}`;
         }
-        
+
         console.log('🔄 [FLOW DEBUG] [USER DATA] Redirecting to:', redirectUrl);
         router.replace(redirectUrl as any);
       }

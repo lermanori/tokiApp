@@ -20,7 +20,14 @@ module.exports = {
         NSLocationWhenInUseUsageDescription: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you.",
         NSLocationAlwaysUsageDescription: "Your location is used to show nearby scenes and events on the map and help you discover what's happening around you.",
         NSCameraUsageDescription: "The camera is used to take profile photos and to capture photos when creating or uploading an event, for example when adding images during event setup.",
-        NSPhotoLibraryUsageDescription: "The photo library is used to select profile photos or photos to upload when creating or uploading an event."
+        NSPhotoLibraryUsageDescription: "The photo library is used to select profile photos or photos to upload when creating or uploading an event.",
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              "com.googleusercontent.apps.637006267798-43d8irdorehl3sedc7btq6r1pt2hfhs3"
+            ]
+          }
+        ]
       },
       associatedDomains: [
         "applinks:toki-app.com"
@@ -49,9 +56,9 @@ module.exports = {
     },
     extra: {
       EXPO_PUBLIC_API_URL: 'https://backend-production-d8ec.up.railway.app',
-      // Google OAuth client IDs - set these via environment variables
-      GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID,
-      GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID,
+      // Google OAuth client IDs
+      GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID || '637006267798-fto4pgl9cpqktdn7sgl7t54dd2dbdpld.apps.googleusercontent.com',
+      GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID || '637006267798-43d8irdorehl3sedc7btq6r1pt2hfhs3.apps.googleusercontent.com',
       router: {},
       eas: {
         projectId: "41a24d0b-1d53-429a-8753-acd4a5b9972c"

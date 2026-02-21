@@ -9,8 +9,7 @@ let Google: typeof import('expo-auth-session/providers/google') | null = null;
 try {
   WebBrowser = require('expo-web-browser');
   Google = require('expo-auth-session/providers/google');
-  // Required for web authentication to complete properly
-  WebBrowser?.maybeCompleteAuthSession();
+  // Note: maybeCompleteAuthSession() is called at the app root (_layout.tsx)
 } catch (e) {
   console.log('expo-auth-session not available');
 }
