@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useState, useR
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
 import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, UserRatingStats, BlockedUser, BlockStatus } from '../services/api';
 import { socketService } from '../services/socket';
 import { getBackendUrl } from '../services/config';
@@ -263,7 +264,7 @@ const loadStoredData = async () => {
 
   // Calculate user stats from stored data
   const userTokis = storedTokis.filter((toki: Toki) => toki.isHostedByUser);
-  const joinedTokis = storedTokis.filter((toki: Toki) => 
+  const joinedTokis = storedTokis.filter((toki: Toki) =>
     !toki.isHostedByUser && toki.joinStatus === 'approved'
   );
 
@@ -355,16 +356,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'ADD_TOKI':
       const newTokis = [action.payload, ...state.tokis];
       storage.set(STORAGE_KEYS.TOKIS, newTokis);
-      
+
       // Update user stats
       const updatedUserAfterAdd = {
         ...state.currentUser,
         tokisCreated: state.currentUser.tokisCreated + 1,
       };
       storage.set(STORAGE_KEYS.CURRENT_USER, updatedUserAfterAdd);
-      
-      return { 
-        ...state, 
+
+      return {
+        ...state,
         tokis: newTokis,
         mapTokis: newTokis,
         currentUser: updatedUserAfterAdd,
@@ -376,7 +377,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           : toki
       );
       storage.set(STORAGE_KEYS.TOKIS, updatedTokis);
-      
+
       // Update user stats if join status changed
       let updatedUserAfterUpdate = state.currentUser;
       const updatedToki = updatedTokis.find(t => t.id === action.payload.id);
@@ -387,7 +388,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         };
         storage.set(STORAGE_KEYS.CURRENT_USER, updatedUserAfterUpdate);
       }
-      
+
       return {
         ...state,
         tokis: updatedTokis,
@@ -397,7 +398,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'DELETE_TOKI':
       const filteredTokis = state.tokis.filter(toki => toki.id !== action.payload);
       storage.set(STORAGE_KEYS.TOKIS, filteredTokis);
-      
+
       // Update user stats
       const deletedToki = state.tokis.find(t => t.id === action.payload);
       let updatedUserAfterDelete = state.currentUser;
@@ -408,7 +409,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         };
         storage.set(STORAGE_KEYS.CURRENT_USER, updatedUserAfterDelete);
       }
-      
+
       return {
         ...state,
         tokis: filteredTokis,
@@ -498,10 +499,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, totalNearbyCount: action.payload };
     case 'SET_CONNECTIONS': {
       const ids = action.payload.map((c: any) => c.user?.id || c.id).filter(Boolean);
-      return { 
-        ...state, 
+      return {
+        ...state,
         connections: action.payload,
-        userConnectionsIds: ids 
+        userConnectionsIds: ids
       };
     }
     case 'SET_PENDING_CONNECTIONS':
@@ -509,26 +510,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'ADD_CONNECTION': {
       const newConnections = [...state.connections, action.payload];
       const ids = newConnections.map((c: any) => c.user?.id || c.id).filter(Boolean);
-      return { 
-        ...state, 
+      return {
+        ...state,
         connections: newConnections,
-        userConnectionsIds: ids 
+        userConnectionsIds: ids
       };
     }
     case 'REMOVE_CONNECTION': {
-      const filtered = state.connections.filter((c: any) => 
+      const filtered = state.connections.filter((c: any) =>
         (c.user?.id || c.id) !== action.payload
       );
       const ids = filtered.map((c: any) => c.user?.id || c.id).filter(Boolean);
-      return { 
-        ...state, 
+      return {
+        ...state,
         connections: filtered,
-        userConnectionsIds: ids 
+        userConnectionsIds: ids
       };
     }
     case 'UPDATE_CONNECTION': {
-      const updated = state.connections.map((c: any) => 
-        (c.user?.id || c.id) === action.payload.id 
+      const updated = state.connections.map((c: any) =>
+        (c.user?.id || c.id) === action.payload.id
           ? { ...c, ...action.payload.updates }
           : c
       );
@@ -637,10 +638,10 @@ interface AppContextType {
     hideUser: (tokiId: string, userId: string) => Promise<boolean>;
     listHiddenUsers: (tokiId: string) => Promise<any[]>;
     unhideUser: (tokiId: string, userId: string) => Promise<boolean>;
-    
+
     // Tokis
     getTokiById: (tokiId: string) => Promise<any>;
-    
+
     // Remove Participant
     removeParticipant: (tokiId: string, userId: string) => Promise<boolean>;
     // Notifications
@@ -679,56 +680,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
-        
+
         console.log('🔄 Starting loadInitialData...');
-        
+
         // Initialize API service
         await apiService.initialize();
         console.log('✅ API service initialized');
-        
+
         // Debug: Check if tokens were loaded
         const hasToken = apiService.hasToken();
         console.log('🔍 [APP] Token check after API init:', hasToken);
-        
+
         // Load stored data as fallback
         const { tokis, currentUser, messages, lastSyncTime } = await loadStoredData();
-        console.log('📦 Loaded stored data:', { 
-          tokisCount: tokis.length, 
+        console.log('📦 Loaded stored data:', {
+          tokisCount: tokis.length,
           currentUserName: currentUser.name,
           hasValidUser: currentUser.id && currentUser.id !== ''
         });
-        
+
         // Check connection status
         await checkConnection();
         console.log('🌐 Connection status checked');
-        
+
         // If authenticated, load current user and Tokis from backend
         const isAuthenticated = await apiService.isAuthenticated();
         console.log('🔐 Authentication check result:', isAuthenticated);
-        
+
         if (isAuthenticated) {
           try {
             console.log('👤 Loading authenticated user data...');
             // Use the new loadCurrentUser function
             await loadCurrentUser();
-            
+
             // Get the current user ID from the updated state
             const currentUserId = state.currentUser?.id;
             console.log('👤 Current user ID:', currentUserId);
-            
+
             // Note: Tokis are loaded by individual screens (Explore/Discover use loadNearbyTokis)
             // This prevents unnecessary /tokis API calls when screens will use /tokis/nearby
-            
+
             // Connect to WebSocket
             await socketService.connect();
             if (currentUser.id) {
               await socketService.joinUser(currentUser.id);
-              
+
               // Note: Global message listeners will be set up after actions are defined
             }
 
             // Configure foreground notifications to show alert banners while app is open
-            try { configureForegroundNotificationHandler(); } catch {}
+            try { configureForegroundNotificationHandler(); } catch { }
           } catch (error) {
             console.error('❌ Failed to load authenticated user data:', error);
             // Clear invalid tokens and use stored data
@@ -748,14 +749,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dispatch({ type: 'SET_LAST_SYNC_TIME', payload: lastSyncTime });
           console.log(`📱 Loaded ${tokis.length} Tokis from AsyncStorage (offline mode)`);
         }
-        
+
         dispatch({ type: 'SET_LOADING', payload: false });
       } catch (error) {
         console.error('❌ Failed to load initial data:', error);
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
-    
+
     loadInitialData();
   }, []);
 
@@ -805,17 +806,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
         body: notification.request.content.body,
         data: notification.request.content.data,
       });
-      
+
       // Refresh notifications list to show new notification in UI
       loadNotifications().catch(err => console.warn('Failed to refresh notifications:', err));
     });
 
     // Listener for when user taps on notification
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data as Record<string, any> | undefined;
       console.log('👆 [PUSH] Notification tapped:', data);
-      
-      // Refresh notifications when user taps (they'll navigate via notifications screen)
+
+      // Navigate to chat screen if this is a chat message notification
+      if (data?.type === 'chat_message') {
+        try {
+          if (data.isGroup) {
+            router.push({
+              pathname: '/chat',
+              params: {
+                tokiId: String(data.tokiId || ''),
+                isGroup: 'true',
+                otherUserName: String(data.tokiTitle || 'Group Chat'),
+              },
+            });
+          } else {
+            router.push({
+              pathname: '/chat',
+              params: {
+                conversationId: String(data.conversationId || ''),
+                otherUserId: String(data.senderId || ''),
+                otherUserName: String(data.senderName || 'Chat'),
+                isGroup: 'false',
+              },
+            });
+          }
+          console.log('🗺️ [PUSH] Navigated to chat screen from notification tap');
+        } catch (navError) {
+          console.warn('⚠️ [PUSH] Failed to navigate to chat:', navError);
+        }
+      }
+
+      // Refresh notifications when user taps
       loadNotifications().catch(err => console.warn('Failed to refresh notifications:', err));
     });
 
@@ -833,12 +863,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('🔌 [APP CONTEXT] Current user ID:', state.currentUser?.id);
     console.log('🔌 [APP CONTEXT] WebSocket connection status:', state.isConnected);
     console.log('🔌 [APP CONTEXT] Socket service status:', socketService.getConnectionStatus());
-    
+
     // Clean up any existing listeners first
     socketService.offMessageReceived();
     socketService.offTokiMessageReceived();
     socketService.offNotificationReceived();
-    
+
     // Listen for new individual messages
     socketService.onMessageReceived((message: any) => {
       console.log('📨 [APP CONTEXT] RECEIVED EVENT: message-received');
@@ -850,12 +880,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sender_id: message.sender_id
       });
       console.log('📨 [APP CONTEXT] Current user ID:', state.currentUser?.id);
-      
+
       // Update conversations list if we're on the messages screen
       // This will trigger a re-render and show the new message
       if (state.currentUser?.id && message.sender_id !== state.currentUser.id) {
         console.log('🔄 [APP CONTEXT] Updating conversations for new message');
-        
+
         // FRONTEND WORKAROUND: Increment unread count locally
         const currentConversations = state.conversations || [];
         const updatedConversations = currentConversations.map(conv => {
@@ -869,10 +899,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           return conv;
         });
-        
+
         // Update state immediately with incremented unread count
         dispatch({ type: 'SET_CONVERSATIONS', payload: updatedConversations });
-        
+
         // Also refresh from API (but this won't have the right unread count until backend is fixed)
         actions.getConversations();
       }
@@ -889,11 +919,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sender_id: message.sender_id
       });
       console.log('📨 [APP CONTEXT] Current user ID:', state.currentUser?.id);
-      
+
       // Update Toki group chats if we're on the messages screen
       if (state.currentUser?.id && message.sender_id !== state.currentUser.id) {
         console.log('🔄 [APP CONTEXT] Updating Toki group chats for new message');
-        
+
         // FRONTEND WORKAROUND: Increment unread count locally
         const currentChats = state.tokiGroupChats || [];
         const updatedChats = currentChats.map(chat => {
@@ -907,10 +937,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           return chat;
         });
-        
+
         // Update state immediately with incremented unread count
         dispatch({ type: 'SET_TOKI_GROUP_CHATS', payload: updatedChats });
-        
+
         // Also refresh from API (but this won't have the right unread count until backend is fixed)
         actions.getTokiGroupChats();
       }
@@ -931,7 +961,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         source: notification.source
       });
       console.log('📬 [APP CONTEXT] Current user ID:', state.currentUser?.id);
-      
+
       // Check if notification is for current user
       // For system notifications: notification.user_id === currentUser.id
       // For connection requests: notification is sent to recipient's room, so if we received it, it's for us
@@ -940,10 +970,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notification.source === 'connection_pending' || // Connection requests (sent to recipient's room)
         notification.source === 'connection_accepted' // Connection accepted (sent to requester's room)
       );
-      
+
       if (isForCurrentUser) {
         console.log('🔄 [APP CONTEXT] Updating notifications for new notification');
-        
+
         // Transform backend notification format to frontend format
         // Handle both system notifications and connection requests (from combined route format)
         const transformedNotification = {
@@ -959,14 +989,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           externalId: notification.externalId || notification.id,
           actionRequired: notification.actionRequired,
         };
-        
+
         // Add new notification to the beginning of the list
         const currentNotifications = state.notifications || [];
         const updatedNotifications = [transformedNotification, ...currentNotifications];
-        
+
         // Update state with new notification (reducer will automatically recalculate unread count)
         dispatch({ type: 'SET_NOTIFICATIONS', payload: updatedNotifications });
-        
+
         console.log('✅ [APP CONTEXT] Notification added to state, unread count will be recalculated');
       } else {
         console.log('⏭️ [APP CONTEXT] Notification not for current user, skipping');
@@ -984,13 +1014,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (state.currentUser?.id) {
       try {
         console.log('🏷️ [APP CONTEXT] Auto-joining Toki group chat rooms...');
-        
+
         // Get current Toki group chats to join their rooms
         const tokiGroupChats = await actions.getTokiGroupChats();
-        
+
         // Use helper function to join rooms
         await joinTokiGroupChatRooms(tokiGroupChats);
-        
+
       } catch (error) {
         console.error('❌ [APP CONTEXT] Failed to auto-join Toki rooms:', error);
       }
@@ -1008,7 +1038,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     console.log('🏷️ [APP CONTEXT] Joining', tokiGroupChats.length, 'Toki group chat rooms...');
-    
+
     for (const tokiChat of tokiGroupChats) {
       try {
         await socketService.joinToki(tokiChat.id);
@@ -1016,7 +1046,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('❌ [APP CONTEXT] Failed to join Toki room:', tokiChat.id, error);
       }
     }
-    
+
     console.log('🏷️ [APP CONTEXT] Toki group chat room joining completed');
   };
 
@@ -1030,8 +1060,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkConnection = async () => {
     try {
-      const path = typeof window !== 'undefined' && window.location?.pathname 
-        ? window.location.pathname 
+      const path = typeof window !== 'undefined' && window.location?.pathname
+        ? window.location.pathname
         : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping health check on auth/join routes');
@@ -1080,8 +1110,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadTokis = async () => {
     try {
       // Avoid hammering the API when entering via invite links or login
-      const path = typeof window !== 'undefined' && window.location?.pathname 
-        ? window.location.pathname 
+      const path = typeof window !== 'undefined' && window.location?.pathname
+        ? window.location.pathname
         : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping loadTokis on auth/join routes');
@@ -1103,11 +1133,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLastTokisFetchMs(now);
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await apiService.getTokis();
-      
+
       // Get current user ID from API service instead of state
-      const currentUserId = apiService.getAccessToken() ? 
+      const currentUserId = apiService.getAccessToken() ?
         (await apiService.getCurrentUser()).user.id : null;
-      
+
       const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
         id: apiToki.id,
         title: apiToki.title,
@@ -1136,13 +1166,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         algorithmScore: apiToki.algorithmScore ?? null,
         friendsGoing: (apiToki as any).friendsAttending || [],
       }));
-      
+
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
 
       // Update total count from pagination (same logic as loadNearbyTokis)
       const pagination = response.pagination || (response as any).data?.pagination;
       const total = pagination?.total;
-      
+
       if (total !== undefined && total !== null && total >= 0) {
         dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
       }
@@ -1159,11 +1189,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await apiService.getMyTokis();
-      
+
       // Get current user ID from API service instead of state
-      const currentUserId = apiService.getAccessToken() ? 
+      const currentUserId = apiService.getAccessToken() ?
         (await apiService.getCurrentUser()).user.id : null;
-      
+
       const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
         id: apiToki.id,
         title: apiToki.title,
@@ -1194,7 +1224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         autoApprove: (apiToki as any).autoApprove || false,
         externalLink: (apiToki as any).externalLink || '',
       }));
-      
+
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
     } catch (error) {
       console.error('❌ Failed to load My Tokis:', error);
@@ -1206,8 +1236,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadTokisWithFilters = async (filters: any) => {
     try {
-      const path = typeof window !== 'undefined' && window.location?.pathname 
-        ? window.location.pathname 
+      const path = typeof window !== 'undefined' && window.location?.pathname
+        ? window.location.pathname
         : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping loadTokisWithFilters on auth/join routes');
@@ -1221,7 +1251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setIsFetchingTokis(true);
       dispatch({ type: 'SET_LOADING', payload: true });
-      
+
       // Build query string from filters
       const queryParams = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
@@ -1229,7 +1259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           queryParams.append(key, value.toString());
         }
       });
-      
+
       const response = await apiService.getTokis(filters);
       const apiTokis: Toki[] = response.tokis.map((apiToki: ApiToki) => ({
         id: apiToki.id,
@@ -1259,7 +1289,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         algorithmScore: apiToki.algorithmScore ?? null,
         friendsGoing: (apiToki as any).friendsAttending || [],
       }));
-      
+
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to load Tokis with filters:', error);
@@ -1273,15 +1303,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const NEARBY_FETCH_LIMIT = 1000;
 
   const loadNearbyTokis = async (
-    params: { 
-      latitude: number; 
-      longitude: number; 
-      radius?: number; 
-      page?: number; 
-      category?: string; 
+    params: {
+      latitude: number;
+      longitude: number;
+      radius?: number;
+      page?: number;
+      category?: string;
       timeSlot?: string;
       limit?: number;
-    }, 
+    },
     append: boolean = false
   ): Promise<{ pagination: any }> => {
     // Create a unique key for this request to detect duplicates
@@ -1314,86 +1344,86 @@ export function AppProvider({ children }: { children: ReactNode }) {
           dispatch({ type: 'SET_LOADING', payload: true });
         }
 
-      const response = await apiService.getNearbyTokis({
-        latitude: params.latitude,
-        longitude: params.longitude,
-        radius: params.radius || 10,
-        limit: params.limit ?? NEARBY_FETCH_LIMIT,
-        page: params.page || 1,
-        category: params.category,
-        timeSlot: params.timeSlot
-      });
+        const response = await apiService.getNearbyTokis({
+          latitude: params.latitude,
+          longitude: params.longitude,
+          radius: params.radius || 10,
+          limit: params.limit ?? NEARBY_FETCH_LIMIT,
+          page: params.page || 1,
+          category: params.category,
+          timeSlot: params.timeSlot
+        });
 
-      // Safety check: ensure response has tokis array (handle both response.tokis and response.data.tokis)
-      const tokisArray = response?.tokis || (response as any)?.data?.tokis;
-      if (!tokisArray || !Array.isArray(tokisArray)) {
-        console.warn('⚠️ [APP CONTEXT] Invalid response from getNearbyTokis - no tokis array:', response);
-        // Don't clear existing tokis if response is invalid
+        // Safety check: ensure response has tokis array (handle both response.tokis and response.data.tokis)
+        const tokisArray = response?.tokis || (response as any)?.data?.tokis;
+        if (!tokisArray || !Array.isArray(tokisArray)) {
+          console.warn('⚠️ [APP CONTEXT] Invalid response from getNearbyTokis - no tokis array:', response);
+          // Don't clear existing tokis if response is invalid
+          return { pagination: { hasMore: false } };
+        }
+
+        // Get current user ID from API service
+        const currentUserId = apiService.getAccessToken() ?
+          (await apiService.getCurrentUser()).user.id : null;
+
+        const apiTokis: Toki[] = tokisArray.map((apiToki: ApiToki) => ({
+          id: apiToki.id,
+          title: apiToki.title,
+          description: apiToki.description,
+          location: apiToki.location,
+          time: apiToki.timeSlot || 'Time TBD',
+          attendees: apiToki.currentAttendees,
+          maxAttendees: apiToki.maxAttendees,
+          tags: apiToki.tags,
+          host: {
+            id: apiToki.host.id,
+            name: apiToki.host.name,
+            avatar: apiToki.host.avatar || '',
+          },
+          image: apiToki.imageUrl || '',
+          distance: formatDistanceString(apiToki.distance),
+          isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
+          joinStatus: apiToki.joinStatus || 'not_joined',
+          visibility: apiToki.visibility,
+          category: apiToki.category,
+          createdAt: apiToki.createdAt,
+          scheduledTime: apiToki.scheduledTime,
+          latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
+          longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
+          isSaved: (apiToki as any).is_saved || false,
+          algorithmScore: apiToki.algorithmScore ?? null,
+          friendsGoing: (apiToki as any).friendsAttending || [],
+        }));
+
+        if (append) {
+          // Append to existing tokis, avoiding duplicates
+          const existingIds = new Set(state.tokis.map(t => t.id));
+          const newTokis = apiTokis.filter(t => !existingIds.has(t.id));
+          dispatch({ type: 'SET_TOKIS', payload: [...state.tokis, ...newTokis] });
+        } else {
+          // For refresh (append: false), always update state with new results
+          // This ensures location changes clear old tokis even if new location has no tokis
+          dispatch({ type: 'SET_TOKIS', payload: apiTokis });
+        }
+
+        // Update total count (only update if we got a valid total from pagination)
+        // Handle both possible response structures: direct pagination or nested in data
+        const pagination = response.pagination || (response as any).data?.pagination;
+        const total = pagination?.total;
+
+        if (total !== undefined && total !== null && total > 0) {
+          dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
+        }
+
+        return { pagination: pagination || response.pagination };
+      } catch (error) {
+        console.error('❌ [APP CONTEXT] Failed to load nearby Tokis:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load nearby activities' });
         return { pagination: { hasMore: false } };
+      } finally {
+        setIsFetchingTokis(false);
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
-
-      // Get current user ID from API service
-      const currentUserId = apiService.getAccessToken() ? 
-        (await apiService.getCurrentUser()).user.id : null;
-
-      const apiTokis: Toki[] = tokisArray.map((apiToki: ApiToki) => ({
-        id: apiToki.id,
-        title: apiToki.title,
-        description: apiToki.description,
-        location: apiToki.location,
-        time: apiToki.timeSlot || 'Time TBD',
-        attendees: apiToki.currentAttendees,
-        maxAttendees: apiToki.maxAttendees,
-        tags: apiToki.tags,
-        host: {
-          id: apiToki.host.id,
-          name: apiToki.host.name,
-          avatar: apiToki.host.avatar || '',
-        },
-        image: apiToki.imageUrl || '',
-        distance: formatDistanceString(apiToki.distance),
-        isHostedByUser: currentUserId ? apiToki.host.id === currentUserId : false,
-        joinStatus: apiToki.joinStatus || 'not_joined',
-        visibility: apiToki.visibility,
-        category: apiToki.category,
-        createdAt: apiToki.createdAt,
-        scheduledTime: apiToki.scheduledTime,
-        latitude: apiToki.latitude ? (typeof apiToki.latitude === 'string' ? parseFloat(apiToki.latitude) : apiToki.latitude) : undefined,
-        longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
-        isSaved: (apiToki as any).is_saved || false,
-        algorithmScore: apiToki.algorithmScore ?? null,
-        friendsGoing: (apiToki as any).friendsAttending || [],
-      }));
-
-      if (append) {
-        // Append to existing tokis, avoiding duplicates
-        const existingIds = new Set(state.tokis.map(t => t.id));
-        const newTokis = apiTokis.filter(t => !existingIds.has(t.id));
-        dispatch({ type: 'SET_TOKIS', payload: [...state.tokis, ...newTokis] });
-      } else {
-        // For refresh (append: false), always update state with new results
-        // This ensures location changes clear old tokis even if new location has no tokis
-        dispatch({ type: 'SET_TOKIS', payload: apiTokis });
-      }
-
-      // Update total count (only update if we got a valid total from pagination)
-      // Handle both possible response structures: direct pagination or nested in data
-      const pagination = response.pagination || (response as any).data?.pagination;
-      const total = pagination?.total;
-      
-      if (total !== undefined && total !== null && total > 0) {
-        dispatch({ type: 'SET_TOTAL_NEARBY_COUNT', payload: total });
-      }
-
-      return { pagination: pagination || response.pagination };
-    } catch (error) {
-      console.error('❌ [APP CONTEXT] Failed to load nearby Tokis:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load nearby activities' });
-      return { pagination: { hasMore: false } };
-    } finally {
-      setIsFetchingTokis(false);
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
     })();
 
     // Store the promise in ref for duplicate detection (only for non-append requests)
@@ -1413,7 +1443,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createToki = async (tokiData: any): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      
+
       // Convert time slot to scheduled time (returns UTC ISO string)
       const getScheduledTimeFromSlot = (timeSlot: string): string => {
         const now = new Date();
@@ -1515,9 +1545,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scheduledTime: apiToki.scheduledTime,
         isSaved: apiToki.is_saved ?? false,
       };
-      
+
       dispatch({ type: 'ADD_TOKI', payload: newToki });
-      
+
       console.log('✅ Toki created successfully:', newToki.title);
       return newToki.id;
     } catch (error) {
@@ -1533,10 +1563,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateToki = async (id: string, updates: any): Promise<boolean> => {
     try {
       dispatch({ type: 'UPDATE_TOKI', payload: { id, updates } });
-      
+
       // Update sync time
       setTimeout(() => syncData(), 100);
-      
+
       console.log('✅ Toki updated successfully');
       return true;
     } catch (error) {
@@ -1548,10 +1578,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteToki = async (id: string): Promise<boolean> => {
     try {
       dispatch({ type: 'DELETE_TOKI', payload: id });
-      
+
       // Update sync time
       setTimeout(() => syncData(), 100);
-      
+
       console.log('✅ Toki deleted successfully');
       return true;
     } catch (error) {
@@ -1566,7 +1596,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!toki) return false;
 
       console.log('🔄 Sending join request to backend for Toki:', id);
-      
+
       // Call the actual backend API using the existing apiService method
       const result = await apiService.joinToki(id);
 
@@ -1590,7 +1620,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Refresh user data to get updated tokisJoined count
       await loadCurrentUser();
-      
+
       console.log('✅ Joined Toki successfully');
       return true;
     } catch (error) {
@@ -1603,9 +1633,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sendJoinRequest = async (id: string): Promise<'approved' | 'pending' | null> => {
     try {
       console.log('🔄 Sending join request to backend for Toki:', id);
-      
+
       const response = await apiService.joinToki(id);
-      
+
       if (response.success) {
         const backendStatus = (response.data?.status as 'approved' | 'pending' | undefined) || 'pending';
         // Update local state to reflect backend status
@@ -1621,7 +1651,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Update sync time
         setTimeout(() => syncData(), 100);
-        
+
         console.log(`✅ Join flow successful with status: ${backendStatus}`);
         return backendStatus;
       } else {
@@ -1667,9 +1697,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const approveJoinRequest = async (tokiId: string, requestId: string): Promise<boolean> => {
     try {
       console.log('✅ Approving join request:', requestId, 'for Toki:', tokiId);
-      
+
       const response = await apiService.approveJoinRequest(tokiId, requestId);
-      
+
       if (response.success) {
         console.log('✅ Join request approved successfully');
         return true;
@@ -1686,9 +1716,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const declineJoinRequest = async (tokiId: string, requestId: string): Promise<boolean> => {
     try {
       console.log('❌ Declining join request:', requestId, 'for Toki:', tokiId);
-      
+
       const response = await apiService.declineJoinRequest(tokiId, requestId);
-      
+
       if (response.success) {
         console.log('✅ Join request declined successfully');
         return true;
@@ -1705,9 +1735,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getJoinRequests = async (tokiId: string): Promise<any[]> => {
     try {
       console.log('📋 Getting join requests for Toki:', tokiId);
-      
+
       const response = await apiService.getJoinRequests(tokiId);
-      
+
       if (response.success) {
         console.log('✅ Retrieved join requests:', response.data.requests);
         return response.data.requests;
@@ -1725,13 +1755,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('📝 Updating Toki:', id, 'with updates:', updates);
     try {
       await apiService.updateToki(id, updates);
-      
+
       // Update local state using existing action
       dispatch({
         type: 'UPDATE_TOKI',
         payload: { id, updates }
       });
-      
+
       console.log('✅ Toki updated successfully');
       return true;
     } catch (error) {
@@ -1912,15 +1942,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.log('🗑️ Calling apiService.deleteToki...');
       await apiService.deleteToki(id);
       console.log('🗑️ API call successful');
-      
+
       // Remove from local state
       console.log('🗑️ Updating local state...');
       const updatedTokis = state.tokis.filter(toki => toki.id !== id);
       console.log('🗑️ Tokis before:', state.tokis.length, 'after:', updatedTokis.length);
-      
+
       dispatch({ type: 'SET_TOKIS', payload: updatedTokis });
       storage.set(STORAGE_KEYS.TOKIS, updatedTokis);
-      
+
       console.log('✅ Toki deleted successfully');
       return true;
     } catch (error) {
@@ -1950,8 +1980,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const checkAuthStatus = async (): Promise<boolean> => {
     try {
-      const path = typeof window !== 'undefined' && window.location?.pathname 
-        ? window.location.pathname 
+      const path = typeof window !== 'undefined' && window.location?.pathname
+        ? window.location.pathname
         : '';
       if (path.startsWith('/join') || path.startsWith('/login')) {
         console.log('🛑 Skipping auth status on auth/join routes');
@@ -1992,11 +2022,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Clear tokens from local storage (this is the key!)
       console.log('🗑️ Clearing auth tokens...');
       await apiService.clearTokens();
-      
+
       // Clear all app data
       console.log('🗑️ Clearing app data...');
       await clearAllData();
-      
+
       console.log('✅ User logged out successfully - tokens cleared');
     } catch (error) {
       console.error('❌ Error during logout:', error);
@@ -2011,15 +2041,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🟢 [AppContext] updateProfile called with:', updates);
       dispatch({ type: 'SET_LOADING', payload: true });
-      
+
       console.log('🟢 [AppContext] Calling apiService.updateProfile...');
       const apiUser = await apiService.updateProfile(updates);
       console.log('🟢 [AppContext] apiService.updateProfile returned:', apiUser);
-      
+
       // Reload the full user data to get updated stats and social links
       console.log('🟢 [AppContext] Reloading current user...');
       await loadCurrentUser();
-      
+
       console.log('✅ Profile updated successfully');
       return true;
     } catch (error) {
@@ -2044,10 +2074,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       dispatch({ type: 'ADD_MESSAGE', payload: messageData });
-      
+
       // Update sync time
       setTimeout(() => syncData(), 100);
-      
+
       console.log('✅ Message sent successfully');
       return true;
     } catch (error) {
@@ -2066,10 +2096,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const key of Object.values(STORAGE_KEYS)) {
       await storage.remove(key);
     }
-    
+
     // Clear auth tokens specifically
     await AsyncStorage.removeItem('auth_tokens');
-    
+
     // Reset to initial state
     dispatch({ type: 'SET_TOKIS', payload: [] });
     dispatch({ type: 'SET_MESSAGES', payload: [] });
@@ -2079,7 +2109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_BLOCKED_USERS', payload: [] });
     dispatch({ type: 'SET_BLOCKED_BY_USERS', payload: [] });
     dispatch({ type: 'SET_SAVED_TOKIS', payload: [] });
-    
+
     console.log('🗑️ All data cleared including auth tokens');
   };
 
@@ -2087,13 +2117,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getUserRatings = async (userId: string) => {
     try {
       const response: any = await apiService.getUserRatings(userId);
-      dispatch({ 
-        type: 'SET_USER_RATINGS', 
-        payload: { 
-          userId, 
-          ratings: response.ratings, 
-          stats: response.stats 
-        } 
+      dispatch({
+        type: 'SET_USER_RATINGS',
+        payload: {
+          userId,
+          ratings: response.ratings,
+          stats: response.stats
+        }
       });
       console.log('✅ User ratings loaded successfully');
     } catch (error) {
@@ -2154,13 +2184,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const response = await apiService.getUserRatingStats(userId);
       if (response.success) {
         // Store rating stats in state using existing action type
-        dispatch({ 
-          type: 'SET_USER_RATINGS', 
-          payload: { 
-            userId, 
+        dispatch({
+          type: 'SET_USER_RATINGS',
+          payload: {
+            userId,
             ratings: [], // Empty array since we're only getting stats
-            stats: response.data 
-          } 
+            stats: response.data
+          }
         });
         console.log('✅ User rating stats loaded successfully');
       } else {
@@ -2254,54 +2284,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     console.log('🔄 loadCurrentUser called');
-    
+
     // Create the request promise
     const requestPromise = (async () => {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
-        
+
         // Get the full response to access user and stats
         console.log('🌐 Calling apiService.getCurrentUser()...');
         const response = await apiService.getCurrentUser();
         console.log('🌐 API response received:', response);
-      
-      // The API service already extracts response.data, so we get: { user: User; socialLinks: any; stats: any; verified: boolean }
-      const user = response.user;
-      const stats = response.stats;
-      console.log('👤 User data from API:', user);
-      console.log('📊 Stats data from API:', stats);
-      console.log('🔗 Social links from API:', response.socialLinks);
-      
-      // Transform backend user data to match our interface
-      const transformedUser: User = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        bio: user.bio || '',
-        location: user.location || '',
-        avatar: user.avatar || 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg',
-        verified: response.verified,
-        socialLinks: response.socialLinks || {},
-        memberSince: user.memberSince,
-        tokisCreated: stats?.tokis_created || 0,
-        tokisJoined: stats?.tokis_joined || 0,
-        connections: stats?.connections_count || 0,
-        rating: parseFloat(user.rating) || 0,
-        latitude: user.latitude,
-        longitude: user.longitude,
-      };
 
-      console.log('🔄 Dispatching UPDATE_CURRENT_USER with:', transformedUser);
-      dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
-      storage.set(STORAGE_KEYS.CURRENT_USER, transformedUser);
-      console.log('✅ Current user loaded successfully:', transformedUser.name);
-      console.log('📊 User stats:', { tokisCreated: transformedUser.tokisCreated, tokisJoined: transformedUser.tokisJoined, connections: transformedUser.connections });
-      
-      // Force a re-render by dispatching again after a short delay
-      setTimeout(() => {
-        console.log('🔄 Forcing stats update...');
+        // The API service already extracts response.data, so we get: { user: User; socialLinks: any; stats: any; verified: boolean }
+        const user = response.user;
+        const stats = response.stats;
+        console.log('👤 User data from API:', user);
+        console.log('📊 Stats data from API:', stats);
+        console.log('🔗 Social links from API:', response.socialLinks);
+
+        // Transform backend user data to match our interface
+        const transformedUser: User = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          bio: user.bio || '',
+          location: user.location || '',
+          avatar: user.avatar || 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg',
+          verified: response.verified,
+          socialLinks: response.socialLinks || {},
+          memberSince: user.memberSince,
+          tokisCreated: stats?.tokis_created || 0,
+          tokisJoined: stats?.tokis_joined || 0,
+          connections: stats?.connections_count || 0,
+          rating: parseFloat(user.rating) || 0,
+          latitude: user.latitude,
+          longitude: user.longitude,
+        };
+
+        console.log('🔄 Dispatching UPDATE_CURRENT_USER with:', transformedUser);
         dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
-      }, 100);
+        storage.set(STORAGE_KEYS.CURRENT_USER, transformedUser);
+        console.log('✅ Current user loaded successfully:', transformedUser.name);
+        console.log('📊 User stats:', { tokisCreated: transformedUser.tokisCreated, tokisJoined: transformedUser.tokisJoined, connections: transformedUser.connections });
+
+        // Force a re-render by dispatching again after a short delay
+        setTimeout(() => {
+          console.log('🔄 Forcing stats update...');
+          dispatch({ type: 'UPDATE_CURRENT_USER', payload: transformedUser });
+        }, 100);
       } catch (error) {
         console.error('❌ Failed to load current user:', error);
         // Don't show error alert here as it might be expected if user is not logged in
@@ -2328,10 +2358,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setIsLoadingConnections(true);
       const response = await apiService.getConnections();
-      
+
       // Update global state
       dispatch({ type: 'SET_CONNECTIONS', payload: response.connections });
-      
+
       return response;
     } catch (error) {
       console.error('❌ Failed to load connections:', error);
@@ -2373,10 +2403,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setIsLoadingPendingConnections(true);
       const response = await apiService.getPendingConnections();
-      
+
       // Update global state
       dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: response });
-      
+
       console.log('✅ Pending connections loaded successfully');
       return response;
     } catch (error) {
@@ -2401,22 +2431,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const acceptConnectionRequest = async (userId: string): Promise<boolean> => {
     try {
       await apiService.respondToConnectionRequest(userId, 'accept');
-      
+
       // Find the pending connection and move it to connections
-      const pendingConn = state.pendingConnections.find((p: any) => 
+      const pendingConn = state.pendingConnections.find((p: any) =>
         (p.user?.id || p.requester_id || p.id) === userId
       );
-      
+
       if (pendingConn) {
         // Remove from pending
-        dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) => 
-          (p.user?.id || p.requester_id || p.id) !== userId
-        )});
-        
+        dispatch({
+          type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) =>
+            (p.user?.id || p.requester_id || p.id) !== userId
+          )
+        });
+
         // Add to connections (need to fetch full connection data)
         await getConnections();
       }
-      
+
       console.log('✅ Connection request accepted successfully');
       return true;
     } catch (error) {
@@ -2428,12 +2460,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const declineConnectionRequest = async (userId: string): Promise<boolean> => {
     try {
       await apiService.respondToConnectionRequest(userId, 'decline');
-      
+
       // Remove from pending connections
-      dispatch({ type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) => 
-        (p.user?.id || p.requester_id || p.id) !== userId
-      )});
-      
+      dispatch({
+        type: 'SET_PENDING_CONNECTIONS', payload: state.pendingConnections.filter((p: any) =>
+          (p.user?.id || p.requester_id || p.id) !== userId
+        )
+      });
+
       console.log('✅ Connection request declined successfully');
       return true;
     } catch (error) {
@@ -2445,10 +2479,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeConnection = async (userId: string): Promise<boolean> => {
     try {
       await apiService.removeConnection(userId);
-      
+
       // Remove from global state
       dispatch({ type: 'REMOVE_CONNECTION', payload: userId });
-      
+
       console.log('✅ Connection removed successfully');
       return true;
     } catch (error) {
@@ -2485,11 +2519,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           unread_count: c.unread_count
         }))
       });
-      
+
       // Debug: Check if any conversations have unread messages
       const hasUnread = response.conversations?.some((c: any) => c.unread_count > 0);
       console.log('🔍 [APP CONTEXT] Any conversations with unread messages?', hasUnread);
-      
+
       console.log('✅ [APP CONTEXT] Conversations loaded:', response.conversations.length);
       // Update global state
       dispatch({ type: 'SET_CONVERSATIONS', payload: response.conversations });
@@ -2538,7 +2572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const response = await apiService.getTokiMessages(tokiId);
       console.log('✅ Toki messages loaded:', response.messages.length);
-      
+
       // Debug the API response structure
       if (response.messages && response.messages.length > 0) {
         console.log('🔍 API RESPONSE INSPECTION:');
@@ -2549,7 +2583,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           isString: typeof response.messages[0]?.created_at === 'string',
         });
       }
-      
+
       return response.messages;
     } catch (error) {
       console.error('❌ Failed to load Toki messages:', error);
@@ -2593,23 +2627,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           unread_count: c.unread_count
         }))
       });
-      
+
       // Debug: Check if any toki group chats have unread messages
       const hasUnread = response.chats?.some((c: any) => c.unread_count > 0);
       console.log('🔍 [APP CONTEXT] Any toki group chats with unread messages?', hasUnread);
-      
+
       console.log('✅ [APP CONTEXT] Toki group chats loaded:', response.chats.length);
-      
+
       // Update global state
       dispatch({ type: 'SET_TOKI_GROUP_CHATS', payload: response.chats });
       console.log('✅ [APP CONTEXT] getTokiGroupChats() - state updated with', response.chats?.length || 0, 'chats');
-      
+
       // Auto-join new Toki group chat rooms if user is authenticated and connected
       if (state.currentUser?.id && socketService.getConnectionStatus()) {
         console.log('🏷️ [APP CONTEXT] Auto-joining new Toki group chat rooms...');
         await joinTokiGroupChatRooms(response.chats);
       }
-      
+
       return response.chats;
     } catch (error) {
       console.error('❌ [APP CONTEXT] getTokiGroupChats() failed:', error);
@@ -2617,11 +2651,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-    // Mark conversation as read
+  // Mark conversation as read
   const markConversationAsRead = async (conversationId: string): Promise<boolean> => {
     try {
       console.log('✅ [APP CONTEXT] Marking conversation as read:', conversationId);
-      
+
       // Immediately update local state to show unread count as 0
       const currentConversations = state.conversations || [];
       const updatedConversations = currentConversations.map(conv => {
@@ -2633,23 +2667,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return conv;
       });
-      
+
       // Update state immediately for instant UI feedback
       dispatch({ type: 'SET_CONVERSATIONS', payload: updatedConversations });
-      
+
       // Call backend API to mark as read
       const response = await apiService.post(`/messages/conversations/${conversationId}/read`);
       console.log('✅ [APP CONTEXT] Conversation marked as read on backend:', response);
-      
+
       return true;
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to mark conversation as read:', error);
-      
+
       // Revert local state change if backend call failed
       console.log('🔄 [APP CONTEXT] Reverting local state change due to backend failure');
       const currentConversations = state.conversations || [];
       dispatch({ type: 'SET_CONVERSATIONS', payload: currentConversations });
-      
+
       return false;
     }
   };
@@ -2658,7 +2692,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markTokiAsRead = async (tokiId: string): Promise<boolean> => {
     try {
       console.log('✅ [APP CONTEXT] Marking Toki as read:', tokiId);
-      
+
       // Immediately update local state to show unread count as 0
       const currentChats = state.tokiGroupChats || [];
       const updatedChats = currentChats.map(chat => {
@@ -2670,23 +2704,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return chat;
       });
-      
+
       // Update state immediately for instant UI feedback
       dispatch({ type: 'SET_TOKI_GROUP_CHATS', payload: updatedChats });
-      
+
       // Call backend API to mark as read
       const response = await apiService.post(`/messages/tokis/${tokiId}/read`);
       console.log('✅ [APP CONTEXT] Toki marked as read on backend:', response);
-      
+
       return true;
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to mark Toki as read:', error);
-      
+
       // Revert local state change if backend call failed
       console.log('🔄 [APP CONTEXT] Reverting local state change due to backend failure');
       const currentChats = state.tokiGroupChats || [];
       dispatch({ type: 'SET_TOKI_GROUP_CHATS', payload: currentChats });
-      
+
       return false;
     }
   };
@@ -2694,11 +2728,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reportMessage = async (messageId: string, reason: string): Promise<boolean> => {
     try {
       console.log('🚨 [APP CONTEXT] Reporting message:', messageId, 'for reason:', reason);
-      
+
       // Call backend API to report message
       const response = await apiService.post(`/messages/${messageId}/report`, { reason });
       console.log('✅ [APP CONTEXT] Message reported successfully:', response);
-      
+
       return true;
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to report message:', error);
@@ -2709,11 +2743,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reportToki = async (tokiId: string, reason: string): Promise<boolean> => {
     try {
       console.log('🚨 [APP CONTEXT] Reporting Toki:', tokiId, 'for reason:', reason);
-      
+
       // Call backend API to report Toki
       await apiService.reportToki(tokiId, reason);
       console.log('✅ [APP CONTEXT] Toki reported successfully');
-      
+
       return true;
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to report Toki:', error);
@@ -2724,11 +2758,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reportUser = async (userId: string, reason: string): Promise<boolean> => {
     try {
       console.log('🚨 [APP CONTEXT] Reporting user:', userId, 'for reason:', reason);
-      
+
       // Call backend API to report user
       await apiService.reportUser(userId, reason);
       console.log('✅ [APP CONTEXT] User reported successfully');
-      
+
       return true;
     } catch (error) {
       console.error('❌ [APP CONTEXT] Failed to report user:', error);
@@ -2759,7 +2793,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     console.log('🧪 [APP CONTEXT] Socket instance:', socketService.getSocket() ? 'exists' : 'null');
     console.log('🧪 [APP CONTEXT] Socket connected:', socketService.getSocket()?.connected);
     console.log('🧪 [APP CONTEXT] Current rooms:', socketService.getCurrentRooms());
-    
+
     // Try to emit a test event to see if listeners are working
     const socket = socketService.getSocket();
     if (socket && socket.connected) {
@@ -2851,7 +2885,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setIsLoadingNotifications(true);
-      
+
       // Use unified backend endpoint
       const response = await fetch(`${getBackendUrl()}/api/notifications/combined`, {
         method: 'GET',
@@ -2930,7 +2964,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markNotificationsAsRead = async (): Promise<void> => {
     try {
       console.log('✅ [APP CONTEXT] Marking notifications as read via timestamp marker');
-      
+
       // Call backend to set timestamp marker
       await fetch(`${getBackendUrl()}/api/notifications/read`, {
         method: 'POST',
@@ -2939,7 +2973,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           'Content-Type': 'application/json',
         },
       });
-      
+
       // Refresh notifications to get updated read status
       await loadNotifications();
     } catch (error) {
@@ -2953,19 +2987,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await checkConnection();
       await syncData();
     };
-    
+
     initializeApp();
-    
+
     // Sync data every 5 minutes (just updates timestamp)
     const syncInterval = setInterval(syncData, 300000);
-    
+
     // Check authentication status every 10 minutes
     const authInterval = setInterval(async () => {
       if (state.isConnected) {
         await checkAuthStatus();
       }
     }, 600000);
-    
+
     return () => {
       clearInterval(syncInterval);
       clearInterval(authInterval);
@@ -2979,17 +3013,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const setupListenersWithDelay = async () => {
         // Wait a bit for WebSocket state to stabilize
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         const socketStatus = socketService.getConnectionStatus();
-        
+
         if (socketStatus) {
           console.log('🔌 [APP CONTEXT] Setting up global message listeners...');
           await setupGlobalMessageListeners();
         }
       };
-      
+
       setupListenersWithDelay();
-      
+
       // Clean up listeners when component unmounts or user changes
       return () => {
         socketService.offMessageReceived();
@@ -3028,7 +3062,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.log('⚠️ User data exists but no tokens - skipping authenticated API calls');
       }
     };
-    
+
     // Load when user becomes available AND has tokens (loading guards will prevent duplicate calls)
     const hasToken = apiService.hasToken();
     if (state.currentUser?.id && state.isConnected && hasToken) {
@@ -3036,13 +3070,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.currentUser?.id, state.isConnected]);
 
-        const actions = {
-        checkConnection,
-        loadTokis,
-        loadMyTokis,
-        loadTokisWithFilters,
-        loadNearbyTokis,
-        createToki,
+  const actions = {
+    checkConnection,
+    loadTokis,
+    loadMyTokis,
+    loadTokisWithFilters,
+    loadNearbyTokis,
+    createToki,
     updateToki,
     deleteToki,
     joinToki,
@@ -3123,9 +3157,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     markConversationAsRead,
     markTokiAsRead,
     // Message moderation actions
-      reportMessage,
-      reportToki,
-      reportUser,
+    reportMessage,
+    reportToki,
+    reportUser,
     // Socket management actions
     reestablishGlobalListeners,
     testWebSocketListeners,

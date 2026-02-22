@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag, Bell, BellOff } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import * as Clipboard from 'expo-clipboard';
@@ -191,7 +191,7 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
 export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams();
-  
+
   // Fallback to read URL parameters directly (for web deep linking)
   const getUrlParams = () => {
     // On native, window doesn't exist or doesn't have location
@@ -215,7 +215,7 @@ export default function TokiDetailsScreen() {
       return {};
     }
   };
-  
+
   const urlParams = getUrlParams();
   // Use params.tokiId first, fallback to urlParams.tokiId
   const effectiveParams = {
@@ -227,12 +227,12 @@ export default function TokiDetailsScreen() {
     fromEdit: (params.fromEdit as string) || urlParams.fromEdit,
     fromCreate: (params.fromCreate as string) || urlParams.fromCreate,
   };
-  
+
   const [toki, setToki] = useState<TokiDetails | null>(null);
   const fromEdit = effectiveParams.fromEdit === 'true';
   const fromCreate = effectiveParams.fromCreate === 'true';
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [isLiked, setIsLiked] = useState(false);
 
   // Web-compatible alert helper
@@ -261,26 +261,73 @@ export default function TokiDetailsScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [editableMessage, setEditableMessage] = useState('');
   const [shareUrl, setShareUrl] = useState('');
-  
+
   // Invite Link Management (integrated into invite modal)
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
   const [activeInviteLink, setActiveInviteLink] = useState<any>(null);
   const [isLoadingInviteLinks, setIsLoadingInviteLinks] = useState(false);
   const [inviteLinkMessage, setInviteLinkMessage] = useState('');
   const [inviteLinkMaxUses, setInviteLinkMaxUses] = useState<number | null>(null);
-  
+
   // Remove Participant Confirmation
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
-  const [participantToRemove, setParticipantToRemove] = useState<{id: string, name: string} | null>(null);
+  const [participantToRemove, setParticipantToRemove] = useState<{ id: string, name: string } | null>(null);
+
+  // Notification mute state
+  const [isMuted, setIsMuted] = useState(false);
+  const [isMuteLoading, setIsMuteLoading] = useState(false);
 
   // Function to format time display smartly
 
-  // Check if Toki is saved on mount
+  // Check if Toki is saved and mute status on mount
   useEffect(() => {
     if (effectiveParams.tokiId) {
       checkSavedStatus();
+      checkMuteStatus();
     }
   }, [effectiveParams.tokiId]);
+
+  const checkMuteStatus = async () => {
+    try {
+      const muted = await apiService.checkTokiNotificationMute(effectiveParams.tokiId as string);
+      setIsMuted(muted);
+    } catch (error) {
+      console.error('Check mute status error:', error);
+    }
+  };
+
+  const handleMuteToggle = async () => {
+    if (isMuteLoading || !toki) return;
+    setIsMuteLoading(true);
+    try {
+      const success = isMuted
+        ? await apiService.unmuteTokiNotifications(toki.id)
+        : await apiService.muteTokiNotifications(toki.id);
+      if (success) {
+        setIsMuted(!isMuted);
+        Toast.show({
+          type: 'success',
+          text1: isMuted ? 'Notifications Unmuted' : 'Notifications Muted',
+          text2: isMuted ? 'You will receive notifications for this Toki' : 'You will no longer receive notifications for this Toki',
+          position: 'top',
+          visibilityTime: 3000,
+          topOffset: 60,
+        });
+      }
+    } catch (error) {
+      console.error('Mute toggle error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to update notification preference',
+        position: 'top',
+        visibilityTime: 3000,
+        topOffset: 60,
+      });
+    } finally {
+      setIsMuteLoading(false);
+    }
+  };
 
   const checkSavedStatus = async () => {
     try {
@@ -376,28 +423,28 @@ export default function TokiDetailsScreen() {
           distance: (() => {
             // Priority 1: Use distance from API response (most accurate, always up-to-date)
             if (tokiData.distance) {
-              return typeof tokiData.distance === 'object' 
-                ? `${tokiData.distance.km} km` 
+              return typeof tokiData.distance === 'object'
+                ? `${tokiData.distance.km} km`
                 : tokiData.distance;
             }
-            
+
             // Priority 2: Try to get distance from state.tokis (matches card display)
             const tokiFromState = state.tokis.find(t => t.id === tokiData.id);
             if (tokiFromState?.distance) {
               return tokiFromState.distance;
             }
-            
+
             // Priority 3: Calculate distance from user's location to toki location if both have coordinates
             const userLat = (state.currentUser as any)?.latitude;
             const userLng = (state.currentUser as any)?.longitude;
             const tokiLat = tokiData.latitude;
             const tokiLng = tokiData.longitude;
-            
+
             if (userLat && userLng && tokiLat && tokiLng) {
               const distanceKm = calculateDistance(userLat, userLng, tokiLat, tokiLng);
               return `${distanceKm} km`;
             }
-            
+
             return undefined;
           })(),
           visibility: tokiData.visibility,
@@ -424,7 +471,7 @@ export default function TokiDetailsScreen() {
         // If this is a newly created Toki and distance is missing or 0, retry after a delay
         // This handles the case where the toki was just created and needs to be fully persisted
         const hasNoDistance = !tokiData.distance || (typeof tokiData.distance === 'object' && (tokiData.distance.km === 0 || tokiData.distance.km === null));
-        
+
         if (fromCreate && hasNoDistance && retryCount < 3) {
           console.log(`📍 [TOKI DETAILS] No distance found for newly created toki, retrying in 1.5 seconds... (attempt ${retryCount + 1}/3)`);
           setTimeout(() => {
@@ -467,12 +514,12 @@ export default function TokiDetailsScreen() {
   // 🔍 LOG: Component mount
   useEffect(() => {
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ===== COMPONENT MOUNTED =====');
-    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] URL:', 
-      typeof window !== 'undefined' && window.location?.href 
-        ? window.location.href 
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] URL:',
+      typeof window !== 'undefined' && window.location?.href
+        ? window.location.href
         : 'N/A (native)');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams:', effectiveParams);
-    
+
     return () => {
       console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ===== COMPONENT UNMOUNTING =====');
       console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] This might indicate redirect to explore page');
@@ -482,15 +529,15 @@ export default function TokiDetailsScreen() {
   // Load data when component mounts or tokiId changes
   useEffect(() => {
     const tokiId = effectiveParams.tokiId as string;
-    
+
     // 🔍 LOG: Component effect triggered
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Component effect triggered');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] effectiveParams.tokiId:', effectiveParams.tokiId);
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] params.tokiId:', params.tokiId);
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] urlParams.tokiId:', urlParams.tokiId);
-    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Current URL:', 
-      typeof window !== 'undefined' && window.location?.href 
-        ? window.location.href 
+    console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Current URL:',
+      typeof window !== 'undefined' && window.location?.href
+        ? window.location.href
         : 'N/A (native)');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] lastProcessedTokiId:', lastProcessedTokiId.current);
 
@@ -521,7 +568,7 @@ export default function TokiDetailsScreen() {
         console.log('📍 [TOKI DETAILS] Forcing fresh data load after creation');
         loadTokiData(tokiId, 0); // Start fresh, retry logic will handle distance
       }, 300);
-      
+
       return () => clearTimeout(timer);
     }
   }, [fromCreate, effectiveParams.tokiId]);
@@ -644,37 +691,37 @@ export default function TokiDetailsScreen() {
 
   const handleInvitePress = async () => {
     if (!toki) return;
-    
+
     // Allow hosts or attendees of public tokis to invite
     const canInvite = toki.isHostedByUser || (toki.visibility === 'public' && toki.joinStatus === 'approved');
     if (!canInvite) {
       Alert.alert('Cannot invite', 'Only hosts or attendees of public events can invite users.');
       return;
     }
-    
+
     try {
       setIsLoadingInvites(true);
       setModalMode('invite');
       const { connections } = await actions.getConnectionsForToki(toki.id);
-      
+
       // Build participant set from the currently loaded toki data
       const participantIds = new Set((toki.participants || []).map((p: any) => p.user?.id || p.id));
-      
+
       // Mark participants in connections
       const connectionsWithStatus = (connections || []).map((conn: any) => ({
         ...conn,
         isParticipant: participantIds.has(conn.user?.id || conn.id),
       }));
-      
+
       // For non-hosts, filter out hidden users since they can't see them
-      const filteredConnections = toki.isHostedByUser 
-        ? connectionsWithStatus 
+      const filteredConnections = toki.isHostedByUser
+        ? connectionsWithStatus
         : connectionsWithStatus.filter((conn: any) => !conn.isHidden);
-      
+
       setInviteConnections(filteredConnections);
       setSelectedInviteeIds(new Set());
       setShowInviteModal(true);
-      
+
       // Load active invite link
       await loadInviteLinks();
     } catch (e) {
@@ -693,11 +740,11 @@ export default function TokiDetailsScreen() {
       return;
     }
     console.log('🔍 [SHARE] Toki data:', { id: toki.id, title: toki.title });
-    
+
     try {
       const shareUrl = generateTokiShareUrl(toki);
       const shareMessage = generateTokiShareMessage(toki);
-      
+
       // On iOS, use native share sheet
       if (Platform.OS === 'ios') {
         console.log('🔍 [SHARE] Using iOS native share sheet');
@@ -708,19 +755,19 @@ export default function TokiDetailsScreen() {
         });
         return;
       }
-      
+
       // On web/Android, show custom modal
       console.log('🔍 [SHARE] Showing custom share modal');
       const shareOptions = generateTokiShareOptions(toki);
       console.log('🔍 [SHARE] Share options generated:', shareOptions);
-      
+
       // Initialize editable message and URL
       setEditableMessage(shareOptions.message);
       setShareUrl(shareOptions.url);
       setShowShareModal(true);
     } catch (error) {
       console.error('Error sharing Toki:', error);
-      
+
       // Fallback to simple share
       try {
         const shareUrl = generateTokiShareUrl(toki);
@@ -842,7 +889,7 @@ export default function TokiDetailsScreen() {
         // Refresh the connections list to update hidden status
         const { connections } = await actions.getConnectionsForToki(toki.id);
         setInviteConnections(connections || []);
-        
+
         // Update hidden count
         const list = await actions.listHiddenUsers(toki.id);
         setHiddenCount((list || []).length);
@@ -891,7 +938,7 @@ export default function TokiDetailsScreen() {
       console.log('❌ No toki found');
       return;
     }
-    
+
     setParticipantToRemove({ id: userId, name: participantName });
     setShowRemoveConfirm(true);
   };
@@ -899,7 +946,7 @@ export default function TokiDetailsScreen() {
   // Report Toki handler
   const handleReportToki = async (reason: string) => {
     if (!toki) return;
-    
+
     try {
       const success = await actions.reportToki(toki.id, reason);
       if (!success) {
@@ -909,7 +956,7 @@ export default function TokiDetailsScreen() {
       // Toki is now auto-hidden on backend, refresh feeds to update UI
       console.log('🔄 [TOKI DETAILS] Refreshing feeds after report...');
       await actions.loadTokis(); // Refresh discover feed
-      
+
       // Close modal and show success message
       Alert.alert(
         'Toki Reported',
@@ -932,7 +979,7 @@ export default function TokiDetailsScreen() {
 
   const handleRemoveParticipantFromModal = async (participantId: string) => {
     if (!toki?.id) return;
-    
+
     setIsRemovingParticipant(true);
     try {
       const response = await fetch(`${getBackendUrl()}/api/tokis/${toki.id}/participants/${participantId}`, {
@@ -953,7 +1000,7 @@ export default function TokiDetailsScreen() {
             attendees: Math.max(0, (prev.attendees || 0) - 1)
           };
         });
-        
+
         Toast.show({
           type: 'success',
           text1: 'Participant Removed',
@@ -986,7 +1033,7 @@ export default function TokiDetailsScreen() {
 
   const confirmRemoveParticipant = async () => {
     if (!toki || !participantToRemove) return;
-    
+
     console.log('🔴 User confirmed removal, calling API...');
     try {
       const success = await actions.removeParticipant(toki.id, participantToRemove.id);
@@ -1170,29 +1217,29 @@ export default function TokiDetailsScreen() {
       Alert.alert('Select connections', 'Pick at least one connection to invite.');
       return;
     }
-    
+
     // Filter out hidden users and participants from selected invitees
     const hiddenUserIds = new Set(
       inviteConnections
         .filter((c: any) => c.isHidden)
         .map((c: any) => c.user?.id || c.id)
     );
-    
+
     const participantUserIds = new Set(
       inviteConnections
         .filter((c: any) => c.isParticipant)
         .map((c: any) => c.user?.id || c.id)
     );
-    
-    const validInviteeIds = Array.from(selectedInviteeIds).filter(id => 
+
+    const validInviteeIds = Array.from(selectedInviteeIds).filter(id =>
       !hiddenUserIds.has(id) && !participantUserIds.has(id)
     );
-    
+
     if (validInviteeIds.length === 0) {
       Alert.alert('No valid connections', 'All selected users are either hidden from this toki or already joined.');
       return;
     }
-    
+
     try {
       setIsLoadingInvites(true);
       for (const userId of validInviteeIds) await actions.createInvite(toki.id, userId);
@@ -1456,7 +1503,7 @@ export default function TokiDetailsScreen() {
 
   return (
     <>
-      <MetaTags 
+      <MetaTags
         tokiData={toki ? {
           id: toki.id,
           title: toki.title,
@@ -1472,799 +1519,817 @@ export default function TokiDetailsScreen() {
       />
       <AppInstallPrompt currentUrl={getCurrentUrl()} />
       <SafeAreaView style={styles.container}>
-        <ScrollView style={{...styles.content,width: '100%', maxWidth: 1000, alignSelf: 'center'}} showsVerticalScrollIndicator={false}>
-        <TokiHeader
-          toki={{
-            id: toki.id,
-            image: toki.image,
-            category: toki.category
-          }}
-          fromEdit={fromEdit}
-          isLiked={isLiked}
-          isSaving={isSaving}
-          onSaveToggle={handleSaveToggle}
-          onShare={handleShareToki}
-          friendsAttending={toki?.friendsAttending}
-          onFriendsPress={() => setShowFriendsModal(true)}
-          onBack={() => {
-            // If coming from edit or create, go to home page instead of back to form
-            if (fromEdit || fromCreate) {
-              router.push('/(tabs)');
-            } else if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push('/(tabs)');
-            }
-          }}
-        />
+        <ScrollView style={{ ...styles.content, width: '100%', maxWidth: 1000, alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
+          <TokiHeader
+            toki={{
+              id: toki.id,
+              image: toki.image,
+              category: toki.category
+            }}
+            fromEdit={fromEdit}
+            isLiked={isLiked}
+            isSaving={isSaving}
+            onSaveToggle={handleSaveToggle}
+            onShare={handleShareToki}
+            friendsAttending={toki?.friendsAttending}
+            onFriendsPress={() => setShowFriendsModal(true)}
+            onBack={() => {
+              // If coming from edit or create, go to home page instead of back to form
+              if (fromEdit || fromCreate) {
+                router.push('/(tabs)');
+              } else if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push('/(tabs)');
+              }
+            }}
+          />
 
-        <InviteModal
-          visible={showInviteModal}
-          mode={modalMode}
-          connections={inviteConnections}
-          selectedIds={selectedInviteeIds}
-          search={inviteSearch}
-          onChangeSearch={setInviteSearch}
-          isLoading={isLoadingInvites}
-          activeInviteLink={activeInviteLink}
-          onCreateInviteLink={handleCreateInviteLink}
-          onRegenerateInviteLink={handleRegenerateInviteLink}
-          onCopyInviteLink={handleCopyInviteLink}
-          onToggleInvitee={toggleInvitee}
-          onUnhideUser={handleUnhideUser}
-          onClose={() => setShowInviteModal(false)}
-          onConfirm={handleInviteModalConfirm}
-          isHost={toki.isHostedByUser || false}
-        />
+          <InviteModal
+            visible={showInviteModal}
+            mode={modalMode}
+            connections={inviteConnections}
+            selectedIds={selectedInviteeIds}
+            search={inviteSearch}
+            onChangeSearch={setInviteSearch}
+            isLoading={isLoadingInvites}
+            activeInviteLink={activeInviteLink}
+            onCreateInviteLink={handleCreateInviteLink}
+            onRegenerateInviteLink={handleRegenerateInviteLink}
+            onCopyInviteLink={handleCopyInviteLink}
+            onToggleInvitee={toggleInvitee}
+            onUnhideUser={handleUnhideUser}
+            onClose={() => setShowInviteModal(false)}
+            onConfirm={handleInviteModalConfirm}
+            isHost={toki.isHostedByUser || false}
+          />
 
-        <ParticipantsModal
-          visible={showParticipantsModal}
-          participants={toki?.participants?.map(p => ({
-            id: p.id,
-            name: p.name,
-            avatar: p.avatar,
-            isHost: p.id === toki?.host?.id
-          })) || []}
-          search={participantsSearch}
-          onChangeSearch={setParticipantsSearch}
-          isLoading={false}
-          isHost={toki?.isHostedByUser || false}
-          onClose={() => setShowParticipantsModal(false)}
-          onRemoveParticipant={handleRemoveParticipantFromModal}
-        />
+          <ParticipantsModal
+            visible={showParticipantsModal}
+            participants={toki?.participants?.map(p => ({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar,
+              isHost: p.id === toki?.host?.id
+            })) || []}
+            search={participantsSearch}
+            onChangeSearch={setParticipantsSearch}
+            isLoading={false}
+            isHost={toki?.isHostedByUser || false}
+            onClose={() => setShowParticipantsModal(false)}
+            onRemoveParticipant={handleRemoveParticipantFromModal}
+          />
 
-        <FriendsGoingModal
-          visible={showFriendsModal}
-          friends={toki?.friendsAttending || []}
-          search={friendsSearch}
-          onChangeSearch={setFriendsSearch}
-          isLoading={false}
-          onClose={() => setShowFriendsModal(false)}
-        />
+          <FriendsGoingModal
+            visible={showFriendsModal}
+            friends={toki?.friendsAttending || []}
+            search={friendsSearch}
+            onChangeSearch={setFriendsSearch}
+            isLoading={false}
+            onClose={() => setShowFriendsModal(false)}
+          />
 
-        <View style={styles.detailsContainer}>
-          {/* Event Title and Badges */}
-          <View style={styles.eventHeaderSection}>
-            <View style={styles.eventTitleRow}>
-              <Text style={styles.eventTitle}>{toki.title}</Text>
-              <View style={styles.eventBadgesContainer}>
-                {toki.visibility === 'private' && (
-                  <View style={styles.eventPrivateBadge}>
-                    <Lock size={14} color="#8B5CF6" />
-                    <Text style={styles.eventPrivateBadgeText}>Private</Text>
-                  </View>
-                )}
-                {toki.isHostedByUser && hiddenCount > 0 && (
-                  <View style={styles.eventHiddenBadge}>
-                    <Text style={styles.eventHiddenBadgeText}>Hidden {hiddenCount}</Text>
-                  </View>
-                )}
-                <Text style={styles.eventDistance}>
-                  {toki.distance ? `${formatDistanceDisplay(toki.distance)} away` : ''}
+          <View style={styles.detailsContainer}>
+            {/* Event Title and Badges */}
+            <View style={styles.eventHeaderSection}>
+              <View style={styles.eventTitleRow}>
+                <Text style={styles.eventTitle}>{toki.title}</Text>
+                <View style={styles.eventBadgesContainer}>
+                  {toki.visibility === 'private' && (
+                    <View style={styles.eventPrivateBadge}>
+                      <Lock size={14} color="#8B5CF6" />
+                      <Text style={styles.eventPrivateBadgeText}>Private</Text>
+                    </View>
+                  )}
+                  {toki.isHostedByUser && hiddenCount > 0 && (
+                    <View style={styles.eventHiddenBadge}>
+                      <Text style={styles.eventHiddenBadgeText}>Hidden {hiddenCount}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.eventDistance}>
+                    {toki.distance ? `${formatDistanceDisplay(toki.distance)} away` : ''}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Event Info Section */}
+            <View style={styles.eventInfoSection}>
+              <TouchableOpacity
+                style={styles.eventInfoItem}
+                onPress={() => {
+                  if (toki.latitude && toki.longitude) {
+                    router.push({
+                      pathname: '/(tabs)/exMap',
+                      params: { highlightTokiId: toki.id }
+                    });
+                  } else {
+                    Toast.show({
+                      type: 'error',
+                      text1: 'Location not available',
+                      text2: 'Location coordinates are not available for this event',
+                      position: 'top',
+                      visibilityTime: 3000,
+                      topOffset: 60,
+                    });
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MapPin size={18} color="#B49AFF" />
+                <Text style={styles.eventInfoText}>{formatLocationDisplay(toki.location)}</Text>
+              </TouchableOpacity>
+              <View style={styles.eventInfoItem}>
+                <Clock size={18} color="#B49AFF" />
+                <Text style={styles.eventInfoText}>{formatTimeDisplay(toki.time, toki.scheduledTime)}</Text>
+              </View>
+              <View style={styles.eventInfoItem}>
+                <Users size={18} color="#B49AFF" />
+                <Text style={styles.eventInfoText}>
+                  {toki.attendees}/{toki.maxAttendees === null ? '∞' : toki.maxAttendees} people
+                </Text>
+              </View>
+              {toki.link && (
+                <View style={styles.eventInfoItem}>
+                  <Link size={18} color="#B49AFF" />
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(toki.link!)}
+                    style={styles.linkContainer}
+                  >
+                    <Text
+                      style={[styles.eventInfoText, styles.linkText]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {toki.link}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View style={styles.eventInfoItem}>
+                <Tag size={18} color="#B49AFF" />
+                <Text style={styles.eventInfoText}>
+                  {toki.isPaid ? 'Paid Event' : 'Free Event'}
                 </Text>
               </View>
             </View>
-          </View>
 
-          {/* Event Info Section */}
-          <View style={styles.eventInfoSection}>
-            <TouchableOpacity 
-              style={styles.eventInfoItem}
-              onPress={() => {
-                if (toki.latitude && toki.longitude) {
-                  router.push({
-                    pathname: '/(tabs)/exMap',
-                    params: { highlightTokiId: toki.id }
-                  });
-                } else {
-                  Toast.show({
-                    type: 'error',
-                    text1: 'Location not available',
-                    text2: 'Location coordinates are not available for this event',
-                    position: 'top',
-                    visibilityTime: 3000,
-                    topOffset: 60,
-                  });
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <MapPin size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>{formatLocationDisplay(toki.location)}</Text>
-            </TouchableOpacity>
-            <View style={styles.eventInfoItem}>
-              <Clock size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>{formatTimeDisplay(toki.time, toki.scheduledTime)}</Text>
-            </View>
-            <View style={styles.eventInfoItem}>
-              <Users size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>
-                {toki.attendees}/{toki.maxAttendees === null ? '∞' : toki.maxAttendees} people
-              </Text>
-            </View>
-            {toki.link && (
-              <View style={styles.eventInfoItem}>
-                <Link size={18} color="#B49AFF" />
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(toki.link!)}
-                  style={styles.linkContainer}
-                >
-                  <Text
-                    style={[styles.eventInfoText, styles.linkText]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {toki.link}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={styles.eventInfoItem}>
-              <Tag size={18} color="#B49AFF" />
-              <Text style={styles.eventInfoText}>
-                {toki.isPaid ? 'Paid Event' : 'Free Event'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Participants Section */}
-          {toki.participants && toki.participants.length > 0 && (
-            <View style={styles.participantsSection}>
-              <Text style={styles.sectionTitle}>Participants</Text>
-              <View style={styles.participantsList}>
-                {toki.participants.slice(0, MAX_PARTICIPANTS_DISPLAY).map((participant, index) => (
-                  <View key={participant.id} style={styles.participantItem}>
-                    {participant.avatar ? (
-                      <Image
-                        source={{ uri: participant.avatar }}
-                        style={styles.participantAvatar}
-                      />
-                    ) : (
-                      <View style={[styles.participantAvatar, styles.participantFallbackAvatar]}>
-                        <Text style={styles.participantFallbackInitials}>
-                          {getInitials(participant.name)}
+            {/* Participants Section */}
+            {toki.participants && toki.participants.length > 0 && (
+              <View style={styles.participantsSection}>
+                <Text style={styles.sectionTitle}>Participants</Text>
+                <View style={styles.participantsList}>
+                  {toki.participants.slice(0, MAX_PARTICIPANTS_DISPLAY).map((participant, index) => (
+                    <View key={participant.id} style={styles.participantItem}>
+                      {participant.avatar ? (
+                        <Image
+                          source={{ uri: participant.avatar }}
+                          style={styles.participantAvatar}
+                        />
+                      ) : (
+                        <View style={[styles.participantAvatar, styles.participantFallbackAvatar]}>
+                          <Text style={styles.participantFallbackInitials}>
+                            {getInitials(participant.name)}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.participantInfo}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (participant.id !== state.currentUser?.id) {
+                              router.push({
+                                pathname: '/user-profile/[userId]',
+                                params: { userId: participant.id }
+                              });
+                            }
+                          }}
+                          disabled={participant.id === state.currentUser?.id}
+                        >
+                          <Text style={[
+                            styles.participantName,
+                            participant.id !== state.currentUser?.id && { textDecorationLine: 'underline' }
+                          ]}>
+                            {participant.name || `Participant ${index + 1}`}
+                          </Text>
+                        </TouchableOpacity>
+                        <Text style={styles.participantStatus}>
+                          {participant.id === toki.host?.id ? 'Host' : 'Attendee'}
                         </Text>
                       </View>
-                    )}
-                    <View style={styles.participantInfo}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          if (participant.id !== state.currentUser?.id) {
-                            router.push({
-                              pathname: '/user-profile/[userId]',
-                              params: { userId: participant.id }
-                            });
-                          }
-                        }}
-                        disabled={participant.id === state.currentUser?.id}
-                      >
-                        <Text style={[
-                          styles.participantName,
-                          participant.id !== state.currentUser?.id && { textDecorationLine: 'underline' }
-                        ]}>
-                          {participant.name || `Participant ${index + 1}`}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={styles.participantStatus}>
-                        {participant.id === toki.host?.id ? 'Host' : 'Attendee'}
-                      </Text>
+                      {/* Remove button for hosts (only show for non-host participants) */}
+                      {(() => {
+                        const shouldShow = toki.isHostedByUser && participant.id !== toki.host?.id;
+                        return shouldShow;
+                      })() && (
+                          <TouchableOpacity
+                            style={styles.removeParticipantButton}
+                            onPress={() => {
+                              handleRemoveParticipant(participant.id, participant.name);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <X size={16} color="#EF4444" />
+                          </TouchableOpacity>
+                        )}
                     </View>
-                    {/* Remove button for hosts (only show for non-host participants) */}
-                    {(() => {
-                      const shouldShow = toki.isHostedByUser && participant.id !== toki.host?.id;
-                      return shouldShow;
-                    })() && (
-                      <TouchableOpacity
-                        style={styles.removeParticipantButton}
-                        onPress={() => {
-                          handleRemoveParticipant(participant.id, participant.name);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <X size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    )}
+                  ))}
+
+                  {toki.participants.length > MAX_PARTICIPANTS_DISPLAY && (
+                    <TouchableOpacity
+                      style={styles.showMoreButton}
+                      onPress={handleOpenParticipantsModal}
+                    >
+                      <Text style={styles.showMoreText}>
+                        View more ({toki.participants.length - MAX_PARTICIPANTS_DISPLAY} more)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
+            <View style={styles.tagsSection}>
+              {toki.tags.map((tag) => (
+                <View key={tag} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.descriptionSection}>
+              <Text style={styles.sectionTitle}>About this Toki</Text>
+              <Text style={styles.description}>{toki.description}</Text>
+            </View>
+
+            <View style={styles.hostSection}>
+              <Text style={styles.sectionTitle}>
+                {toki.isHostedByUser ? 'You are hosting' : 'Hosted by'}
+              </Text>
+              <View style={styles.hostInfo}>
+                {toki.host.avatar ? (
+                  <Image source={{ uri: toki.host.avatar }} style={styles.hostAvatar} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.hostAvatar, styles.fallbackAvatar]}>
+                    <Text style={styles.fallbackInitials}>
+                      {getInitials(toki.host.name)}
+                    </Text>
                   </View>
-                ))}
-                
-                {toki.participants.length > MAX_PARTICIPANTS_DISPLAY && (
+                )}
+                <View style={styles.hostDetails}>
                   <TouchableOpacity
-                    style={styles.showMoreButton}
-                    onPress={handleOpenParticipantsModal}
+                    onPress={() => {
+                      if (!toki.isHostedByUser) {
+                        router.push({
+                          pathname: '/user-profile/[userId]',
+                          params: { userId: toki.host.id }
+                        });
+                      }
+                    }}
+                    disabled={toki.isHostedByUser}
                   >
-                    <Text style={styles.showMoreText}>
-                      View more ({toki.participants.length - MAX_PARTICIPANTS_DISPLAY} more)
+                    <Text style={[
+                      styles.hostName,
+                      !toki.isHostedByUser && { textDecorationLine: 'underline' }
+                    ]}>
+                      {toki.isHostedByUser ? 'You' : toki.host.name}
                     </Text>
                   </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
-
-          <View style={styles.tagsSection}>
-            {toki.tags.map((tag) => (
-              <View key={tag} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.descriptionSection}>
-            <Text style={styles.sectionTitle}>About this Toki</Text>
-            <Text style={styles.description}>{toki.description}</Text>
-          </View>
-
-          <View style={styles.hostSection}>
-            <Text style={styles.sectionTitle}>
-              {toki.isHostedByUser ? 'You are hosting' : 'Hosted by'}
-            </Text>
-            <View style={styles.hostInfo}>
-              {toki.host.avatar ? (
-                <Image source={{ uri: toki.host.avatar }} style={styles.hostAvatar} resizeMode="cover" />
-              ) : (
-                <View style={[styles.hostAvatar, styles.fallbackAvatar]}>
-                  <Text style={styles.fallbackInitials}>
-                    {getInitials(toki.host.name)}
-                  </Text>
+                  {toki.host.bio && (
+                    <Text style={styles.hostBio}>{toki.host.bio}</Text>
+                  )}
                 </View>
-              )}
-              <View style={styles.hostDetails}>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (!toki.isHostedByUser) {
-                      router.push({
-                        pathname: '/user-profile/[userId]',
-                        params: { userId: toki.host.id }
-                      });
-                    }
-                  }}
-                  disabled={toki.isHostedByUser}
-                >
-                  <Text style={[
-                    styles.hostName,
-                    !toki.isHostedByUser && { textDecorationLine: 'underline' }
-                  ]}>
-                    {toki.isHostedByUser ? 'You' : toki.host.name}
-                  </Text>
-                </TouchableOpacity>
-                {toki.host.bio && (
-                  <Text style={styles.hostBio}>{toki.host.bio}</Text>
-                )}
-              </View>
 
-              {/* Chat with host button - only show if not hosting yourself */}
-              {!toki.isHostedByUser && (
-                <TouchableOpacity
-                  style={styles.hostChatButton}
-                  onPress={async () => {
-                    try {
-                      // Get the host ID from the Toki data
-                      const hostId = toki.host.id || toki.hostId;
-                      if (hostId) {
-                        router.push({
-                          pathname: '/chat',
-                          params: {
-                            otherUserId: hostId,
-                            otherUserName: toki.host.name,
-                            isGroup: 'false'
-                          }
-                        });
-                      } else {
-                        Alert.alert('Error', 'Unable to identify host for chat.');
-                      }
-                    } catch (error) {
-                      console.error('Error starting conversation with host:', error);
-                      Alert.alert('Error', 'Failed to open chat with host. Please try again.');
-                    }
-                  }}
-                >
-                  <Text style={styles.hostChatButtonText}>Chat</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.actionsSection}>
-            {/* Invite button - show for hosts or attendees of public tokis */}
-            {(() => {
-              const isHost = toki.isHostedByUser;
-              const isPublicAttendee = toki.visibility === 'public' && toki.joinStatus === 'approved';
-              const canInvite = isHost || isPublicAttendee;
-              
-              
-              return canInvite;
-            })() && (
-              <TouchableOpacity style={styles.inviteButton} onPress={handleInvitePress}>
-                <UserPlus size={20} color="#B49AFF" />
-                <Text style={styles.inviteText}>Invite</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Hide button (host-only) */}
-            {toki.isHostedByUser && (
-              <TouchableOpacity style={styles.hideButton} onPress={async () => {
-                try {
-                  setIsLoadingInvites(true);
-                  setModalMode('hide');
-                  const { connections } = await actions.getConnectionsForToki(toki.id);
-                  
-                  // Build participant set from the currently loaded toki data
-                  const participantIds = new Set((toki.participants || []).map((p: any) => p.user?.id || p.id));
-                  
-                  // Mark participants in connections and filter them out for hiding
-                  const connectionsWithStatus = (connections || []).map((conn: any) => ({
-                    ...conn,
-                    isParticipant: participantIds.has(conn.user?.id || conn.id),
-                  }));
-                  
-                  setInviteConnections(connectionsWithStatus);
-                  setSelectedInviteeIds(new Set());
-                  setInviteSearch('');
-                  const list = await actions.listHiddenUsers(toki.id);
-                  setHiddenCount((list || []).length);
-                  setShowInviteModal(true);
-                } catch (e) {
-                  Alert.alert('Error', 'Failed to load connections');
-                } finally {
-                  setIsLoadingInvites(false);
-                }
-              }}>
-                <Lock size={20} color="#EF4444" />
-                <Text style={styles.hideText}>Hide</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.chatButton,
-                !canAccessChat() && styles.chatButtonDisabled
-              ]}
-              onPress={handleChatPress}
-            >
-              <MessageCircle size={20} color={canAccessChat() ? "#666666" : "#9CA3AF"} />
-              <Text style={[
-                styles.chatText,
-                !canAccessChat() && styles.chatTextDisabled
-              ]}>
-                {canAccessChat() ? 'Join Chat' : 'Chat Locked'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Report Button - Only show for Tokis not hosted by current user */}
-          {!toki.isHostedByUser && (
-            <View style={styles.reportSection}>
-              <TouchableOpacity
-                style={styles.reportButton}
-                onPress={() => setShowReportModal(true)}
-              >
-                <Flag size={20} color="#EF4444" />
-                <Text style={styles.reportText}>Report Toki</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Host Actions - Only show for Tokis hosted by current user */}
-          {toki.isHostedByUser && (
-            <View style={styles.hostActionsSection}>
-              {!showDeleteConfirm ? (
-                <>
-                  <TouchableOpacity style={styles.editButton} onPress={handleEditPress}>
-                    <Edit size={20} color="#4DC4AA" />
-                    <Text style={styles.editText}>Edit</Text>
-                  </TouchableOpacity>
-
-
+                {/* Chat with host button - only show if not hosting yourself */}
+                {!toki.isHostedByUser && (
                   <TouchableOpacity
-                    style={styles.completeButton}
-                    onPress={() => {
-                      try {
-                        const otherParticipantsCount = Array.isArray(toki.participants)
-                          ? toki.participants.length
-                          : Math.max((toki.attendees || 0) - 1, 0);
-                        const isHostOnlyEvent = !!toki.isHostedByUser && otherParticipantsCount === 0;
-                        if (isHostOnlyEvent) {
-                          setShowHostOnlyConfirm(true);
-                          return;
-                        }
-                      } catch {}
-                      handleCompleteEvent();
-                    }}
-                  >
-                    <CheckCircle size={20} color="#10B981" />
-                    <Text style={styles.completeText}>Complete</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePress}>
-                    <Trash2 size={20} color="#EF4444" />
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <TouchableOpacity style={styles.cancelButton} onPress={handleCancelDelete}>
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.confirmDeleteButton} onPress={handleConfirmDelete}>
-                    <Trash2 size={20} color="#FFFFFF" />
-                    <Text style={styles.confirmDeleteText}>Confirm Delete</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Host-only confirmation modal */}
-      <Modal
-        transparent
-        visible={showHostOnlyConfirm}
-        animationType="fade"
-        onRequestClose={() => setShowHostOnlyConfirm(false)}
-      >
-        <View style={styles.pickerBackdrop}>
-          <View style={styles.confirmModalContainer}>
-            <Text style={styles.confirmTitle}>Complete event?</Text>
-            <Text style={styles.confirmSubtitle}>
-              Only you are listed as a participant. Are you sure you want to mark this Toki as completed?
-            </Text>
-            <View style={styles.confirmActions}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowHostOnlyConfirm(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmButton}
-                onPress={() => {
-                  setShowHostOnlyConfirm(false);
-                  handleCompleteEvent();
-                }}
-              >
-                <Text style={styles.confirmButtonText}>Complete Anyway</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.joinButton,
-            {
-              backgroundColor: getJoinButtonColor(),
-              opacity: isJoining ? 0.6 : 1
-            }
-          ]}
-          onPress={handleJoinRequest}
-          disabled={isJoining}
-        >
-          <Text style={styles.joinButtonText}>
-            {isJoining ? 'Joining...' : getJoinButtonText()}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <RatingPrompt
-        visible={showRatingPrompt}
-        tokiId={toki?.id || ''}
-        tokiTitle={toki?.title || ''}
-        participants={participantsForRating}
-        onClose={() => setShowRatingPrompt(false)}
-        onRatingsSubmitted={completeEventAfterRatings}
-        onNavigateToExplore={() => router.push('/(tabs)')}
-      />
-      
-      {/* Remove Participant Confirmation Modal */}
-      <Modal
-        visible={showRemoveConfirm}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelRemoveParticipant}
-      >
-        <View style={styles.removeModalOverlay}>
-          <View style={styles.removeConfirmModal}>
-            <Text style={styles.removeConfirmTitle}>Remove Participant</Text>
-            <Text style={styles.removeConfirmMessage}>
-              Are you sure you want to remove {participantToRemove?.name} from this event?
-            </Text>
-            <View style={styles.removeConfirmButtons}>
-              <TouchableOpacity
-                style={[styles.removeConfirmButton, styles.removeCancelButton]}
-                onPress={cancelRemoveParticipant}
-              >
-                <Text style={styles.removeCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.removeConfirmButton, styles.removeConfirmRemoveButton]}
-                onPress={confirmRemoveParticipant}
-              >
-                <Text style={styles.removeConfirmRemoveButtonText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      
-      <Toast 
-        config={{
-          success: (props) => (
-            <View style={{
-              backgroundColor: '#10B981',
-              borderRadius: 8,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              marginHorizontal: 20,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 4,
-              elevation: 5,
-            }}>
-              <Text style={{
-                fontSize: 16,
-                fontWeight: 'bold',
-                color: '#FFFFFF',
-                marginBottom: 4,
-              }}>
-                {props.text1}
-              </Text>
-              <Text style={{
-                fontSize: 14,
-                color: '#FFFFFF',
-              }}>
-                {props.text2}
-              </Text>
-            </View>
-          ),
-          error: (props) => (
-            <View style={{
-              backgroundColor: '#EF4444',
-              borderRadius: 8,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              marginHorizontal: 20,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 4,
-              elevation: 5,
-            }}>
-              <Text style={{
-                fontSize: 16,
-                fontWeight: 'bold',
-                color: '#FFFFFF',
-                marginBottom: 4,
-              }}>
-                {props.text1}
-              </Text>
-              <Text style={{
-                fontSize: 14,
-                color: '#FFFFFF',
-              }}>
-                {props.text2}
-              </Text>
-            </View>
-          ),
-        }}
-      />
-
-      {/* Custom Share Modal */}
-      <Modal
-        visible={showShareModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowShareModal(false)}
-      >
-        <View style={styles.shareModalOverlay}>
-          <View style={styles.shareModal}>
-            <View style={styles.shareModalHeader}>
-              <Text style={styles.shareModalTitle}>Share Event</Text>
-              <TouchableOpacity 
-                style={styles.shareModalClose}
-                onPress={() => setShowShareModal(false)}
-              >
-                <X size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.shareModalContent}>
-              <View style={styles.eventPreview}>
-                <Text style={styles.shareEventTitle}>"{toki?.title}"</Text>
-                <View style={styles.eventDetails}>
-                  <View style={styles.eventDetailRow}>
-                    <MapPin size={14} color="#8B5CF6" />
-                    <Text style={styles.eventDetailText} numberOfLines={1}>{toki?.location}</Text>
-                  </View>
-                  <View style={styles.eventDetailRow}>
-                    <Clock size={14} color="#8B5CF6" />
-                    <Text style={styles.eventDetailText}>{toki?.timeSlot || 'TBD'}</Text>
-                  </View>
-                </View>
-              </View>
-              
-              {/* URL Display */}
-              <View style={styles.urlContainer}>
-                <View style={styles.urlHeader}>
-                  <Text style={styles.urlLabel}>🔗 Share Link</Text>
-                  <TouchableOpacity 
-                    style={styles.copyUrlButton}
+                    style={styles.hostChatButton}
                     onPress={async () => {
-                      await Clipboard.setStringAsync(shareUrl);
-                      Toast.show({
-                        type: 'success',
-                        text1: 'Link copied!',
-                        text2: 'Ready to paste anywhere'
-                      });
+                      try {
+                        // Get the host ID from the Toki data
+                        const hostId = toki.host.id || toki.hostId;
+                        if (hostId) {
+                          router.push({
+                            pathname: '/chat',
+                            params: {
+                              otherUserId: hostId,
+                              otherUserName: toki.host.name,
+                              isGroup: 'false'
+                            }
+                          });
+                        } else {
+                          Alert.alert('Error', 'Unable to identify host for chat.');
+                        }
+                      } catch (error) {
+                        console.error('Error starting conversation with host:', error);
+                        Alert.alert('Error', 'Failed to open chat with host. Please try again.');
+                      }
                     }}
                   >
-                    <Link size={16} color="#FFFFFF" />
+                    <Text style={styles.hostChatButtonText}>Chat</Text>
                   </TouchableOpacity>
-                </View>
-                <View style={styles.urlBox}>
-                  <Text style={styles.urlText} numberOfLines={2}>{shareUrl}</Text>
-                </View>
+                )}
               </View>
+            </View>
 
-              {/* Editable Message */}
-              <View style={styles.messageContainer}>
-                <View style={styles.messageHeader}>
-                  <Text style={styles.messageLabel}>✏️ Your Message</Text>
-                  <Text style={styles.messageHint}>Customize how you share this event</Text>
-                </View>
-                <TextInput
-                  style={styles.messageInput}
-                  value={editableMessage}
-                  onChangeText={setEditableMessage}
-                  multiline={true}
-                  numberOfLines={3}
-                  placeholder="Write your own message about this event..."
-                  placeholderTextColor="#999"
-                />
+            <View style={styles.actionsSection}>
+              {/* Invite button - show for hosts or attendees of public tokis */}
+              {(() => {
+                const isHost = toki.isHostedByUser;
+                const isPublicAttendee = toki.visibility === 'public' && toki.joinStatus === 'approved';
+                const canInvite = isHost || isPublicAttendee;
+
+
+                return canInvite;
+              })() && (
+                  <TouchableOpacity style={styles.inviteButton} onPress={handleInvitePress}>
+                    <UserPlus size={20} color="#B49AFF" />
+                    <Text style={styles.inviteText}>Invite</Text>
+                  </TouchableOpacity>
+                )}
+
+              {/* Hide button (host-only) */}
+              {toki.isHostedByUser && (
+                <TouchableOpacity style={styles.hideButton} onPress={async () => {
+                  try {
+                    setIsLoadingInvites(true);
+                    setModalMode('hide');
+                    const { connections } = await actions.getConnectionsForToki(toki.id);
+
+                    // Build participant set from the currently loaded toki data
+                    const participantIds = new Set((toki.participants || []).map((p: any) => p.user?.id || p.id));
+
+                    // Mark participants in connections and filter them out for hiding
+                    const connectionsWithStatus = (connections || []).map((conn: any) => ({
+                      ...conn,
+                      isParticipant: participantIds.has(conn.user?.id || conn.id),
+                    }));
+
+                    setInviteConnections(connectionsWithStatus);
+                    setSelectedInviteeIds(new Set());
+                    setInviteSearch('');
+                    const list = await actions.listHiddenUsers(toki.id);
+                    setHiddenCount((list || []).length);
+                    setShowInviteModal(true);
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to load connections');
+                  } finally {
+                    setIsLoadingInvites(false);
+                  }
+                }}>
+                  <Lock size={20} color="#EF4444" />
+                  <Text style={styles.hideText}>Hide</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.chatButton,
+                  !canAccessChat() && styles.chatButtonDisabled
+                ]}
+                onPress={handleChatPress}
+              >
+                <MessageCircle size={20} color={canAccessChat() ? "#666666" : "#9CA3AF"} />
+                <Text style={[
+                  styles.chatText,
+                  !canAccessChat() && styles.chatTextDisabled
+                ]}>
+                  {canAccessChat() ? 'Join Chat' : 'Chat Locked'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Mute Notifications Button */}
+            <View style={styles.muteSection}>
+              <TouchableOpacity
+                style={[styles.muteButton, isMuteLoading && { opacity: 0.6 }]}
+                onPress={handleMuteToggle}
+                disabled={isMuteLoading}
+              >
+                {isMuted ? (
+                  <BellOff size={20} color="#666666" />
+                ) : (
+                  <Bell size={20} color="#666666" />
+                )}
+                <Text style={styles.muteText}>
+                  {isMuteLoading ? 'Updating...' : (isMuted ? 'Unmute Notifications' : 'Mute Notifications')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Report Button - Only show for Tokis not hosted by current user */}
+            {!toki.isHostedByUser && (
+              <View style={styles.reportSection}>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={() => setShowReportModal(true)}
+                >
+                  <Flag size={20} color="#EF4444" />
+                  <Text style={styles.reportText}>Report Toki</Text>
+                </TouchableOpacity>
               </View>
-              
-              <View style={styles.shareSection}>
-                <Text style={styles.shareSectionTitle}>🚀 Share to Social Media</Text>
-                <View style={styles.shareButtonsGrid}>
-                  <TouchableOpacity 
-                    style={[styles.shareButton, styles.twitterButton]}
-                    onPress={() => {
-                      const text = encodeURIComponent(editableMessage);
-                      const url = encodeURIComponent(shareUrl);
-                      const shareUrl_full = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
-                        window.open(shareUrl_full, '_blank');
-                      } else {
-                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Twitter:', err));
-                      }
-                      setShowShareModal(false);
-                    }}
-                  >
-                    <Text style={[styles.shareButtonIcon, { color: '#1DA1F2' }]}>🐦</Text>
-                    <Text style={styles.shareButtonText}>Twitter</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.shareButton, styles.facebookButton]}
-                    onPress={() => {
-                      const url = encodeURIComponent(shareUrl);
-                      const shareUrl_full = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
-                        window.open(shareUrl_full, '_blank');
-                      } else {
-                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Facebook:', err));
-                      }
-                      setShowShareModal(false);
-                    }}
-                  >
-                    <Text style={[styles.shareButtonIcon, { color: '#1877F2' }]}>📘</Text>
-                    <Text style={styles.shareButtonText}>Facebook</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.shareButton, styles.linkedinButton]}
-                    onPress={() => {
-                      const url = encodeURIComponent(shareUrl);
-                      const title = encodeURIComponent(toki?.title || '');
-                      const summary = encodeURIComponent(editableMessage);
-                      const shareUrl_full = `https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
-                        window.open(shareUrl_full, '_blank');
-                      } else {
-                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open LinkedIn:', err));
-                      }
-                      setShowShareModal(false);
-                    }}
-                  >
-                    <Text style={[styles.shareButtonIcon, { color: '#0077B5' }]}>💼</Text>
-                    <Text style={styles.shareButtonText}>LinkedIn</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.shareButton, styles.whatsappButton]}
-                    onPress={() => {
-                      const text = encodeURIComponent(`${editableMessage}\n\n${shareUrl}`);
-                      const shareUrl_full = `https://wa.me/?text=${text}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
-                        window.open(shareUrl_full, '_blank');
-                      } else {
-                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open WhatsApp:', err));
-                      }
-                      setShowShareModal(false);
-                    }}
-                  >
-                    <Text style={[styles.shareButtonIcon, { color: '#25D366' }]}>💬</Text>
-                    <Text style={styles.shareButtonText}>WhatsApp</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.shareButton, styles.telegramButton]}
-                    onPress={() => {
-                      const text = encodeURIComponent(editableMessage);
-                      const url = encodeURIComponent(shareUrl);
-                      const shareUrl_full = `https://t.me/share/url?url=${url}&text=${text}`;
-                      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
-                        window.open(shareUrl_full, '_blank');
-                      } else {
-                        Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Telegram:', err));
-                      }
-                      setShowShareModal(false);
-                    }}
-                  >
-                    <Text style={[styles.shareButtonIcon, { color: '#0088CC' }]}>✈️</Text>
-                    <Text style={styles.shareButtonText}>Telegram</Text>
-                  </TouchableOpacity>
-                  
-                </View>
+            )}
+
+            {/* Host Actions - Only show for Tokis hosted by current user */}
+            {toki.isHostedByUser && (
+              <View style={styles.hostActionsSection}>
+                {!showDeleteConfirm ? (
+                  <>
+                    <TouchableOpacity style={styles.editButton} onPress={handleEditPress}>
+                      <Edit size={20} color="#4DC4AA" />
+                      <Text style={styles.editText}>Edit</Text>
+                    </TouchableOpacity>
+
+
+                    <TouchableOpacity
+                      style={styles.completeButton}
+                      onPress={() => {
+                        try {
+                          const otherParticipantsCount = Array.isArray(toki.participants)
+                            ? toki.participants.length
+                            : Math.max((toki.attendees || 0) - 1, 0);
+                          const isHostOnlyEvent = !!toki.isHostedByUser && otherParticipantsCount === 0;
+                          if (isHostOnlyEvent) {
+                            setShowHostOnlyConfirm(true);
+                            return;
+                          }
+                        } catch { }
+                        handleCompleteEvent();
+                      }}
+                    >
+                      <CheckCircle size={20} color="#10B981" />
+                      <Text style={styles.completeText}>Complete</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePress}>
+                      <Trash2 size={20} color="#EF4444" />
+                      <Text style={styles.deleteText}>Delete</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity style={styles.cancelButton} onPress={handleCancelDelete}>
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.confirmDeleteButton} onPress={handleConfirmDelete}>
+                      <Trash2 size={20} color="#FFFFFF" />
+                      <Text style={styles.confirmDeleteText}>Confirm Delete</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
-              
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Host-only confirmation modal */}
+        <Modal
+          transparent
+          visible={showHostOnlyConfirm}
+          animationType="fade"
+          onRequestClose={() => setShowHostOnlyConfirm(false)}
+        >
+          <View style={styles.pickerBackdrop}>
+            <View style={styles.confirmModalContainer}>
+              <Text style={styles.confirmTitle}>Complete event?</Text>
+              <Text style={styles.confirmSubtitle}>
+                Only you are listed as a participant. Are you sure you want to mark this Toki as completed?
+              </Text>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowHostOnlyConfirm(false)}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={() => {
+                    setShowHostOnlyConfirm(false);
+                    handleCompleteEvent();
+                  }}
+                >
+                  <Text style={styles.confirmButtonText}>Complete Anyway</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Report Modal */}
-      <ReportModal
-        visible={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        onSubmit={handleReportToki}
-        title="Report Toki"
-        subtitle="Please let us know why this Toki is inappropriate. This helps us maintain a safe community."
-        contentType="Toki"
-      />
-      <ConfirmModal
-        visible={showCancelRequestModal}
-        title="Request Pending"
-        message="Your join request is waiting for host approval."
-        icon="clock"
-        confirmLabel="Cancel Request"
-        cancelLabel="Keep Waiting"
-        confirmStyle="destructive"
-        onConfirm={handleCancelRequest}
-        onCancel={() => setShowCancelRequestModal(false)}
-      />
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[
+              styles.joinButton,
+              {
+                backgroundColor: getJoinButtonColor(),
+                opacity: isJoining ? 0.6 : 1
+              }
+            ]}
+            onPress={handleJoinRequest}
+            disabled={isJoining}
+          >
+            <Text style={styles.joinButtonText}>
+              {isJoining ? 'Joining...' : getJoinButtonText()}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <RatingPrompt
+          visible={showRatingPrompt}
+          tokiId={toki?.id || ''}
+          tokiTitle={toki?.title || ''}
+          participants={participantsForRating}
+          onClose={() => setShowRatingPrompt(false)}
+          onRatingsSubmitted={completeEventAfterRatings}
+          onNavigateToExplore={() => router.push('/(tabs)')}
+        />
+
+        {/* Remove Participant Confirmation Modal */}
+        <Modal
+          visible={showRemoveConfirm}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={cancelRemoveParticipant}
+        >
+          <View style={styles.removeModalOverlay}>
+            <View style={styles.removeConfirmModal}>
+              <Text style={styles.removeConfirmTitle}>Remove Participant</Text>
+              <Text style={styles.removeConfirmMessage}>
+                Are you sure you want to remove {participantToRemove?.name} from this event?
+              </Text>
+              <View style={styles.removeConfirmButtons}>
+                <TouchableOpacity
+                  style={[styles.removeConfirmButton, styles.removeCancelButton]}
+                  onPress={cancelRemoveParticipant}
+                >
+                  <Text style={styles.removeCancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.removeConfirmButton, styles.removeConfirmRemoveButton]}
+                  onPress={confirmRemoveParticipant}
+                >
+                  <Text style={styles.removeConfirmRemoveButtonText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Toast
+          config={{
+            success: (props) => (
+              <View style={{
+                backgroundColor: '#10B981',
+                borderRadius: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                marginHorizontal: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 5,
+              }}>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  color: '#FFFFFF',
+                  marginBottom: 4,
+                }}>
+                  {props.text1}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: '#FFFFFF',
+                }}>
+                  {props.text2}
+                </Text>
+              </View>
+            ),
+            error: (props) => (
+              <View style={{
+                backgroundColor: '#EF4444',
+                borderRadius: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                marginHorizontal: 20,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 5,
+              }}>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  color: '#FFFFFF',
+                  marginBottom: 4,
+                }}>
+                  {props.text1}
+                </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: '#FFFFFF',
+                }}>
+                  {props.text2}
+                </Text>
+              </View>
+            ),
+          }}
+        />
+
+        {/* Custom Share Modal */}
+        <Modal
+          visible={showShareModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowShareModal(false)}
+        >
+          <View style={styles.shareModalOverlay}>
+            <View style={styles.shareModal}>
+              <View style={styles.shareModalHeader}>
+                <Text style={styles.shareModalTitle}>Share Event</Text>
+                <TouchableOpacity
+                  style={styles.shareModalClose}
+                  onPress={() => setShowShareModal(false)}
+                >
+                  <X size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.shareModalContent}>
+                <View style={styles.eventPreview}>
+                  <Text style={styles.shareEventTitle}>"{toki?.title}"</Text>
+                  <View style={styles.eventDetails}>
+                    <View style={styles.eventDetailRow}>
+                      <MapPin size={14} color="#8B5CF6" />
+                      <Text style={styles.eventDetailText} numberOfLines={1}>{toki?.location}</Text>
+                    </View>
+                    <View style={styles.eventDetailRow}>
+                      <Clock size={14} color="#8B5CF6" />
+                      <Text style={styles.eventDetailText}>{toki?.timeSlot || 'TBD'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* URL Display */}
+                <View style={styles.urlContainer}>
+                  <View style={styles.urlHeader}>
+                    <Text style={styles.urlLabel}>🔗 Share Link</Text>
+                    <TouchableOpacity
+                      style={styles.copyUrlButton}
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(shareUrl);
+                        Toast.show({
+                          type: 'success',
+                          text1: 'Link copied!',
+                          text2: 'Ready to paste anywhere'
+                        });
+                      }}
+                    >
+                      <Link size={16} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.urlBox}>
+                    <Text style={styles.urlText} numberOfLines={2}>{shareUrl}</Text>
+                  </View>
+                </View>
+
+                {/* Editable Message */}
+                <View style={styles.messageContainer}>
+                  <View style={styles.messageHeader}>
+                    <Text style={styles.messageLabel}>✏️ Your Message</Text>
+                    <Text style={styles.messageHint}>Customize how you share this event</Text>
+                  </View>
+                  <TextInput
+                    style={styles.messageInput}
+                    value={editableMessage}
+                    onChangeText={setEditableMessage}
+                    multiline={true}
+                    numberOfLines={3}
+                    placeholder="Write your own message about this event..."
+                    placeholderTextColor="#999"
+                  />
+                </View>
+
+                <View style={styles.shareSection}>
+                  <Text style={styles.shareSectionTitle}>🚀 Share to Social Media</Text>
+                  <View style={styles.shareButtonsGrid}>
+                    <TouchableOpacity
+                      style={[styles.shareButton, styles.twitterButton]}
+                      onPress={() => {
+                        const text = encodeURIComponent(editableMessage);
+                        const url = encodeURIComponent(shareUrl);
+                        const shareUrl_full = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                          window.open(shareUrl_full, '_blank');
+                        } else {
+                          Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Twitter:', err));
+                        }
+                        setShowShareModal(false);
+                      }}
+                    >
+                      <Text style={[styles.shareButtonIcon, { color: '#1DA1F2' }]}>🐦</Text>
+                      <Text style={styles.shareButtonText}>Twitter</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.shareButton, styles.facebookButton]}
+                      onPress={() => {
+                        const url = encodeURIComponent(shareUrl);
+                        const shareUrl_full = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                          window.open(shareUrl_full, '_blank');
+                        } else {
+                          Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Facebook:', err));
+                        }
+                        setShowShareModal(false);
+                      }}
+                    >
+                      <Text style={[styles.shareButtonIcon, { color: '#1877F2' }]}>📘</Text>
+                      <Text style={styles.shareButtonText}>Facebook</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.shareButton, styles.linkedinButton]}
+                      onPress={() => {
+                        const url = encodeURIComponent(shareUrl);
+                        const title = encodeURIComponent(toki?.title || '');
+                        const summary = encodeURIComponent(editableMessage);
+                        const shareUrl_full = `https://www.linkedin.com/sharing/share-offsite/?url=${url}&title=${title}&summary=${summary}`;
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                          window.open(shareUrl_full, '_blank');
+                        } else {
+                          Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open LinkedIn:', err));
+                        }
+                        setShowShareModal(false);
+                      }}
+                    >
+                      <Text style={[styles.shareButtonIcon, { color: '#0077B5' }]}>💼</Text>
+                      <Text style={styles.shareButtonText}>LinkedIn</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.shareButton, styles.whatsappButton]}
+                      onPress={() => {
+                        const text = encodeURIComponent(`${editableMessage}\n\n${shareUrl}`);
+                        const shareUrl_full = `https://wa.me/?text=${text}`;
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                          window.open(shareUrl_full, '_blank');
+                        } else {
+                          Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open WhatsApp:', err));
+                        }
+                        setShowShareModal(false);
+                      }}
+                    >
+                      <Text style={[styles.shareButtonIcon, { color: '#25D366' }]}>💬</Text>
+                      <Text style={styles.shareButtonText}>WhatsApp</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.shareButton, styles.telegramButton]}
+                      onPress={() => {
+                        const text = encodeURIComponent(editableMessage);
+                        const url = encodeURIComponent(shareUrl);
+                        const shareUrl_full = `https://t.me/share/url?url=${url}&text=${text}`;
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.open) {
+                          window.open(shareUrl_full, '_blank');
+                        } else {
+                          Linking.openURL(shareUrl_full).catch(err => console.error('Failed to open Telegram:', err));
+                        }
+                        setShowShareModal(false);
+                      }}
+                    >
+                      <Text style={[styles.shareButtonIcon, { color: '#0088CC' }]}>✈️</Text>
+                      <Text style={styles.shareButtonText}>Telegram</Text>
+                    </TouchableOpacity>
+
+                  </View>
+                </View>
+
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Report Modal */}
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          onSubmit={handleReportToki}
+          title="Report Toki"
+          subtitle="Please let us know why this Toki is inappropriate. This helps us maintain a safe community."
+          contentType="Toki"
+        />
+        <ConfirmModal
+          visible={showCancelRequestModal}
+          title="Request Pending"
+          message="Your join request is waiting for host approval."
+          icon="clock"
+          confirmLabel="Cancel Request"
+          cancelLabel="Keep Waiting"
+          confirmStyle="destructive"
+          onConfirm={handleCancelRequest}
+          onCancel={() => setShowCancelRequestModal(false)}
+        />
       </SafeAreaView>
     </>
   );
@@ -2782,6 +2847,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EF4444',
   },
+  muteSection: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  muteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  muteText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#666666',
+  },
   reportSection: {
     padding: 16,
     borderTopWidth: 1,
@@ -3152,7 +3236,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  
+
   // Remove Participant Confirmation Modal Styles
   removeModalOverlay: {
     flex: 1,
@@ -3216,191 +3300,191 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
+  },
+
+  // Share Modal Styles
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '95%',
+    maxWidth: 800,
+    maxHeight: '85%',
+    alignSelf: 'center',
+  },
+  shareModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  shareModalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1C1C1C',
+  },
+  shareModalClose: {
+    padding: 4,
+  },
+  shareModalContent: {
+    gap: 20,
+  },
+  eventPreview: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#8B5CF6',
+  },
+  shareEventTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#1C1C1C',
+    marginBottom: 8,
+  },
+  eventDetails: {
+    gap: 6,
+  },
+  eventDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  eventDetailText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    flex: 1,
+  },
+  urlContainer: {
+    gap: 12,
+  },
+  urlHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  urlLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+  },
+  urlBox: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  urlText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+  },
+  copyUrlButton: {
+    padding: 8,
+    backgroundColor: '#8B5CF6',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  messageContainer: {
+    gap: 12,
+  },
+  messageHeader: {
+    gap: 4,
+  },
+  messageLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+  },
+  messageHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#8B5CF6',
+  },
+  messageInput: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#1C1C1C',
+    textAlignVertical: 'top',
+    minHeight: 120,
+  },
+  shareSection: {
+    gap: 12,
+  },
+  shareSectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1C1C1C',
+  },
+  shareButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'flex-start',
+  },
+  shareButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    width: 95,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: 3,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
     },
-  
-    // Share Modal Styles
-    shareModalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    shareModal: {
-      backgroundColor: '#FFFFFF',
-      borderRadius: 16,
-      padding: 24,
-      width: '95%',
-      maxWidth: 800,
-      maxHeight: '85%',
-      alignSelf: 'center',
-    },
-    shareModalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    shareModalTitle: {
-      fontSize: 20,
-      fontFamily: 'Inter-Bold',
-      color: '#1C1C1C',
-    },
-    shareModalClose: {
-      padding: 4,
-    },
-    shareModalContent: {
-      gap: 20,
-    },
-    eventPreview: {
-      backgroundColor: '#F8F9FA',
-      borderRadius: 12,
-      padding: 16,
-      borderLeftWidth: 4,
-      borderLeftColor: '#8B5CF6',
-    },
-    shareEventTitle: {
-      fontSize: 18,
-      fontFamily: 'Inter-Bold',
-      color: '#1C1C1C',
-      marginBottom: 8,
-    },
-    eventDetails: {
-      gap: 6,
-    },
-    eventDetailRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    eventDetailText: {
-      fontSize: 14,
-      fontFamily: 'Inter-Regular',
-      color: '#666',
-      flex: 1,
-    },
-    urlContainer: {
-      gap: 12,
-    },
-    urlHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    urlLabel: {
-      fontSize: 16,
-      fontFamily: 'Inter-SemiBold',
-      color: '#1C1C1C',
-    },
-    urlBox: {
-      backgroundColor: '#F3F4F6',
-      borderRadius: 8,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: '#E5E7EB',
-    },
-    urlText: {
-      fontSize: 12,
-      fontFamily: 'Inter-Regular',
-      color: '#6B7280',
-    },
-    copyUrlButton: {
-      padding: 8,
-      backgroundColor: '#8B5CF6',
-      borderRadius: 6,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    messageContainer: {
-      gap: 12,
-    },
-    messageHeader: {
-      gap: 4,
-    },
-    messageLabel: {
-      fontSize: 16,
-      fontFamily: 'Inter-SemiBold',
-      color: '#1C1C1C',
-    },
-    messageHint: {
-      fontSize: 12,
-      fontFamily: 'Inter-Regular',
-      color: '#8B5CF6',
-    },
-    messageInput: {
-      backgroundColor: '#F3F4F6',
-      borderRadius: 8,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: '#E5E7EB',
-      fontSize: 14,
-      fontFamily: 'Inter-Regular',
-      color: '#1C1C1C',
-      textAlignVertical: 'top',
-      minHeight: 120,
-    },
-    shareSection: {
-      gap: 12,
-    },
-    shareSectionTitle: {
-      fontSize: 16,
-      fontFamily: 'Inter-SemiBold',
-      color: '#1C1C1C',
-    },
-    shareButtonsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      justifyContent: 'flex-start',
-    },
-    shareButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-      borderRadius: 12,
-      width: 95,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 3,
-      borderWidth: 1.5,
-      borderColor: '#E5E7EB',
-      backgroundColor: '#FFFFFF',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 1,
-      },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    shareButtonIcon: {
-      fontSize: 16,
-    },
-    shareButtonText: {
-      fontSize: 10,
-      fontFamily: 'Inter-Medium',
-      color: '#4B5563',
-      textAlign: 'center',
-    },
-    twitterButton: {
-      backgroundColor: '#F0F9FF',
-      borderColor: '#1DA1F2',
-    },
-    facebookButton: {
-      backgroundColor: '#F0F4FF',
-      borderColor: '#1877F2',
-    },
-    linkedinButton: {
-      backgroundColor: '#F0F7FF',
-      borderColor: '#0077B5',
-    },
-    whatsappButton: {
-      backgroundColor: '#F0FDF4',
-      borderColor: '#25D366',
-    },
-    telegramButton: {
-      backgroundColor: '#F0F9FF',
-      borderColor: '#0088CC',
-    },
-  
-  });
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  shareButtonIcon: {
+    fontSize: 16,
+  },
+  shareButtonText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Medium',
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  twitterButton: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#1DA1F2',
+  },
+  facebookButton: {
+    backgroundColor: '#F0F4FF',
+    borderColor: '#1877F2',
+  },
+  linkedinButton: {
+    backgroundColor: '#F0F7FF',
+    borderColor: '#0077B5',
+  },
+  whatsappButton: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#25D366',
+  },
+  telegramButton: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#0088CC',
+  },
+
+});

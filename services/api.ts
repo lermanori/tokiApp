@@ -232,9 +232,9 @@ class ApiService {
   private refreshToken: string | null = null;
   private authCache: { isValid: boolean; timestamp: number } | null = null;
   private readonly AUTH_CACHE_DURATION = 30000; // 30 seconds
-  private userCache: { 
-    data: { user: User; socialLinks: any; stats: any; verified: boolean }; 
-    timestamp: number 
+  private userCache: {
+    data: { user: User; socialLinks: any; stats: any; verified: boolean };
+    timestamp: number
   } | null = null;
   private readonly USER_CACHE_DURATION = 60000; // 60 seconds - user data changes less frequently
   private pendingGetCurrentUser: Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> | null = null;
@@ -253,7 +253,7 @@ class ApiService {
       console.debug('🔍 [API] Attempting to load stored tokens...');
       const tokens = await AsyncStorage.getItem('auth_tokens');
       console.debug('🔍 [API] Raw tokens from storage:', tokens);
-      
+
       if (tokens) {
         const { accessToken, refreshToken } = JSON.parse(tokens);
         this.accessToken = accessToken;
@@ -315,16 +315,16 @@ class ApiService {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     if (this.accessToken) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
-    
+
     return headers;
   }
 
   private async makeRequest<T>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -339,7 +339,7 @@ class ApiService {
 
       if (!response.ok) {
         console.error(`❌ [API] Request failed: ${response.status} ${response.statusText}`);
-        
+
         if (response.status === 401 && this.refreshToken) {
           console.info('🔄 [API] Attempting token refresh...');
           // Try to refresh token
@@ -350,7 +350,7 @@ class ApiService {
             config.headers = this.getHeaders();
             const retryResponse = await fetch(url, config);
             const retryData = await retryResponse.json();
-            
+
             if (!retryResponse.ok) {
               console.error(`❌ [API] Retry request failed: ${retryResponse.status}`);
               throw new Error(retryData.message || 'Request failed after token refresh');
@@ -363,7 +363,7 @@ class ApiService {
             throw new Error('Authentication failed. Please log in again.');
           }
         }
-        
+
         // Create a more descriptive error message
         const errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`;
         const error = new Error(errorMessage);
@@ -377,13 +377,13 @@ class ApiService {
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);
       console.error(`❌ [API] Full URL attempted: ${url}`);
       console.error(`❌ [API] Base URL: ${API_BASE_URL}`);
-      
+
       // Enhance error with more context
       if (error instanceof Error) {
         (error as any).endpoint = endpoint;
         (error as any).url = url;
       }
-      
+
       throw error;
     }
   }
@@ -413,7 +413,7 @@ class ApiService {
         await this.saveTokens(data.data.accessToken, data.data.refreshToken);
         return true;
       }
-      
+
       // Only clear tokens if refresh token is actually invalid/expired (401)
       // This means the refresh token itself is expired or invalid
       if (response.status === 401) {
@@ -421,21 +421,21 @@ class ApiService {
         await this.clearTokens();
         return false;
       }
-      
+
       // For other HTTP errors, don't clear tokens - might be server issue
       console.error('⚠️ [API] Token refresh failed with status:', response.status);
       return false;
     } catch (error) {
       // Check if this is a network error (TypeError from fetch, or network-related message)
-      const isNetworkError = error instanceof TypeError || 
-                            (error instanceof Error && (
-                              error.message.includes('Network request failed') ||
-                              error.message.includes('Failed to fetch') ||
-                              error.message.includes('timeout') ||
-                              error.message.includes('network') ||
-                              error.message.includes('NetworkError')
-                            ));
-      
+      const isNetworkError = error instanceof TypeError ||
+        (error instanceof Error && (
+          error.message.includes('Network request failed') ||
+          error.message.includes('Failed to fetch') ||
+          error.message.includes('timeout') ||
+          error.message.includes('network') ||
+          error.message.includes('NetworkError')
+        ));
+
       if (isNetworkError) {
         console.error('⚠️ [API] Token refresh failed due to network error, keeping tokens:', error);
         // Don't clear tokens on network errors - they might still be valid
@@ -571,19 +571,19 @@ class ApiService {
       const response = await this.makeRequest<{ success: boolean; message: string }>('/auth/me', {
         method: 'DELETE',
       });
-      
+
       // Clear tokens immediately after successful deletion
       await this.clearTokens();
-      
+
       return { success: true, message: response.message || 'Account deleted successfully' };
     } catch (error) {
       console.error('Delete account error:', error);
-      
+
       // If it's an auth error, clear tokens anyway
       if (error instanceof Error && ((error as any).isAuthError || (error as any).status === 401 || (error as any).status === 403)) {
         await this.clearTokens();
       }
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to delete account';
       return { success: false, message: errorMessage };
     }
@@ -636,8 +636,8 @@ class ApiService {
     // Create the request promise
     const requestPromise = (async () => {
       try {
-        const response = await this.makeRequest<{ 
-          success: boolean; 
+        const response = await this.makeRequest<{
+          success: boolean;
           data: {
             user: User & {
               stats: any;
@@ -645,10 +645,10 @@ class ApiService {
             };
           }
         }>('/auth/me');
-        
+
         // Extract stats and socialLinks from the user object
         const { stats, socialLinks, ...user } = response.data.user;
-        
+
         const userData = {
           user,
           stats,
@@ -968,6 +968,37 @@ class ApiService {
     }
   }
 
+  // Toki Notification Mute methods
+  async muteTokiNotifications(tokiId: string): Promise<boolean> {
+    try {
+      const response = await this.makeRequest(`/toki-notification-mutes/${tokiId}`, { method: 'POST' }) as any;
+      return response.success;
+    } catch (error) {
+      console.error('Mute toki notifications error:', error);
+      return false;
+    }
+  }
+
+  async unmuteTokiNotifications(tokiId: string): Promise<boolean> {
+    try {
+      const response = await this.makeRequest(`/toki-notification-mutes/${tokiId}`, { method: 'DELETE' }) as any;
+      return response.success;
+    } catch (error) {
+      console.error('Unmute toki notifications error:', error);
+      return false;
+    }
+  }
+
+  async checkTokiNotificationMute(tokiId: string): Promise<boolean> {
+    try {
+      const response = await this.makeRequest(`/toki-notification-mutes/${tokiId}`, { method: 'GET' }) as any;
+      return response.muted || false;
+    } catch (error) {
+      console.error('Check toki mute status error:', error);
+      return false;
+    }
+  }
+
   async getUserRatings(userId: string, page: number = 1, limit: number = 20): Promise<{ success: boolean; message?: string; data?: any }> {
     try {
       const response = await this.makeRequest(`/ratings/users/${userId}?page=${page}&limit=${limit}`, { method: 'GET' });
@@ -1059,10 +1090,10 @@ class ApiService {
       }
     });
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        tokis: Toki[]; 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        tokis: Toki[];
         pagination: {
           page: number;
           limit: number;
@@ -1070,8 +1101,8 @@ class ApiService {
           totalPages: number;
           hasMore: boolean;
         };
-        searchParams: any 
-      } 
+        searchParams: any
+      }
     }>(
       `/tokis/nearby?${queryParams.toString()}`
     );
@@ -1101,7 +1132,7 @@ class ApiService {
   async searchTags(query: string, limit?: number): Promise<string[]> {
     const queryParams = new URLSearchParams({ q: query });
     if (limit) queryParams.append('limit', limit.toString());
-    
+
     const response = await this.makeRequest<{ success: boolean; data: string[] }>(`/tokis/tags/search?${queryParams.toString()}`);
     return response.data;
   }
@@ -1203,9 +1234,9 @@ class ApiService {
 
   // Public Profile Methods
   async getUserProfile(userId: string): Promise<any> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: any 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: any
     }>(`/auth/users/${userId}`);
     return response.data;
   }
@@ -1236,8 +1267,8 @@ class ApiService {
     createdAt?: string;
     updatedAt?: string;
   }> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
+    const response = await this.makeRequest<{
+      success: boolean;
       data: {
         status: 'none' | 'pending' | 'accepted' | 'declined';
         isRequester: boolean;
@@ -1251,20 +1282,20 @@ class ApiService {
 
 
 
-  async getMyRatings(page?: number, limit?: number): Promise<{ 
-    ratings: UserRating[]; 
-    pagination: any 
+  async getMyRatings(page?: number, limit?: number): Promise<{
+    ratings: UserRating[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        ratings: UserRating[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        ratings: UserRating[];
+        pagination: any
+      }
     }>(`/ratings/my-ratings?${queryParams.toString()}`);
     return response.data;
   }
@@ -1289,79 +1320,79 @@ class ApiService {
     return response;
   }
 
-  async getBlockedUsers(page?: number, limit?: number): Promise<{ 
-    blockedUsers: BlockedUser[]; 
-    pagination: any 
+  async getBlockedUsers(page?: number, limit?: number): Promise<{
+    blockedUsers: BlockedUser[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        blockedUsers: BlockedUser[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        blockedUsers: BlockedUser[];
+        pagination: any
+      }
     }>(`/blocks/blocked-users?${queryParams.toString()}`);
     return response.data;
   }
 
-  async getBlockedByUsers(page?: number, limit?: number): Promise<{ 
-    blockedBy: BlockedUser[]; 
-    pagination: any 
+  async getBlockedByUsers(page?: number, limit?: number): Promise<{
+    blockedBy: BlockedUser[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        blockedBy: BlockedUser[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        blockedBy: BlockedUser[];
+        pagination: any
+      }
     }>(`/blocks/blocked-by?${queryParams.toString()}`);
     return response.data;
   }
 
   async checkBlockStatus(userId: string): Promise<BlockStatus> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: BlockStatus 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: BlockStatus
     }>(`/blocks/check/${userId}`);
     return response.data;
   }
 
   // Messaging Methods
-  async getConversations(page?: number, limit?: number): Promise<{ 
-    conversations: Conversation[]; 
-    pagination: any 
+  async getConversations(page?: number, limit?: number): Promise<{
+    conversations: Conversation[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        conversations: Conversation[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        conversations: Conversation[];
+        pagination: any
+      }
     }>(`/messages/conversations?${queryParams.toString()}`);
     return response.data;
   }
 
-  async startConversation(otherUserId: string): Promise<{ 
-    conversationId: string; 
-    message: string 
+  async startConversation(otherUserId: string): Promise<{
+    conversationId: string;
+    message: string
   }> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        conversationId: string; 
-        message: string 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        conversationId: string;
+        message: string
+      }
     }>(`/messages/conversations`, {
       method: 'POST',
       body: JSON.stringify({ otherUserId }),
@@ -1369,36 +1400,36 @@ class ApiService {
     return response.data;
   }
 
-  async getConversationMessages(conversationId: string, page?: number, limit?: number): Promise<{ 
-    messages: Message[]; 
-    pagination: any 
+  async getConversationMessages(conversationId: string, page?: number, limit?: number): Promise<{
+    messages: Message[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        messages: Message[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        messages: Message[];
+        pagination: any
+      }
     }>(`/messages/conversations/${conversationId}/messages?${queryParams.toString()}`);
     return response.data;
   }
 
-  async sendMessage(conversationId: string, content: string, messageType?: string, mediaUrl?: string): Promise<{ 
-    messageId: string; 
-    createdAt: string; 
-    message: string 
+  async sendMessage(conversationId: string, content: string, messageType?: string, mediaUrl?: string): Promise<{
+    messageId: string;
+    createdAt: string;
+    message: string
   }> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        messageId: string; 
-        createdAt: string; 
-        message: string 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        messageId: string;
+        createdAt: string;
+        message: string
+      }
     }>(`/messages/conversations/${conversationId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content, messageType: messageType || 'text', mediaUrl }),
@@ -1406,36 +1437,36 @@ class ApiService {
     return response.data;
   }
 
-  async getTokiMessages(tokiId: string, page?: number, limit?: number): Promise<{ 
-    messages: Message[]; 
-    pagination: any 
+  async getTokiMessages(tokiId: string, page?: number, limit?: number): Promise<{
+    messages: Message[];
+    pagination: any
   }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
 
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        messages: Message[]; 
-        pagination: any 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        messages: Message[];
+        pagination: any
+      }
     }>(`/messages/tokis/${tokiId}/messages?${queryParams.toString()}`);
     return response.data;
   }
 
-  async sendTokiMessage(tokiId: string, content: string, messageType?: string, mediaUrl?: string): Promise<{ 
-    messageId: string; 
-    createdAt: string; 
-    message: string 
+  async sendTokiMessage(tokiId: string, content: string, messageType?: string, mediaUrl?: string): Promise<{
+    messageId: string;
+    createdAt: string;
+    message: string
   }> {
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        messageId: string; 
-        createdAt: string; 
-        message: string 
-      } 
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        messageId: string;
+        createdAt: string;
+        message: string
+      }
     }>(`/messages/tokis/${tokiId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ content, messageType: messageType || 'text', mediaUrl }),
@@ -1443,29 +1474,29 @@ class ApiService {
     return response.data;
   }
 
-  async deleteMessage(messageId: string): Promise<{ 
-    success: boolean; 
-    message: string 
+  async deleteMessage(messageId: string): Promise<{
+    success: boolean;
+    message: string
   }> {
     return this.makeRequest(`/messages/${messageId}`, {
       method: 'DELETE'
     });
   }
 
-  async getTokiGroupChats(page?: number, limit?: number): Promise<{ 
-    chats: any[]; 
-    pagination: any 
+  async getTokiGroupChats(page?: number, limit?: number): Promise<{
+    chats: any[];
+    pagination: any
   }> {
     const params = new URLSearchParams();
     if (page) params.append('page', page.toString());
     if (limit) params.append('limit', limit.toString());
-    
-    const response = await this.makeRequest<{ 
-      success: boolean; 
-      data: { 
-        chats: any[]; 
-        pagination: any 
-      } 
+
+    const response = await this.makeRequest<{
+      success: boolean;
+      data: {
+        chats: any[];
+        pagination: any
+      }
     }>(`/messages/tokis/group-chats?${params.toString()}`);
     return response.data;
   }
@@ -1475,7 +1506,7 @@ class ApiService {
     if (!this.accessToken) {
       return false;
     }
-    
+
     // Check cache first
     if (this.authCache && Date.now() - this.authCache.timestamp < this.AUTH_CACHE_DURATION) {
       console.log('🔐 [API] Using cached authentication status.');
@@ -1493,7 +1524,7 @@ class ApiService {
     // We'll use getCurrentUser which has caching, so if auth succeeds we also cache user data
     const maxRetries = 2;
     let lastError: any;
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔐 [API] Authentication check attempt ${attempt}/${maxRetries}`);
@@ -1505,7 +1536,7 @@ class ApiService {
       } catch (error) {
         lastError = error;
         console.log(`❌ [API] Authentication check attempt ${attempt} failed:`, error);
-        
+
         // If this is not the last attempt, wait a bit before retrying
         if (attempt < maxRetries) {
           console.log(`⏳ [API] Waiting before retry...`);
@@ -1513,16 +1544,16 @@ class ApiService {
         }
       }
     }
-    
+
     // All attempts failed - only clear tokens if it's a clear authentication error
     console.log('❌ [API] All authentication attempts failed');
-    
+
     // Only clear tokens if it's a clear authentication error (401, 403)
     // Don't clear tokens for network errors or other issues
     if (lastError && typeof lastError === 'object' && lastError.message) {
-      if (lastError.message.includes('Authentication failed') || 
-          lastError.message.includes('Token expired') ||
-          lastError.message.includes('Invalid token')) {
+      if (lastError.message.includes('Authentication failed') ||
+        lastError.message.includes('Token expired') ||
+        lastError.message.includes('Invalid token')) {
         console.log('🗑️ [API] Clearing tokens due to authentication error');
         await this.clearTokens();
         this.authCache = { isValid: false, timestamp: Date.now() }; // Invalidate cache on clear
@@ -1530,7 +1561,7 @@ class ApiService {
         console.log('⚠️ [API] Keeping tokens - error appears to be network-related');
       }
     }
-    
+
     return false;
   }
 
