@@ -38,6 +38,8 @@ import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
 import invitationRoutes from './routes/invitations';
 import reportsRoutes from './routes/reports';
+import ogPreviewRoutes from './routes/og-preview';
+import tokiNotificationMuteRoutes from './routes/toki-notification-mutes';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcp/server';
@@ -46,7 +48,7 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:8081", "http://localhost:8082", "file://",'http://localhost:6274'],
+    origin: ["http://localhost:3000", "http://localhost:8081", "http://localhost:8082", "file://", 'http://localhost:6274'],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -90,26 +92,26 @@ const originFunction: cors.CorsOptions['origin'] = function (origin, callback) {
     /https:\/\/.*\.railway\.app$/,
     'http://localhost:6274'
   ];
-  
+
   // Log the origin for debugging
   if (origin) {
     logger.info(`[CORS] Checking origin: ${origin}`);
   } else {
     logger.info('[CORS] Request with no origin (allowing)');
   }
-  
+
   if (!origin) return callback(null, true);
-  
+
   const isAllowed = allowList.some(entry => {
     if (typeof entry === 'string') return origin === entry;
     return entry.test(origin);
   });
-  
+
   if (isAllowed) {
     logger.info(`[CORS] Origin allowed: ${origin}`);
     return callback(null, true);
   }
-  
+
   // Log blocked origin so you can add it to allowList
   logger.warn(`[CORS] Origin blocked: ${origin} - Add this to allowList if needed`);
   return callback(new Error('Not allowed by CORS'));
@@ -129,12 +131,12 @@ const corsMiddleware = cors({
 app.use('/api/mcp', (req, res, next) => {
   const requestedHeaders = req.headers['access-control-request-headers'];
   const requestedMethod = req.headers['access-control-request-method'];
-  
+
   // Log EVERY request to MCP endpoint with detailed info
   console.log(`[MCP] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
   console.log(`[MCP] Requested Headers: ${requestedHeaders || 'none'}`);
   console.log(`[MCP] Requested Method: ${requestedMethod || 'none'}`);
-  
+
   logger.info(`[MCP] ===== ${req.method} ${req.path} =====`, {
     method: req.method,
     path: req.path,
@@ -153,7 +155,7 @@ app.use('/api/mcp', (req, res, next) => {
 // Custom CORS middleware for MCP that dynamically allows ALL requested headers
 const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const origin = req.headers.origin;
-  
+
   // Check if origin is allowed
   const allowList: (string | RegExp)[] = [
     'http://localhost:3000',
@@ -166,13 +168,13 @@ const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: ex
     /https:\/\/.*\.railway\.app$/,
     'http://localhost:6274'
   ];
-  
+
   if (origin) {
     const isAllowed = allowList.some(entry => {
       if (typeof entry === 'string') return origin === entry;
       return entry.test(origin);
     });
-    
+
     if (isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -180,19 +182,19 @@ const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: ex
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  
+
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     const requestedHeaders = req.headers['access-control-request-headers'];
     const requestedMethod = req.headers['access-control-request-method'];
-    
+
     // Allow the requested method
     if (requestedMethod) {
       res.setHeader('Access-Control-Allow-Methods', requestedMethod);
     } else {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     }
-    
+
     // Dynamically allow ALL requested headers
     if (requestedHeaders) {
       const headers = requestedHeaders.split(',').map((h: string) => h.trim());
@@ -202,12 +204,12 @@ const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: ex
       // Fallback to common headers
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
     }
-    
+
     res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
     res.status(200).end();
     return;
   }
-  
+
   // For non-OPTIONS requests, set headers but continue
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   const requestedHeaders = req.headers['access-control-request-headers'];
@@ -216,7 +218,7 @@ const mcpCorsMiddleware = (req: express.Request, res: express.Response, next: ex
   } else {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
   }
-  
+
   next();
 };
 
@@ -303,6 +305,10 @@ app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 app.use('/api/push', corsMiddleware, pushRoutes);
 app.use('/api/invitations', corsMiddleware, invitationRoutes);
 app.use('/api/reports', corsMiddleware, reportsRoutes);
+app.use('/api/toki-notification-mutes', corsMiddleware, tokiNotificationMuteRoutes);
+
+// Public share route for OG meta tag previews (no auth required)
+app.use('/share', ogPreviewRoutes);
 
 // MCP HTTP endpoint (Streamable HTTP transport)
 // Route base: /api/mcp/toki and /api/mcp/toki/*
@@ -315,7 +321,7 @@ app.all('/api/mcp/toki', mcpCorsMiddleware, (req, res) => {
     headers: req.headers,
     'all-headers': Object.keys(req.headers),
   });
-  
+
   // Let the MCP transport handle the request directly
   // It will parse the JSON-RPC request and route to appropriate handlers
   void mcpTransport.handleRequest(req as any, res as any, req.body).catch((error) => {
@@ -339,7 +345,7 @@ app.all('/api/mcp/toki/*', mcpCorsMiddleware, (req, res) => {
     body: req.body,
     headers: req.headers,
   });
-  
+
   // Let the MCP transport handle the request directly
   void mcpTransport.handleRequest(req as any, res as any, req.body).catch((error) => {
     logger.error('[MCP] Transport error:', error);
@@ -392,7 +398,7 @@ app.use(errorHandler);
 // WebSocket event handlers
 io.on('connection', (socket) => {
   logger.info('🔌 User connected:', socket.id);
-  
+
   let currentUserId: string | null = null; // Track user for this socket
 
   // Join user to their personal room
@@ -400,7 +406,7 @@ io.on('connection', (socket) => {
     const roomName = `user-${userId}`;
     socket.join(roomName);
     currentUserId = userId; // Store for disconnect tracking
-    
+
     // Log connection event
     try {
       await pool.query(
@@ -412,7 +418,7 @@ io.on('connection', (socket) => {
       logger.error('Error logging connect event:', error);
       // Don't fail the connection if logging fails
     }
-    
+
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
     logger.debug(`👤 [BACKEND] User ${userId} (socket: ${socket.id}) joined room: ${roomName}`);
     logger.debug(`👤 [BACKEND] Room ${roomName} now has ${roomMembers ? roomMembers.size : 0} members`);
@@ -446,7 +452,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async () => {
     logger.info('🔌 User disconnected:', socket.id);
-    
+
     // Log disconnect event if we have a user ID
     if (currentUserId) {
       try {
@@ -474,6 +480,24 @@ server.listen(Number(PORT), '0.0.0.0', async () => {
   // Test database connection and set timezone
   await testDatabaseConnection();
   await setDatabaseTimezone();
+
+  // Ensure toki_notification_mutes table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS toki_notification_mutes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        toki_id UUID NOT NULL REFERENCES tokis(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, toki_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_toki_notif_mutes_user ON toki_notification_mutes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_toki_notif_mutes_toki ON toki_notification_mutes(toki_id);
+    `);
+    logger.info('✅ toki_notification_mutes table ready');
+  } catch (err: any) {
+    logger.warn('⚠️ toki_notification_mutes migration warning:', err.message);
+  }
 
   // Start notification scheduler
   startNotificationScheduler();

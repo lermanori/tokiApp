@@ -48,7 +48,7 @@ async function checkAndSendNotifications() {
     for (const notification of result.rows) {
       try {
         logger.info(`📬 [SCHEDULER] Sending notification: ${notification.title}`);
-        
+
         await sendPushToUsers(userIds, {
           title: notification.title,
           body: notification.message,
@@ -75,8 +75,79 @@ async function checkAndSendNotifications() {
 }
 
 /**
+ * Check for events happening today and send reminders
+ * Runs daily at 09:00 UTC
+ */
+async function checkAndSendEventDayNotifications() {
+  try {
+    logger.info('🎉 [EVENT-DAY] Checking for events happening today...');
+
+    // Find all active tokis with scheduled_time today (UTC)
+    const tokisResult = await pool.query(
+      `SELECT id, title, scheduled_time
+       FROM tokis
+       WHERE status = 'active'
+         AND scheduled_time IS NOT NULL
+         AND DATE(scheduled_time) = CURRENT_DATE`
+    );
+
+    if (tokisResult.rows.length === 0) {
+      logger.info('🎉 [EVENT-DAY] No events happening today');
+      return;
+    }
+
+    logger.info(`🎉 [EVENT-DAY] Found ${tokisResult.rows.length} event(s) happening today`);
+
+    for (const toki of tokisResult.rows) {
+      try {
+        // Find users who saved or joined this toki (or are the host), excluding muted users
+        const usersResult = await pool.query(
+          `SELECT DISTINCT u.id
+           FROM users u
+           WHERE u.id IN (
+             -- Users who saved the toki
+             SELECT st.user_id FROM saved_tokis st WHERE st.toki_id = $1
+             UNION
+             -- Users who joined the toki (approved participants)
+             SELECT tp.user_id FROM toki_participants tp WHERE tp.toki_id = $1 AND tp.status = 'approved'
+             UNION
+             -- The host
+             SELECT t.host_id FROM tokis t WHERE t.id = $1
+           )
+           -- Exclude muted users
+           AND u.id NOT IN (
+             SELECT tnm.user_id FROM toki_notification_mutes tnm WHERE tnm.toki_id = $1
+           )`,
+          [toki.id]
+        );
+
+        const userIds = usersResult.rows.map((row: any) => row.id);
+
+        if (userIds.length === 0) {
+          logger.info(`🎉 [EVENT-DAY] No eligible users for event: ${toki.title}`);
+          continue;
+        }
+
+        await sendPushToUsers(userIds, {
+          title: 'Happening Today 🎉',
+          body: `${toki.title} is happening today. Don't miss it!`,
+          data: { type: 'event_reminder', tokiId: toki.id }
+        });
+
+        logger.info(`✅ [EVENT-DAY] Reminder sent for "${toki.title}" to ${userIds.length} users`);
+      } catch (error) {
+        logger.error(`❌ [EVENT-DAY] Error sending reminder for toki ${toki.id}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error('❌ [EVENT-DAY] Error checking event day notifications:', error);
+  }
+}
+
+/**
  * Start the notification scheduler
  * Runs a cron job every minute to check for notifications
+ * Runs a daily cron at 09:00 UTC to send event day reminders
  */
 export function startNotificationScheduler() {
   if (schedulerStarted) {
@@ -91,8 +162,13 @@ export function startNotificationScheduler() {
     await checkAndSendNotifications();
   });
 
+  // Run daily at 09:00 UTC: 0 9 * * *
+  cron.schedule('0 9 * * *', async () => {
+    await checkAndSendEventDayNotifications();
+  });
+
   schedulerStarted = true;
-  logger.info('✅ [SCHEDULER] Notification scheduler started (checking every minute)');
+  logger.info('✅ [SCHEDULER] Notification scheduler started (checking every minute + daily at 09:00 UTC)');
 }
 
 /**
@@ -104,4 +180,3 @@ export function stopNotificationScheduler() {
   schedulerStarted = false;
   logger.info('🛑 [SCHEDULER] Notification scheduler stopped');
 }
-
