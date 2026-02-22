@@ -13,13 +13,13 @@ import { sendPushToUsers } from '../utils/push';
 import { authenticateToken, optionalAuth } from '../middleware/auth';
 import { uploadSingleImage, handleUploadError } from '../middleware/upload';
 import { calculateDistance, formatDistance } from '../utils/distance';
-import { 
-  generateInviteCode, 
-  deactivateExistingLinks, 
-  validateInviteLink, 
-  incrementLinkUsage, 
-  isUserParticipant, 
-  addUserToToki 
+import {
+  generateInviteCode,
+  deactivateExistingLinks,
+  validateInviteLink,
+  incrementLinkUsage,
+  isUserParticipant,
+  addUserToToki
 } from '../utils/inviteLinkUtils';
 import { getCategoriesForAPI, CATEGORY_CONFIG } from '../config/categories';
 import logger from '../utils/logger';
@@ -127,7 +127,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
 
     // Start a database transaction
     const client = await pool.connect();
-    
+
     try {
       await client.query('BEGIN');
 
@@ -535,7 +535,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       'SELECT latitude, longitude FROM users WHERE id = $1',
       [userId]
     );
-    
+
     const userLat = userResult.rows[0]?.latitude;
     const userLng = userResult.rows[0]?.longitude;
 
@@ -559,7 +559,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
           WHERE st.toki_id = t.id AND st.user_id = $${userIdParamPos}
         ) as is_saved
     `;
-    
+
     // Always add distance calculation if user has coordinates
     if (userLat && userLng) {
       query += `,
@@ -575,7 +575,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       queryParams.push(userLat, userLng);
       paramCount += 2;
     }
-    
+
     query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
@@ -600,7 +600,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // Add userId for jp join and for block/hidden checks
     paramCount++;
     queryParams.push(userId);
-    
+
     // TODO: Implement radius filtering in next iteration
     // For now, just log the parameters for debugging
     if (radius && userLatitude && userLongitude) {
@@ -703,12 +703,12 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     // Add sorting
     const validSortFields = ['created_at', 'title', 'location', 'current_attendees'];
     const validSortOrders = ['asc', 'desc'];
-    
+
     // Add distance to valid sort fields if user coordinates are available
     if (userLat && userLng) {
       validSortFields.push('distance');
     }
-    
+
     if ((sortBy as string) === 'relevance') {
       query += ` ORDER BY t.created_at DESC`;
     } else if (validSortFields.includes(sortBy as string) && validSortOrders.includes(sortOrder as string)) {
@@ -741,7 +741,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     if (userId) {
       // Fetch algorithm weights (hyperparameters)
       const weightsResult = await pool.query(
-        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen
+        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen
          FROM algorithm_hyperparameters
          ORDER BY updated_at DESC
          LIMIT 1`
@@ -750,23 +750,25 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       const weightsRow = weightsResult.rows[0];
       const weights: AlgorithmWeights = weightsRow
         ? {
-            w_hist: Number(weightsRow.w_hist ?? 0.2),
-            w_social: Number(weightsRow.w_social ?? 0.15),
-            w_pop: Number(weightsRow.w_pop ?? 0.2),
-            w_time: Number(weightsRow.w_time ?? 0.15),
-            w_geo: Number(weightsRow.w_geo ?? 0.2),
-            w_novel: Number(weightsRow.w_novel ?? 0.1),
-            w_pen: Number(weightsRow.w_pen ?? 0.05),
-          }
+          w_hist: Number(weightsRow.w_hist ?? 0.2),
+          w_social: Number(weightsRow.w_social ?? 0.15),
+          w_pop: Number(weightsRow.w_pop ?? 0.2),
+          w_time: Number(weightsRow.w_time ?? 0.15),
+          w_geo: Number(weightsRow.w_geo ?? 0.15),
+          w_novel: Number(weightsRow.w_novel ?? 0.1),
+          w_new: Number(weightsRow.w_new ?? 0.05),
+          w_pen: Number(weightsRow.w_pen ?? 0.05),
+        }
         : {
-            w_hist: 0.2,
-            w_social: 0.15,
-            w_pop: 0.2,
-            w_time: 0.15,
-            w_geo: 0.2,
-            w_novel: 0.1,
-            w_pen: 0.05,
-          };
+          w_hist: 0.2,
+          w_social: 0.15,
+          w_pop: 0.2,
+          w_time: 0.15,
+          w_geo: 0.15,
+          w_novel: 0.1,
+          w_new: 0.05,
+          w_pen: 0.05,
+        };
 
       let userLatForAlgo: number | null = null;
       let userLngForAlgo: number | null = null;
@@ -785,6 +787,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
         id: row.id,
         category: row.category,
         scheduled_time: row.scheduled_time ? new Date(row.scheduled_time) : null,
+        created_at: row.created_at ? new Date(row.created_at) : null,
         latitude: row.latitude,
         longitude: row.longitude,
         max_attendees: row.max_attendees,
@@ -915,7 +918,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     if (userId) {
       // Get all toki IDs from the result
       const tokiIds = result.rows.map(row => row.id);
-      
+
       if (tokiIds.length > 0) {
         // Fetch friends attending for all tokis in one query
         const friendsResult = await pool.query(
@@ -1043,7 +1046,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     const limitNum = Math.min(parseInt(limit as string) || 20, 100);
     const pageNum = Math.max(parseInt(page as string) || 1, 1);
     const offset = (pageNum - 1) * limitNum;
-    
+
     // Get userId from optional auth (may be undefined)
     const userId = (req as any).user?.id || null;
 
@@ -1072,7 +1075,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
           )
         ) <= $3
     `;
-    
+
     // Filter out hidden activities if user is authenticated
     if (userId) {
       whereConditions += `
@@ -1089,7 +1092,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
 
     const baseParams: any[] = [lat, lng, radiusKm];
     let paramCount = 3;
-    
+
     // Add userId parameter if authenticated (for hidden activities filter)
     if (userId) {
       paramCount++;
@@ -1146,11 +1149,11 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
             sin(radians(t.latitude))
           )
         ) as distance_km`;
-    
+
     // Add is_saved check and join_status if user is authenticated
     // Note: userId is already in baseParams at position 4 if authenticated
     const userIdParamNum = userId ? 4 : null;
-    
+
     if (userId) {
       query += `,
         EXISTS(
@@ -1163,19 +1166,19 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         false as is_saved,
         'not_joined' as join_status`;
     }
-    
+
     query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
       LEFT JOIN toki_tags tt ON t.id = tt.toki_id
       LEFT JOIN toki_participants tp ON t.id = tp.toki_id AND tp.status = 'approved'`;
-    
+
     // Add join_status join if user is authenticated
     if (userId) {
       query += `
       LEFT JOIN toki_participants jp ON jp.toki_id = t.id AND jp.user_id = $${userIdParamNum}`;
     }
-    
+
     query += `
       ${whereConditions}
     `;
@@ -1204,7 +1207,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
 
     if (userId) {
       const weightsResult = await pool.query(
-        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen
+        `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen
          FROM algorithm_hyperparameters
          ORDER BY updated_at DESC
          LIMIT 1`
@@ -1213,23 +1216,25 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       const weightsRow = weightsResult.rows[0];
       const weights: AlgorithmWeights = weightsRow
         ? {
-            w_hist: Number(weightsRow.w_hist ?? 0.2),
-            w_social: Number(weightsRow.w_social ?? 0.15),
-            w_pop: Number(weightsRow.w_pop ?? 0.2),
-            w_time: Number(weightsRow.w_time ?? 0.15),
-            w_geo: Number(weightsRow.w_geo ?? 0.2),
-            w_novel: Number(weightsRow.w_novel ?? 0.1),
-            w_pen: Number(weightsRow.w_pen ?? 0.05),
-          }
+          w_hist: Number(weightsRow.w_hist ?? 0.2),
+          w_social: Number(weightsRow.w_social ?? 0.15),
+          w_pop: Number(weightsRow.w_pop ?? 0.2),
+          w_time: Number(weightsRow.w_time ?? 0.15),
+          w_geo: Number(weightsRow.w_geo ?? 0.15),
+          w_novel: Number(weightsRow.w_novel ?? 0.1),
+          w_new: Number(weightsRow.w_new ?? 0.05),
+          w_pen: Number(weightsRow.w_pen ?? 0.05),
+        }
         : {
-            w_hist: 0.2,
-            w_social: 0.15,
-            w_pop: 0.2,
-            w_time: 0.15,
-            w_geo: 0.2,
-            w_novel: 0.1,
-            w_pen: 0.05,
-          };
+          w_hist: 0.2,
+          w_social: 0.15,
+          w_pop: 0.2,
+          w_time: 0.15,
+          w_geo: 0.15,
+          w_novel: 0.1,
+          w_new: 0.05,
+          w_pen: 0.05,
+        };
 
       let userLatForAlgo: number | null = null;
       let userLngForAlgo: number | null = null;
@@ -1248,6 +1253,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         id: row.id,
         category: row.category,
         scheduled_time: row.scheduled_time ? new Date(row.scheduled_time) : null,
+        created_at: row.created_at ? new Date(row.created_at) : null,
         latitude: row.latitude,
         longitude: row.longitude,
         max_attendees: row.max_attendees,
@@ -1283,7 +1289,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     if (userId) {
       // Get all toki IDs from the result
       const tokiIds = result.rows.map(row => row.id);
-      
+
       if (tokiIds.length > 0) {
         // Fetch friends attending for all tokis in one query
         const friendsResult = await pool.query(
@@ -1402,7 +1408,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       'SELECT latitude, longitude FROM users WHERE id = $1',
       [userId]
     );
-    
+
     const userLat = userResult.rows[0]?.latitude;
     const userLng = userResult.rows[0]?.longitude;
 
@@ -1448,7 +1454,7 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
           )
         ) as distance_km`;
     }
-    
+
     query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
@@ -1550,7 +1556,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       'SELECT latitude, longitude FROM users WHERE id = $1',
       [userId]
     );
-    
+
     const userLat = userResult.rows[0]?.latitude;
     const userLng = userResult.rows[0]?.longitude;
 
@@ -1568,7 +1574,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
           SELECT 1 FROM saved_tokis st
           WHERE st.toki_id = t.id AND st.user_id = $2
         ) as is_saved`;
-    
+
     // Add distance calculation if user has coordinates
     if (userLat && userLng) {
       query += `,
@@ -1582,7 +1588,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
           )
         ) as distance_km`;
     }
-    
+
     query += `
       FROM tokis t
       LEFT JOIN users u ON t.host_id = u.id
@@ -1605,7 +1611,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
           WHERE hu.toki_id = t.id AND hu.user_id = $2
         )
       GROUP BY t.id, u.name, u.avatar_url, u.bio, u.location`;
-    
+
     // Add latitude and longitude to GROUP BY if calculating distance
     if (userLat && userLng) {
       query += `, t.latitude, t.longitude`;
@@ -1655,7 +1661,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
         'SELECT status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
         [id, userId]
       );
-      
+
       if (joinResult.rows.length > 0) {
         joinStatus = joinResult.rows[0].status;
       }
@@ -1863,7 +1869,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
 
     // Start a database transaction
     const client = await pool.connect();
-    
+
     try {
       await client.query('BEGIN');
 
@@ -2042,7 +2048,7 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     const { id } = req.params;
     const { invitedUserId } = req.body as { invitedUserId: string };
     const userId = (req as any).user.id;
-    
+
     logger.info('📥 [TOKIS] Invite request:', { tokiId: id, invitedUserId, inviterId: userId });
 
     if (!invitedUserId) {
@@ -2054,13 +2060,13 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     if (tokiCheck.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Toki not found' });
     }
-    
+
     const toki = tokiCheck.rows[0];
     const isHost = toki.host_id === userId;
-    const isPublicAttendee = toki.visibility === 'public' && 
-      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status = $3', 
+    const isPublicAttendee = toki.visibility === 'public' &&
+      (await pool.query('SELECT 1 FROM toki_participants WHERE toki_id = $1 AND user_id = $2 AND status = $3',
         [id, userId, 'approved'])).rows.length > 0;
-    
+
     if (!isHost && !isPublicAttendee) {
       return res.status(403).json({ success: false, error: 'Only host or attendees of public tokis can invite users' });
     }
@@ -2077,9 +2083,9 @@ router.post('/:id/invites', authenticateToken, async (req: Request, res: Respons
     const tokiTitle = toki.title || 'a Toki';
     const inviterName = (req as any).user.name;
     const inviterType = isHost ? 'the host' : 'an attendee';
-    
+
     logger.info('📥 [TOKIS] About to create notification, io available:', !!req.app.get('io'));
-    
+
     await createSystemNotificationAndPush({
       userId: invitedUserId,
       type: 'invite',
@@ -2112,21 +2118,21 @@ router.get('/:id/invites', authenticateToken, async (req: Request, res: Response
 
     const result = isHost
       ? await pool.query(
-          `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
+        `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
            FROM toki_invites ti
            JOIN users u ON u.id = ti.invited_user_id
            WHERE ti.toki_id = $1
            ORDER BY ti.created_at DESC`,
-          [id]
-        )
+        [id]
+      )
       : await pool.query(
-          `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
+        `SELECT ti.*, u.name as invited_user_name, u.avatar_url as invited_user_avatar
            FROM toki_invites ti
            JOIN users u ON u.id = ti.invited_user_id
            WHERE ti.toki_id = $1 AND ti.invited_user_id = $2
            ORDER BY ti.created_at DESC`,
-          [id, userId]
-        );
+        [id, userId]
+      );
 
     return res.status(200).json({ success: true, data: { invites: result.rows } });
   } catch (error) {
@@ -2179,7 +2185,7 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
       'SELECT * FROM notifications WHERE id = $1 AND user_id = $2 AND type = $3',
       [notificationId, userId, 'invite']
     );
-    
+
     if (notificationRow.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Invite notification not found' });
     }
@@ -2194,7 +2200,7 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
       'SELECT * FROM toki_invites WHERE toki_id = $1 AND invited_user_id = $2 AND status = $3',
       [tokiId, userId, 'invited']
     );
-    
+
     if (inviteRow.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'Invite not found or already responded' });
     }
@@ -2233,13 +2239,13 @@ router.post('/invites/respond', authenticateToken, async (req: Request, res: Res
       await pool.query('UPDATE notifications SET read = true WHERE user_id = $1 AND type = $2 AND related_toki_id = $3 ORDER BY created_at DESC LIMIT 1', [userId, 'invite_accepted', tokiId]);
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      data: { 
+    return res.status(200).json({
+      success: true,
+      data: {
         invite: updated.rows[0],
         action: action,
         tokiId: tokiId
-      } 
+      }
     });
   } catch (error) {
     logger.error('Respond invite via notification error:', error);
@@ -2338,7 +2344,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
 
     if (existingJoinResult.rows.length > 0) {
       const existingJoin = existingJoinResult.rows[0];
-      
+
       if (existingJoin.status === 'approved') {
         return res.status(400).json({
           success: false,
@@ -2368,9 +2374,9 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
         'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status = $2',
         [id, 'approved']
       );
-      
+
       const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count); // Host (1) + participants
-      
+
       if (currentAttendees >= toki.max_attendees) {
         return res.status(400).json({
           success: false,
@@ -2383,7 +2389,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
     // Determine status based on auto_approve setting or active invite
     const autoApprove = toki.auto_approve || false;
     const joinStatus = (hasActiveInvite || autoApprove) ? 'approved' : 'pending';
-    
+
     // Insert join request or direct join
     const joinResult = await pool.query(
       'INSERT INTO toki_participants (toki_id, user_id, status, joined_at) VALUES ($1, $2, $3, $4) RETURNING *',
@@ -2427,7 +2433,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
 
   } catch (error) {
     console.error('Join Toki error:', error);
-    
+
     // Check if it's a table doesn't exist error
     if (error instanceof Error && error.message && error.message.includes('relation "toki_participants" does not exist')) {
       return res.status(500).json({
@@ -2436,7 +2442,7 @@ router.post('/:id/join', authenticateToken, async (req: Request, res: Response) 
         message: 'The database tables need to be initialized. Please run the database setup script.'
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -2489,15 +2495,15 @@ router.put('/:id/join/:requestId/approve', authenticateToken, async (req: Reques
 
     // Check if Toki is full (skip check if max_attendees is NULL/unlimited)
     const maxAttendees = tokiResult.rows[0].max_attendees;
-    
+
     if (maxAttendees !== null && maxAttendees !== undefined) {
       const currentAttendeesResult = await pool.query(
         'SELECT COUNT(*) as count FROM toki_participants WHERE toki_id = $1 AND status = $2',
         [id, 'approved']
       );
-      
+
       const currentAttendees = 1 + parseInt(currentAttendeesResult.rows[0].count);
-      
+
       if (currentAttendees >= maxAttendees) {
         return res.status(400).json({
           success: false,
@@ -3082,7 +3088,7 @@ router.post('/join-by-link', authenticateToken, async (req: Request, res: Respon
 
     // Validate invite link
     const validation = await validateInviteLink(inviteCode);
-    
+
     if (!validation.isValid) {
       return res.status(400).json({
         success: false,
@@ -3095,7 +3101,7 @@ router.post('/join-by-link', authenticateToken, async (req: Request, res: Respon
 
     // Check if user is already a participant
     const isParticipant = await isUserParticipant(tokiId, userId);
-    
+
     if (isParticipant) {
       return res.status(400).json({
         success: false,
@@ -3105,7 +3111,7 @@ router.post('/join-by-link', authenticateToken, async (req: Request, res: Respon
 
     // Add user to toki
     const added = await addUserToToki(tokiId, userId);
-    
+
     if (!added) {
       return res.status(400).json({
         success: false,
@@ -3160,7 +3166,7 @@ router.get('/invite-links/:code', async (req: Request, res: Response): Promise<a
     const { code } = req.params;
 
     const validation = await validateInviteLink(code);
-    
+
     if (!validation.isValid) {
       return res.status(404).json({
         success: false,

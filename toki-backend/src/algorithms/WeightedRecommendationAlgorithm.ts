@@ -98,6 +98,9 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
     const noveltyScore = this.calculateNoveltyScore(event, userContext);
     score += weights.w_novel * noveltyScore;
 
+    const newEventScore = this.calculateNewEventScore(event);
+    score += weights.w_new * newEventScore;
+
     return score;
   }
 
@@ -295,6 +298,29 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
       hostBoost * 0.6 + normalizedParticipantBoost * 0.4;
 
     return Math.min(combined, 1);
+  }
+
+  /**
+   * Score based on how recently the event was created.
+   * Returns 1.0 for events created in the last 24 hours,
+   * linearly decaying to 0 at 7 days old.
+   */
+  private calculateNewEventScore(event: EventData): number {
+    if (!event.created_at) {
+      return 0.3; // neutral default for events without created_at
+    }
+
+    const createdTime = new Date(event.created_at).getTime();
+    const now = Date.now();
+    const hoursOld = (now - createdTime) / (1000 * 60 * 60);
+
+    if (hoursOld <= 24) {
+      return 1;
+    }
+
+    // Linear decay from 1 at 24h to 0 at 7 days (168h)
+    const maxHours = 24 * 7; // 168 hours
+    return Math.max(0, 1 - (hoursOld - 24) / (maxHours - 24));
   }
 }
 

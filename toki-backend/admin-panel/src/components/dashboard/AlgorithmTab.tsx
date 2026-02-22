@@ -5,14 +5,14 @@ import AlgorithmPreview from '../algorithm/AlgorithmPreview';
 import SaveConfirmationDialog from '../algorithm/SaveConfirmationDialog';
 
 interface Weights {
-  w_hist: number; w_social: number; w_pop: number; w_time: number; w_geo: number; w_novel: number; w_pen: number;
+  w_hist: number; w_social: number; w_pop: number; w_time: number; w_geo: number; w_novel: number; w_new: number; w_pen: number;
 }
 
 export default function AlgorithmTab() {
   const [_, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const [w, setW] = useState<Weights>({ w_hist: 0.2, w_social: 0.15, w_pop: 0.2, w_time: 0.15, w_geo: 0.2, w_novel: 0.1, w_pen: 0.05 });
+  const [w, setW] = useState<Weights>({ w_hist: 0.2, w_social: 0.15, w_pop: 0.2, w_time: 0.15, w_geo: 0.15, w_novel: 0.1, w_new: 0.05, w_pen: 0.05 });
 
   useEffect(() => { load(); }, []);
   const load = async () => {
@@ -25,8 +25,9 @@ export default function AlgorithmTab() {
         w_social: Number(data.w_social ?? 0.15),
         w_pop: Number(data.w_pop ?? 0.2),
         w_time: Number(data.w_time ?? 0.15),
-        w_geo: Number(data.w_geo ?? 0.2),
+        w_geo: Number(data.w_geo ?? 0.15),
         w_novel: Number(data.w_novel ?? 0.1),
+        w_new: Number(data.w_new ?? 0.05),
         w_pen: Number(data.w_pen ?? 0.05),
       });
     } finally { setLoading(false); }
@@ -39,6 +40,7 @@ export default function AlgorithmTab() {
     w_time: Math.round(w.w_time * 100),
     w_geo: Math.round(w.w_geo * 100),
     w_novel: Math.round(w.w_novel * 100),
+    w_new: Math.round(w.w_new * 100),
     w_pen: Math.round(w.w_pen * 100),
   }), [w]);
 
@@ -65,13 +67,14 @@ export default function AlgorithmTab() {
 
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
         <div className="glass-card" style={{ padding: 16, display: 'grid', gap: 16 }}>
-          <HyperparameterSlider label="w_hist" value={percentages.w_hist} onChange={(v)=>setPct('w_hist', v)} explanation="Similarity to user's past likes." />
-          <HyperparameterSlider label="w_social" value={percentages.w_social} onChange={(v)=>setPct('w_social', v)} explanation="Boost when friends are going." />
-          <HyperparameterSlider label="w_pop" value={percentages.w_pop} onChange={(v)=>setPct('w_pop', v)} explanation="Popularity of the event." />
-          <HyperparameterSlider label="w_time" value={percentages.w_time} onChange={(v)=>setPct('w_time', v)} explanation="Recency/sooner events scoring higher." />
-          <HyperparameterSlider label="w_geo" value={percentages.w_geo} onChange={(v)=>setPct('w_geo', v)} explanation="Proximity to user." />
-          <HyperparameterSlider label="w_novel" value={percentages.w_novel} onChange={(v)=>setPct('w_novel', v)} explanation="Novelty/variety boost." />
-          <HyperparameterSlider label="w_pen" value={percentages.w_pen} onChange={(v)=>setPct('w_pen', v)} explanation="Penalty for duplicate categories." />
+          <HyperparameterSlider label="w_hist" value={percentages.w_hist} onChange={(v) => setPct('w_hist', v)} explanation="Similarity to user's past likes." />
+          <HyperparameterSlider label="w_social" value={percentages.w_social} onChange={(v) => setPct('w_social', v)} explanation="Boost when friends are going." />
+          <HyperparameterSlider label="w_pop" value={percentages.w_pop} onChange={(v) => setPct('w_pop', v)} explanation="Popularity of the event." />
+          <HyperparameterSlider label="w_time" value={percentages.w_time} onChange={(v) => setPct('w_time', v)} explanation="Recency/sooner events scoring higher." />
+          <HyperparameterSlider label="w_geo" value={percentages.w_geo} onChange={(v) => setPct('w_geo', v)} explanation="Proximity to user." />
+          <HyperparameterSlider label="w_novel" value={percentages.w_novel} onChange={(v) => setPct('w_novel', v)} explanation="Novelty/variety boost." />
+          <HyperparameterSlider label="w_new" value={percentages.w_new} onChange={(v) => setPct('w_new', v)} explanation="Boost for newly created events." />
+          <HyperparameterSlider label="w_pen" value={percentages.w_pen} onChange={(v) => setPct('w_pen', v)} explanation="Penalty for duplicate categories." />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: total === 100 ? '#10B981' : '#EF4444' }}>
             <div>Total</div>
@@ -89,7 +92,7 @@ export default function AlgorithmTab() {
       </div>
 
       {confirm && (
-        <SaveConfirmationDialog onCancel={()=>setConfirm(false)} onConfirm={save} disabled={!canSave} />
+        <SaveConfirmationDialog onCancel={() => setConfirm(false)} onConfirm={save} disabled={!canSave} />
       )}
     </div>
   );

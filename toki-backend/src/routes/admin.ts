@@ -19,12 +19,12 @@ const router = Router();
 const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = req.user!.id;
-    
+
     const userResult = await pool.query(
       'SELECT id, name, email, role FROM users WHERE id = $1',
       [userId]
     );
-    
+
     if (userResult.rows.length === 0) {
       res.status(403).json({
         success: false,
@@ -32,7 +32,7 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction): Pr
       });
       return;
     }
-    
+
     if (userResult.rows[0].role !== 'admin') {
       res.status(403).json({
         success: false,
@@ -40,7 +40,7 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction): Pr
       });
       return;
     }
-    
+
     next();
     return;
   } catch (error) {
@@ -234,7 +234,7 @@ router.patch('/tokis/:tokiId/block', authenticateToken, requireAdmin, async (req
     const { tokiId } = req.params;
     const { block, reason } = req.body;
     const adminId = req.user!.id;
-    
+
     // Validate block parameter
     if (typeof block !== 'boolean') {
       return res.status(400).json({
@@ -242,9 +242,9 @@ router.patch('/tokis/:tokiId/block', authenticateToken, requireAdmin, async (req
         message: 'Block parameter must be a boolean'
       });
     }
-    
+
     const newStatus = block ? 'blocked' : 'active';
-    
+
     // Update Toki status
     const result = await pool.query(
       `UPDATE tokis 
@@ -253,16 +253,16 @@ router.patch('/tokis/:tokiId/block', authenticateToken, requireAdmin, async (req
        RETURNING *`,
       [newStatus, tokiId]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Toki not found'
       });
     }
-    
+
     logger.info(`🚫 [ADMIN] Toki ${tokiId} ${block ? 'BLOCKED' : 'UNBLOCKED'} by admin ${adminId}. Reason: ${reason || 'N/A'}`);
-    
+
     return res.json({
       success: true,
       data: result.rows[0],
@@ -582,7 +582,7 @@ router.get('/reports/:reportId', authenticateToken, requireAdmin, async (req: Re
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -652,7 +652,7 @@ router.post('/login', async (req: Request, res: Response) => {
 router.get('/me', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    
+
     const userResult = await pool.query(
       'SELECT id, email, name, role, verified, created_at FROM users WHERE id = $1',
       [userId]
@@ -1289,9 +1289,9 @@ router.post('/users', authenticateToken, requireAdmin, async (req: Request, res:
 router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { purpose = 'reset', send = false, templateId, includeLink = true } = req.body as { 
-      purpose?: PasswordLinkPurpose; 
-      send?: boolean; 
+    const { purpose = 'reset', send = false, templateId, includeLink = true } = req.body as {
+      purpose?: PasswordLinkPurpose;
+      send?: boolean;
       templateId?: string;
       includeLink?: boolean;
     };
@@ -1341,13 +1341,13 @@ router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (
           const tmpl = t.rows[0];
           subject = tmpl.subject || subject;
           let bodyText = tmpl.body_text || text;
-          
+
           // Replace variables
           bodyText = bodyText
             .replace(/\{\{name\}\}/g, u.name || '')
             .replace(/\{\{email\}\}/g, u.email || '')
             .replace(/\{\{expiry_hours\}\}/g, String(expiryHours));
-          
+
           // Only include link if checkbox is checked
           if (includeLink) {
             bodyText = bodyText.replace(/\{\{reset_link\}\}/g, link);
@@ -1355,7 +1355,7 @@ router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (
             // Remove the link placeholder if not including it
             bodyText = bodyText.replace(/\{\{reset_link\}\}/g, '');
           }
-          
+
           text = bodyText;
         }
       } else if (!includeLink) {
@@ -1377,7 +1377,7 @@ router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (
         }),
       });
       if (!resp.ok) {
-        const txt = await resp.text().catch(()=> '');
+        const txt = await resp.text().catch(() => '');
         console.error('Resend email failed (password-link):', txt);
         res.status(500).json({ success: false, message: 'Failed to send email' });
         return;
@@ -1692,13 +1692,13 @@ router.get('/tokis/:id/participants', authenticateToken, requireAdmin, async (re
 router.get('/algorithm', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const result = await pool.query(
-      `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen, updated_by, updated_at
+      `SELECT w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen, updated_by, updated_at
        FROM algorithm_hyperparameters
        ORDER BY updated_at DESC
        LIMIT 1`
     );
     if (result.rows.length === 0) {
-      res.json({ success: true, data: { w_hist: 0.2, w_social: 0.15, w_pop: 0.2, w_time: 0.15, w_geo: 0.2, w_novel: 0.1, w_pen: 0.05 } });
+      res.json({ success: true, data: { w_hist: 0.2, w_social: 0.15, w_pop: 0.2, w_time: 0.15, w_geo: 0.15, w_novel: 0.1, w_new: 0.05, w_pen: 0.05 } });
       return;
     }
     res.json({ success: true, data: result.rows[0] });
@@ -1712,8 +1712,8 @@ router.get('/algorithm', authenticateToken, requireAdmin, async (req: Request, r
 
 router.put('/algorithm', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen } = req.body || {};
-    const weights = [w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen].map(Number);
+    const { w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen } = req.body || {};
+    const weights = [w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen].map(Number);
     if (weights.some((v) => isNaN(v))) {
       res.status(400).json({ success: false, message: 'All weights must be numbers' });
       return;
@@ -1731,9 +1731,9 @@ router.put('/algorithm', authenticateToken, requireAdmin, async (req: Request, r
     const updatedBy = req.user!.id;
     // Upsert single latest row (simple approach)
     await pool.query(
-      `INSERT INTO algorithm_hyperparameters (w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen, updated_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
-      [w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_pen, updatedBy]
+      `INSERT INTO algorithm_hyperparameters (w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen, updated_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())`,
+      [w_hist, w_social, w_pop, w_time, w_geo, w_novel, w_new, w_pen, updatedBy]
     );
 
     res.json({ success: true });
@@ -1886,7 +1886,7 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       [startTimeStr]
     );
     const totalBefore = parseInt(totalBeforeResult.rows[0]?.count || '0');
-    
+
     // Then get counts per period and calculate cumulative
     const totalAccountsResult = await pool.query(
       `WITH period_counts AS (
@@ -1985,7 +1985,7 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // Fill in missing periods and build time series
     const timeSeries: any[] = [];
     const sortedDates = Array.from(allDates).sort();
-    
+
     // If no data, create empty series for the time range
     if (sortedDates.length === 0) {
       const increment = groupByHour ? 1 : 24; // hours
@@ -2335,7 +2335,7 @@ router.post('/notification-schedule/:id/test', authenticateToken, requireAdmin, 
 
     // Import sendPushToUsers
     const { sendPushToUsers } = await import('../utils/push');
-    
+
     await sendPushToUsers(userIds, {
       title: notification.title,
       body: notification.message,
@@ -2380,7 +2380,7 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
     const entries = zip.getEntries();
 
     // Find JSON file
-    const jsonEntry = entries.find((e: IZipEntry) => 
+    const jsonEntry = entries.find((e: IZipEntry) =>
       e.entryName.toLowerCase().endsWith('.json')
     );
 
@@ -2419,7 +2419,7 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
     // Fix invalid or missing host_ids - first pass: check which host_ids exist
     const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter(Boolean))];
     const existingHostIds = new Set<string>();
-    
+
     if (allHostIds.length > 0) {
       try {
         const hostCheckResult = await pool.query(
@@ -2465,8 +2465,8 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
     const imageMap = new Map<string, Buffer>();
     entries.forEach((entry: IZipEntry) => {
       const ext = entry.entryName.toLowerCase();
-      if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || 
-          ext.endsWith('.png') || ext.endsWith('.webp')) {
+      if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') ||
+        ext.endsWith('.png') || ext.endsWith('.webp')) {
         const filename = entry.entryName.split('/').pop() || entry.entryName;
         imageMap.set(filename, entry.getData());
       }
@@ -2531,13 +2531,13 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
       const previewData: any = {
         ...matchedToki.toki,
         index: i,
-        host: hostMap.get(matchedToki.toki.host_id) || { 
-          id: matchedToki.toki.host_id, 
+        host: hostMap.get(matchedToki.toki.host_id) || {
+          id: matchedToki.toki.host_id,
           name: 'Unknown User',
           email: ''
         }
       };
-      
+
       // Remove the internal flag from preview data
       delete previewData._hostFixed;
 
@@ -2546,8 +2546,8 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
         const mimeType = matchedToki.imageBuffer[0] === 0xFF && matchedToki.imageBuffer[1] === 0xD8
           ? 'image/jpeg'
           : matchedToki.imageBuffer[0] === 0x89
-          ? 'image/png'
-          : 'image/webp';
+            ? 'image/png'
+            : 'image/webp';
         previewData.previewImage = `data:${mimeType};base64,${matchedToki.imageBuffer.toString('base64')}`;
       }
 
@@ -2610,7 +2610,7 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
     const zip = new AdmZip(req.file.buffer);
     const entries = zip.getEntries();
 
-    const jsonEntry = entries.find((e: IZipEntry) => 
+    const jsonEntry = entries.find((e: IZipEntry) =>
       e.entryName.toLowerCase().endsWith('.json')
     );
 
@@ -2648,7 +2648,7 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
     // Fix invalid or missing host_ids - first pass: check which host_ids exist
     const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter(Boolean))];
     const existingHostIds = new Set<string>();
-    
+
     if (allHostIds.length > 0) {
       try {
         const hostCheckResult = await pool.query(
@@ -2675,8 +2675,8 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
     const imageMap = new Map<string, Buffer>();
     entries.forEach((entry: IZipEntry) => {
       const ext = entry.entryName.toLowerCase();
-      if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || 
-          ext.endsWith('.png') || ext.endsWith('.webp')) {
+      if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') ||
+        ext.endsWith('.png') || ext.endsWith('.webp')) {
         const filename = entry.entryName.split('/').pop() || entry.entryName;
         imageMap.set(filename, entry.getData());
       }
@@ -2750,8 +2750,8 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
             matchedToki.toki.longitude || null,
             matchedToki.toki.timeSlot,
             matchedToki.toki.scheduledTime || null,
-            matchedToki.toki.maxAttendees === null || matchedToki.toki.maxAttendees === undefined 
-              ? null 
+            matchedToki.toki.maxAttendees === null || matchedToki.toki.maxAttendees === undefined
+              ? null
               : (matchedToki.toki.maxAttendees || 10),
             matchedToki.toki.category,
             matchedToki.toki.visibility || 'public',

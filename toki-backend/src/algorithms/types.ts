@@ -5,6 +5,7 @@ export interface AlgorithmWeights {
   w_time: number;
   w_geo: number;
   w_novel: number;
+  w_new: number;
   w_pen: number;
 }
 
@@ -12,6 +13,7 @@ export interface EventData {
   id: string;
   category: string;
   scheduled_time: Date | null;
+  created_at?: Date | null;
   latitude: number | null;
   longitude: number | null;
   max_attendees: number;

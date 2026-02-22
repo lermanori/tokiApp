@@ -5,6 +5,7 @@ interface Weights {
   w_time: number;
   w_geo: number;
   w_novel: number;
+  w_new: number;
   w_pen: number;
 }
 
@@ -16,6 +17,7 @@ export default function AlgorithmPreview({ w }: { w: Weights }) {
     ['w_time', w.w_time, 'TimeDecay(e.start_time, now)'],
     ['w_geo', w.w_geo, 'Proximity(u.location, e.location)'],
     ['w_novel', w.w_novel, 'NoveltyBoost(u,e)'],
+    ['w_new', w.w_new, 'NewEventBoost(e.created_at)'],
     ['w_pen', w.w_pen, 'DuplicateCategoryPenalty(u,e)'],
   ];
 
@@ -27,7 +29,7 @@ export default function AlgorithmPreview({ w }: { w: Weights }) {
         {' '}
         w_hist·SimilarityToPastLiked + w_social·SocialBoost + w_pop·Popularity +
         {' '}
-        w_time·TimeDecay + w_geo·Proximity + w_novel·NoveltyBoost − w_pen·DuplicateCategoryPenalty
+        w_time·TimeDecay + w_geo·Proximity + w_novel·NoveltyBoost + w_new·NewEventBoost − w_pen·DuplicateCategoryPenalty
       </div>
       <div style={{ display: 'grid', gap: 8 }}>
         {rows.map(([key, val, desc]) => (
