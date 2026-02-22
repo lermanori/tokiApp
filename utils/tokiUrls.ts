@@ -7,7 +7,7 @@ import { config } from '@/services/config';
  */
 const getBaseUrl = (baseUrl?: string): string => {
   if (baseUrl) return baseUrl;
-  
+
   // Try to get from config, fallback to localhost for development
   try {
     return config.frontend.baseUrl;
@@ -35,16 +35,10 @@ export const generateTokiUrl = (tokiId: string, baseUrl?: string): string => {
  */
 export const generateTokiShareUrl = (toki: any, baseUrl?: string): string => {
   const base = getBaseUrl(baseUrl);
-  const url = `${base}/toki-details?tokiId=${toki.id}`;
-  
-  // Add additional parameters if they exist
-  const params = new URLSearchParams();
-  if (toki.title) params.append('title', toki.title);
-  if (toki.location) params.append('location', toki.location);
-  if (toki.timeSlot) params.append('time', toki.timeSlot);
-  
-  const paramString = params.toString();
-  return paramString ? `${url}&${paramString}` : url;
+  // Use /share/:id path — Netlify proxies this to the backend which serves
+  // HTML with OG meta tags (og:image, og:title, etc.) for link previews,
+  // then redirects real users to the SPA.
+  return `${base}/share/${toki.id}`;
 };
 
 /**
@@ -56,7 +50,7 @@ export const generateTokiShareMessage = (toki: any): string => {
   const title = toki.title || 'Amazing Event';
   const location = toki.location || 'TBD';
   const time = toki.timeSlot || 'TBD';
-  
+
   return `🎉 Check out this event: "${title}"\n📍 ${location}\n⏰ ${time}\n\nJoin me on Toki!`;
 };
 
@@ -79,7 +73,7 @@ export const generateTokiShareOptions = (toki: any) => {
   const url = generateTokiShareUrl(toki);
   const message = generateTokiShareMessage(toki);
   const shortMessage = generateTokiShareMessageShort(toki);
-  
+
   return {
     url,
     message,

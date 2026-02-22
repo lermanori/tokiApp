@@ -1,2 +1,3 @@
 /.well-known/*   200
+/share/*  https://backend-production-d8ec.up.railway.app/share/:splat  200
 /*    /index.html   200
