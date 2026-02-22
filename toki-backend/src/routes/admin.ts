@@ -2844,4 +2844,55 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
   }
 });
 
+// ===== TOKEN DEBUG =====
+
+// Get token configuration and user info for debugging disconnections
+router.get('/token-debug/:userId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const userResult = await pool.query(
+      'SELECT id, name, email, created_at, updated_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Return configured token expiry durations
+    const accessExpiresIn = process.env.JWT_EXPIRES_IN || '24h';
+    const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          createdAt: user.created_at,
+          updatedAt: user.updated_at
+        },
+        tokenConfig: {
+          accessExpiresIn,
+          refreshExpiresIn
+        },
+        serverTime: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching token debug info:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch token debug info'
+    });
+  }
+});
+
 export default router;

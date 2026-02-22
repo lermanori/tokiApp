@@ -160,7 +160,7 @@ export const adminApi = {
     });
     return handleResponse(response);
   },
-  issuePasswordLink: async (id: string, purpose: 'welcome'|'reset', send: boolean, templateId?: string, includeLink: boolean = true) => {
+  issuePasswordLink: async (id: string, purpose: 'welcome' | 'reset', send: boolean, templateId?: string, includeLink: boolean = true) => {
     const response = await fetch(`${API_BASE}/users/${id}/password-link`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -236,7 +236,7 @@ export const adminApi = {
   previewBatchTokis: async (zipFile: File) => {
     const formData = new FormData();
     formData.append('zipFile', zipFile);
-    
+
     const response = await fetch(`${API_BASE}/tokis/batch/preview`, {
       method: 'POST',
       headers: getAuthHeaders(false), // Don't set Content-Type for FormData
@@ -248,7 +248,7 @@ export const adminApi = {
   createBatchTokis: async (zipFile: File) => {
     const formData = new FormData();
     formData.append('zipFile', zipFile);
-    
+
     const response = await fetch(`${API_BASE}/tokis/batch/create`, {
       method: 'POST',
       headers: getAuthHeaders(false), // Don't set Content-Type for FormData
@@ -422,10 +422,10 @@ export const adminApi = {
   },
 
   // Reports
-  getReports: async (params?: { 
-    page?: number; 
-    limit?: number; 
-    status?: string; 
+  getReports: async (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
     contentType?: string;
   }) => {
     const query = new URLSearchParams();
@@ -455,6 +455,14 @@ export const adminApi = {
       method: 'PATCH',
       headers: getAuthHeaders(),
       body: JSON.stringify(data)
+    });
+    return handleResponse(response);
+  },
+
+  // Token Debug
+  getTokenDebug: async (userId: string) => {
+    const response = await fetch(`${API_BASE}/token-debug/${userId}`, {
+      headers: getAuthHeaders()
     });
     return handleResponse(response);
   },

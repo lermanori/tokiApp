@@ -732,9 +732,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             try { configureForegroundNotificationHandler(); } catch { }
           } catch (error) {
             console.error('❌ Failed to load authenticated user data:', error);
-            // Clear invalid tokens and use stored data
-            await apiService.logout();
-            console.log('🔄 Falling back to stored data after auth failure');
+            // DON'T clear tokens here — the error might be transient (network/timeout).
+            // The token refresh logic inside makeRequest() already handles clearing
+            // tokens when the refresh token is truly expired (401 from /auth/refresh).
+            // Clearing here with apiService.logout() was wiping valid refresh tokens
+            // and forcing users to re-login daily.
+            console.log('🔄 Falling back to stored data (keeping tokens for retry)');
             dispatch({ type: 'SET_TOKIS', payload: tokis });
             dispatch({ type: 'UPDATE_CURRENT_USER', payload: currentUser });
             dispatch({ type: 'SET_MESSAGES', payload: messages });
