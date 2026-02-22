@@ -78,7 +78,7 @@ export default function ChatScreen() {
   // Load Toki participants for the modal
   const loadTokiParticipants = async () => {
     if (!isGroup || !tokiId) return;
-    
+
     setIsLoadingParticipants(true);
     try {
       const tokiData = await actions.getTokiById(tokiId);
@@ -87,7 +87,7 @@ export default function ChatScreen() {
         const currentUserId = state.currentUser?.id;
         const hostId = tokiData.host?.id || tokiData.host_id;
         setIsUserHost(currentUserId === hostId);
-        
+
         // Map participants to the format expected by ParticipantsModal
         const participantsList = (tokiData.participants || []).map((p: any) => ({
           id: p.id || p.user?.id || '',
@@ -95,10 +95,10 @@ export default function ChatScreen() {
           avatar: p.avatar || p.user?.avatar_url || undefined,
           isHost: (p.id || p.user?.id) === hostId
         }));
-        
+
         // Check if host is already in participants list
         const hostInParticipants = participantsList.some(p => p.id === hostId);
-        
+
         // If host is not in participants list, add them
         if (!hostInParticipants && tokiData.host) {
           participantsList.push({
@@ -108,14 +108,14 @@ export default function ChatScreen() {
             isHost: true
           });
         }
-        
+
         // Sort participants: host first, then others
         const sortedParticipants = participantsList.sort((a, b) => {
           if (a.isHost && !b.isHost) return -1;
           if (!a.isHost && b.isHost) return 1;
           return 0;
         });
-        
+
         setTokiParticipants(sortedParticipants);
       } else {
         setTokiParticipants([]);
@@ -131,7 +131,7 @@ export default function ChatScreen() {
   // Handle removing a participant from the group
   const handleRemoveParticipant = async (participantId: string) => {
     if (!tokiId) return;
-    
+
     Alert.alert(
       'Remove Participant',
       'Are you sure you want to remove this participant from the group chat?',
@@ -167,12 +167,12 @@ export default function ChatScreen() {
       console.log('⏭️ [CHAT SCREEN] Debounced mark as read skipped - no messages');
       return;
     }
-    
+
     // Clear existing timeout
     if (markAsReadTimeout) {
       clearTimeout(markAsReadTimeout);
     }
-    
+
     // Set new timeout to mark as read after 1 second of inactivity
     const timeout = setTimeout(() => {
       console.log('⏱️ [CHAT SCREEN] Debounced mark as read triggered');
@@ -182,7 +182,7 @@ export default function ChatScreen() {
         actions.markConversationAsRead(chatId);
       }
     }, 1000);
-    
+
     setMarkAsReadTimeout(timeout);
   };
 
@@ -206,7 +206,7 @@ export default function ChatScreen() {
     // Mark as read when user is actively scrolling (indicates engagement)
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const isNearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 20;
-    
+
     // If user is near bottom or actively scrolling, mark as read
     if (isNearBottom || contentOffset.y > 0) {
       console.log('📜 [CHAT SCREEN] User scrolling, marking chat as read...');
@@ -226,36 +226,36 @@ export default function ChatScreen() {
         console.error('❌ No timestamp provided');
         return 'No time';
       }
-      
+
       const date = new Date(timestamp);
       const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      
+
       // Check if date is valid
       if (isNaN(date.getTime())) {
         console.error('❌ Invalid date created from timestamp:', timestamp);
         return 'Invalid time';
       }
-      
+
       // Simple approach: Just use the Date object's built-in local conversion
       // JavaScript automatically converts UTC timestamps to local time
-      const localTime = date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
+      const localTime = date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
         minute: '2-digit',
         hour12: true
         // Don't specify timeZone - let JS use the system's local timezone
       });
-      
+
       // Also get a more detailed format for comparison
       const detailedTime = date.toLocaleString('en-US', {
-        hour: '2-digit', 
+        hour: '2-digit',
         minute: '2-digit',
         hour12: true,
         month: 'short',
         day: 'numeric'
       });
-      
 
-      
+
+
       return localTime;
     } catch (error) {
       console.error('❌ Error formatting timestamp:', error);
@@ -271,7 +271,7 @@ export default function ChatScreen() {
         console.log('🔄 Loading messages for Toki:', tokiId);
         const messagesData = await actions.getTokiMessages(tokiId);
         console.log('✅ Toki messages loaded:', messagesData);
-        
+
         // Deep inspection of the raw message data
         if (messagesData && messagesData.length > 0) {
           console.log('🔍 RAW MESSAGE INSPECTION:');
@@ -284,10 +284,10 @@ export default function ChatScreen() {
             charCodes: messagesData[0]?.created_at && typeof messagesData[0].created_at === 'string' ? Array.from(messagesData[0].created_at as string).map((c: string) => c.charCodeAt(0)) : [],
           });
         }
-        
+
         setMessages(messagesData);
         scrollToBottom();
-        
+
         // Mark Toki as read when messages are loaded (only if there are messages)
         if (messagesData && messagesData.length > 0) {
           try {
@@ -312,7 +312,7 @@ export default function ChatScreen() {
         console.log('🔄 Loading messages for conversation:', conversationId);
         const messagesData = await actions.getConversationMessages(conversationId);
         console.log('✅ Messages loaded:', messagesData);
-        
+
         // Deep inspection of the raw message data
         if (messagesData && messagesData.length > 0) {
           console.log('🔍 RAW MESSAGE INSPECTION:');
@@ -325,10 +325,10 @@ export default function ChatScreen() {
             charCodes: messagesData[0]?.created_at && typeof messagesData[0].created_at === 'string' ? Array.from(messagesData[0].created_at as string).map((c: string) => c.charCodeAt(0)) : [],
           });
         }
-        
+
         setMessages(messagesData);
         scrollToBottom();
-        
+
         // Mark conversation as read when messages are loaded (only if there are messages)
         if (messagesData && messagesData.length > 0) {
           try {
@@ -356,7 +356,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     loadMessages();
-    
+
     // Join appropriate room for real-time messages
     const setupSocketConnection = async () => {
       try {
@@ -364,12 +364,12 @@ export default function ChatScreen() {
           // Join Toki group chat room
           console.log('🔌 [CHAT SCREEN] Joining Toki room:', tokiId);
           await socketService.joinToki(tokiId);
-          
+
           // Check WebSocket connection status
           console.log('🔌 [CHAT SCREEN] WebSocket connection status:', socketService.getConnectionStatus());
           console.log('🔌 [CHAT SCREEN] Socket instance:', socketService.getSocket());
           console.log('🔌 [CHAT SCREEN] Current rooms before joining:', socketService.getCurrentRooms());
-          
+
           // Listen for new Toki messages
           console.log('👂 [CHAT SCREEN] Setting up toki-message-received listener for Toki:', tokiId);
           socketService.onTokiMessageReceived((newMessage) => {
@@ -387,34 +387,34 @@ export default function ChatScreen() {
               charCodes: newMessage.created_at && typeof newMessage.created_at === 'string' ? Array.from(newMessage.created_at as string).map((c: string) => c.charCodeAt(0)) : [],
               formatted: formatMessageTimestamp(newMessage.created_at)
             });
-            
+
             // Auto-mark as read since user is actively viewing this chat
             if (newMessage.sender_id !== state.currentUser?.id) {
               console.log('✅ [CHAT SCREEN] Auto-marking Toki as read (user is actively viewing)');
               debouncedMarkAsRead(tokiId, true);
             }
-            
+
             setMessages(prev => {
               console.log('📨 Current messages count:', prev.length);
               console.log('📨 Current messages:', prev.map(m => ({ id: m.id, content: m.content, sender: m.sender_id, isOptimistic: m.isOptimistic })));
-              
+
               // Check if this message should replace an optimistic message
-              const optimisticIndex = prev.findIndex(msg => 
-                msg.isOptimistic && 
-                msg.content === newMessage.content && 
+              const optimisticIndex = prev.findIndex(msg =>
+                msg.isOptimistic &&
+                msg.content === newMessage.content &&
                 msg.sender_id === newMessage.sender_id
               );
-              
+
               // Check if this message already exists (non-optimistic)
-              const messageExists = prev.some(msg => 
+              const messageExists = prev.some(msg =>
                 !msg.isOptimistic && (
-                  msg.id === newMessage.id || 
-                  (msg.content === newMessage.content && 
-                   msg.sender_id === newMessage.sender_id && 
-                   Math.abs(new Date(msg.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 10000) // Within 10 seconds
+                  msg.id === newMessage.id ||
+                  (msg.content === newMessage.content &&
+                    msg.sender_id === newMessage.sender_id &&
+                    Math.abs(new Date(msg.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 10000) // Within 10 seconds
                 )
               );
-              
+
               if (optimisticIndex !== -1) {
                 // Replace optimistic message with real message
                 console.log('📨 Replacing optimistic Toki message with real message at index:', optimisticIndex);
@@ -443,12 +443,12 @@ export default function ChatScreen() {
           // Join individual conversation room
           console.log('🔌 [CHAT SCREEN] Joining conversation room:', conversationId);
           await socketService.joinConversation(conversationId);
-          
+
           // Check WebSocket connection status
           console.log('🔌 [CHAT SCREEN] WebSocket connection status:', socketService.getConnectionStatus());
           console.log('🔌 [CHAT SCREEN] Socket instance:', socketService.getSocket());
           console.log('🔌 [CHAT SCREEN] Current rooms before joining:', socketService.getCurrentRooms());
-          
+
           // Listen for new messages
           socketService.onMessageReceived((newMessage) => {
             console.log('📨 Real-time message received:', newMessage);
@@ -462,34 +462,34 @@ export default function ChatScreen() {
               charCodes: newMessage.created_at && typeof newMessage.created_at === 'string' ? Array.from(newMessage.created_at as string).map((c: string) => c.charCodeAt(0)) : [],
               formatted: formatMessageTimestamp(newMessage.created_at)
             });
-            
+
             // Auto-mark as read since user is actively viewing this chat
             if (newMessage.sender_id !== state.currentUser?.id) {
               console.log('✅ [CHAT SCREEN] Auto-marking conversation as read (user is actively viewing)');
               debouncedMarkAsRead(conversationId, false);
             }
-            
+
             setMessages(prev => {
               console.log('📨 Current messages count:', prev.length);
               console.log('📨 Current messages:', prev.map(m => ({ id: m.id, content: m.content, sender: m.sender_id, isOptimistic: m.isOptimistic })));
-              
+
               // Check if this message should replace an optimistic message
-              const optimisticIndex = prev.findIndex(msg => 
-                msg.isOptimistic && 
-                msg.content === newMessage.content && 
+              const optimisticIndex = prev.findIndex(msg =>
+                msg.isOptimistic &&
+                msg.content === newMessage.content &&
                 msg.sender_id === newMessage.sender_id
               );
-              
+
               // Check if this message already exists (non-optimistic)
-              const messageExists = prev.some(msg => 
+              const messageExists = prev.some(msg =>
                 !msg.isOptimistic && (
-                  msg.id === newMessage.id || 
-                  (msg.content === newMessage.content && 
-                   msg.sender_id === newMessage.sender_id && 
-                   Math.abs(new Date(msg.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 10000) // Within 10 seconds
+                  msg.id === newMessage.id ||
+                  (msg.content === newMessage.content &&
+                    msg.sender_id === newMessage.sender_id &&
+                    Math.abs(new Date(msg.created_at).getTime() - new Date(newMessage.created_at).getTime()) < 10000) // Within 10 seconds
                 )
               );
-              
+
               if (optimisticIndex !== -1) {
                 // Replace optimistic message with real message
                 console.log('📨 Replacing optimistic message with real message at index:', optimisticIndex);
@@ -524,16 +524,16 @@ export default function ChatScreen() {
 
     // Setup socket connection
     setupSocketConnection();
-    
+
     // Cleanup listeners when component unmounts
     return () => {
       console.log('🔌 Cleaning up WebSocket listeners (keeping rooms active)');
-      
+
       // Clear mark-as-read timeout
       if (markAsReadTimeout) {
         clearTimeout(markAsReadTimeout);
       }
-      
+
       // Remove event listeners but keep rooms active
       // Rooms will only be left when app is closed or connection is lost
       socketService.offMessageReceived();
@@ -552,13 +552,13 @@ export default function ChatScreen() {
   useFocusEffect(
     React.useCallback(() => {
       console.log('🎯 [CHAT SCREEN] Chat screen focused, marking as read...');
-      
+
       // Only mark as read if there are messages
       if (messages.length === 0) {
         console.log('⏭️ [CHAT SCREEN] No messages yet, skipping mark as read');
         return;
       }
-      
+
       // Mark as read based on chat type
       if (isGroup && tokiId) {
         console.log('✅ [CHAT SCREEN] Marking Toki group chat as read on focus');
@@ -567,7 +567,7 @@ export default function ChatScreen() {
         console.log('✅ [CHAT SCREEN] Marking conversation as read on focus');
         debouncedMarkAsRead(conversationId, false);
       }
-      
+
       // Set up a timer to mark as read periodically while user is viewing
       const readTimer = setInterval(() => {
         // Only mark as read if there are messages
@@ -575,7 +575,7 @@ export default function ChatScreen() {
           console.log('⏭️ [CHAT SCREEN] No messages in periodic check, skipping mark as read');
           return;
         }
-        
+
         console.log('⏰ [CHAT SCREEN] Periodic read check - marking chat as read...');
         if (isGroup && tokiId) {
           debouncedMarkAsRead(tokiId, true);
@@ -583,7 +583,7 @@ export default function ChatScreen() {
           debouncedMarkAsRead(conversationId, false);
         }
       }, 30000); // Every 30 seconds
-      
+
       return () => {
         console.log('🔄 [CHAT SCREEN] Chat screen losing focus, clearing read timer');
         clearInterval(readTimer);
@@ -596,7 +596,7 @@ export default function ChatScreen() {
       const messageText = newMessage.trim();
       setNewMessage('');
       setIsSending(true);
-      
+
       // Create optimistic message
       const optimisticMessage = {
         id: `temp-${Date.now()}`,
@@ -608,15 +608,15 @@ export default function ChatScreen() {
         message_type: 'text',
         isOptimistic: true
       };
-      
+
       // Add optimistic message immediately
       console.log('📤 Adding optimistic message:', optimisticMessage);
       setMessages(prev => [...prev, optimisticMessage]);
       scrollToBottom();
-      
+
       try {
         let success = false;
-        
+
         if (isGroup && tokiId) {
           // Send Toki group message
           console.log('📤 Sending message to Toki:', tokiId);
@@ -633,7 +633,7 @@ export default function ChatScreen() {
             setDynamicConversationId(newConversationId);
             try {
               await socketService.joinConversation(newConversationId);
-            } catch {}
+            } catch { }
             console.log('📤 Sending message to newly created conversation:', newConversationId);
             success = await actions.sendConversationMessage(newConversationId, messageText);
             // Refresh conversations so it appears in list
@@ -642,7 +642,7 @@ export default function ChatScreen() {
             success = false;
           }
         }
-        
+
         if (success) {
           console.log('📤 Message sent successfully, waiting for server response to replace optimistic message');
         } else {
@@ -666,7 +666,7 @@ export default function ChatScreen() {
 
   const handleTextChange = (text: string) => {
     setNewMessage(text);
-    
+
     // Mark as read when user starts typing (indicates active engagement)
     if (text.length === 1) { // First character typed
       console.log('⌨️ [CHAT SCREEN] User started typing, marking chat as read...');
@@ -676,7 +676,7 @@ export default function ChatScreen() {
         debouncedMarkAsRead(conversationId, false);
       }
     }
-    
+
     // Check if the last character is a newline (Enter key) - handle different line break types
     const hasNewline = text.includes('\n') || text.includes('\r') || text.includes('\r\n');
     if (hasNewline && text.trim() && !isSending) {
@@ -688,7 +688,7 @@ export default function ChatScreen() {
       console.log('↵️ [CHAT SCREEN] Contains \\n:', text.includes('\n'));
       console.log('↵️ [CHAT SCREEN] Contains \\r:', text.includes('\r'));
       console.log('↵️ [CHAT SCREEN] Contains \\r\\n:', text.includes('\r\n'));
-      
+
       const messageText = text.trim();
       setNewMessage('');
       handleSendMessageWithText(messageText);
@@ -698,7 +698,7 @@ export default function ChatScreen() {
   const handleSendMessageWithText = async (messageText: string) => {
     if (messageText && !isSending) {
       setIsSending(true);
-      
+
       // Create optimistic message
       const optimisticMessage = {
         id: `temp-${Date.now()}`,
@@ -710,15 +710,15 @@ export default function ChatScreen() {
         message_type: 'text',
         isOptimistic: true
       };
-      
+
       // Add optimistic message immediately
       console.log('📤 Adding optimistic message (Enter key):', optimisticMessage);
       setMessages(prev => [...prev, optimisticMessage]);
       scrollToBottom();
-      
+
       try {
         let success = false;
-        
+
         if (isGroup && tokiId) {
           // Send Toki group message
           console.log('📤 Sending message to Toki:', tokiId);
@@ -735,7 +735,7 @@ export default function ChatScreen() {
             setDynamicConversationId(newConversationId);
             try {
               await socketService.joinConversation(newConversationId);
-            } catch {}
+            } catch { }
             console.log('📤 Sending message to newly created conversation:', newConversationId);
             success = await actions.sendConversationMessage(newConversationId, messageText);
             // Refresh conversations so it appears in list
@@ -744,7 +744,7 @@ export default function ChatScreen() {
             success = false;
           }
         }
-        
+
         if (success) {
           console.log('📤 Message sent successfully, waiting for server response to replace optimistic message');
         } else {
@@ -777,7 +777,7 @@ export default function ChatScreen() {
             <ArrowLeft size={24} color="#1F2937" />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 if (isGroup && tokiId) {
                   // For group chats, navigate to toki details
@@ -846,7 +846,7 @@ export default function ChatScreen() {
           ) : (
             messages.map((message: any) => {
               const isOwnMessage = message.sender_id === state.currentUser?.id;
-              
+
               return (
                 <View
                   key={message.id}
@@ -925,7 +925,7 @@ export default function ChatScreen() {
           </View>
           <TouchableOpacity
             style={[
-              styles.sendButton, 
+              styles.sendButton,
               (newMessage.trim() && !isSending) && styles.sendButtonActive
             ]}
             onPress={handleSendMessage}
@@ -949,7 +949,7 @@ export default function ChatScreen() {
             <Text style={styles.modalSubtitle}>
               Please provide a reason for reporting this message. This helps us maintain a safe community.
             </Text>
-            
+
             <TextInput
               style={styles.reportInput}
               placeholder="Enter reason for reporting..."
@@ -960,16 +960,16 @@ export default function ChatScreen() {
               maxLength={500}
               placeholderTextColor="#9CA3AF"
             />
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={cancelReport}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
-                  styles.submitButton, 
+                  styles.submitButton,
                   !reportReason.trim() && styles.submitButtonDisabled
-                ]} 
+                ]}
                 onPress={submitReport}
                 disabled={!reportReason.trim()}
               >
@@ -1081,6 +1081,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    maxWidth: '75%',
   },
   reportIconButton: {
     padding: 4,
@@ -1104,7 +1105,7 @@ const styles = StyleSheet.create({
     color: '#8B5CF6',
   },
   messageBubble: {
-    maxWidth: '75%',
+    flexShrink: 1,
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,

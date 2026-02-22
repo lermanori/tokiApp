@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import logger from '../utils/logger';
+import { sendPushToUsers } from '../utils/push';
 
 const router = Router();
 
@@ -312,7 +313,7 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
     // Check if either user has blocked the other
     const conversation = accessResult.rows[0];
     const otherUserId = conversation.user1_id === req.user!.id ? conversation.user2_id : conversation.user1_id;
-    
+
     const blockCheck = await pool.query(
       `SELECT id FROM user_blocks 
        WHERE (blocker_id = $1 AND blocked_user_id = $2) 
@@ -331,9 +332,9 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
     // Insert message with explicit UTC timestamp from Node.js
     // Store messages in pure UTC timezone
     const utcTimestamp = new Date().toISOString();
-    
+
     logger.debug('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
-    
+
     const result = await pool.query(
       `INSERT INTO messages (conversation_id, sender_id, content, message_type, media_url, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -374,16 +375,35 @@ router.post('/conversations/:conversationId/messages', authenticateToken, async 
       logger.info('📤 [BACKEND] Room: conversation-', conversationId);
       logger.debug('📤 [BACKEND] Sender ID:', req.user!.id);
       logger.debug('📤 [BACKEND] Message data:', messageData);
-      
+
       // Get room members for logging
       const roomName = `conversation-${conversationId}`;
       const roomMembers = io.sockets.adapter.rooms.get(roomName);
       logger.debug('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
-      
+
       io.to(roomName).emit('message-received', messageData);
       logger.info('✅ [BACKEND] Event message-received sent to room:', roomName);
     } else {
       logger.warn('❌ [BACKEND] WebSocket io instance not found!');
+    }
+
+    // Send push notification to the other user
+    try {
+      const truncatedContent = content.trim().length > 100 ? content.trim().substring(0, 97) + '...' : content.trim();
+      await sendPushToUsers([otherUserId], {
+        title: senderResult.rows[0].name,
+        body: truncatedContent,
+        data: {
+          type: 'chat_message',
+          conversationId,
+          senderId: req.user!.id,
+          senderName: senderResult.rows[0].name,
+          isGroup: false,
+        },
+      });
+      logger.info('📲 [BACKEND] Push notification sent for 1-on-1 message to user:', otherUserId);
+    } catch (pushError) {
+      logger.error('❌ [BACKEND] Failed to send push notification for message:', pushError);
     }
 
     return res.json({
@@ -409,7 +429,7 @@ router.post('/conversations/:id/read', authenticateToken, async (req: Request, r
   try {
     const { id } = req.params;
     const conversationId = id; // UUID is already a string
-    
+
     if (!conversationId) {
       return res.status(400).json({
         success: false,
@@ -625,9 +645,9 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
     // Insert message with explicit UTC timestamp from Node.js
     // Store messages in pure UTC timezone
     const utcTimestamp = new Date().toISOString();
-    
+
     logger.debug('🕐 DEBUG: UTC timestamp for DB:', utcTimestamp);
-    
+
     const result = await pool.query(
       `INSERT INTO messages (toki_id, sender_id, content, message_type, media_url, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -670,16 +690,74 @@ router.post('/tokis/:tokiId/messages', authenticateToken, async (req: Request, r
       logger.info('📤 [BACKEND] Room: toki-', tokiId);
       logger.debug('📤 [BACKEND] Sender ID:', req.user!.id);
       logger.debug('📤 [BACKEND] Message data:', messageData);
-      
+
       // Get room members for logging
       const roomName = `toki-${tokiId}`;
       const roomMembers = io.sockets.adapter.rooms.get(roomName);
       logger.debug('📤 [BACKEND] Room members in', roomName, ':', roomMembers ? roomMembers.size : 0, 'users');
-      
+
       io.to(roomName).emit('toki-message-received', messageData);
       logger.info('✅ [BACKEND] Event toki-message-received sent to room:', roomName);
     } else {
       logger.warn('❌ [BACKEND] WebSocket io instance not found!');
+    }
+
+    // Send push notification to all Toki participants + host (excluding sender)
+    try {
+      const tokiInfoResult = await pool.query(
+        `SELECT t.title, t.host_id FROM tokis t WHERE t.id = $1`,
+        [tokiId]
+      );
+      const tokiTitle = tokiInfoResult.rows[0]?.title || 'Group Chat';
+      const hostId = tokiInfoResult.rows[0]?.host_id;
+
+      // Get all approved participants
+      const participantsResult = await pool.query(
+        `SELECT user_id FROM toki_participants WHERE toki_id = $1 AND status = 'approved'`,
+        [tokiId]
+      );
+
+      // Collect all recipient IDs (participants + host), excluding sender
+      const recipientIds = new Set<string>();
+      if (hostId && hostId !== req.user!.id) recipientIds.add(hostId);
+      for (const row of participantsResult.rows) {
+        if (row.user_id !== req.user!.id) recipientIds.add(row.user_id);
+      }
+
+      if (recipientIds.size > 0) {
+        // Filter out users who muted this Toki's notifications
+        try {
+          const mutedResult = await pool.query(
+            `SELECT user_id FROM toki_notification_mutes WHERE toki_id = $1`,
+            [tokiId]
+          );
+          const mutedUserIds = new Set(mutedResult.rows.map((r: any) => r.user_id));
+          for (const mutedId of mutedUserIds) {
+            recipientIds.delete(mutedId);
+          }
+        } catch (muteErr) {
+          logger.warn('⚠️ [BACKEND] Failed to check muted users, sending to all:', muteErr);
+        }
+      }
+
+      if (recipientIds.size > 0) {
+        const truncatedContent = content.trim().length > 100 ? content.trim().substring(0, 97) + '...' : content.trim();
+        await sendPushToUsers(Array.from(recipientIds), {
+          title: `${senderResult.rows[0].name} in ${tokiTitle}`,
+          body: truncatedContent,
+          data: {
+            type: 'chat_message',
+            tokiId,
+            senderId: req.user!.id,
+            senderName: senderResult.rows[0].name,
+            tokiTitle,
+            isGroup: true,
+          },
+        });
+        logger.info(`📲 [BACKEND] Push notification sent for Toki group message to ${recipientIds.size} users`);
+      }
+    } catch (pushError) {
+      logger.error('❌ [BACKEND] Failed to send push notification for Toki message:', pushError);
     }
 
     return res.json({
@@ -925,7 +1003,7 @@ router.post('/tokis/:id/read', authenticateToken, async (req: Request, res: Resp
   try {
     const { id } = req.params;
     const tokiId = id; // UUID is already a string
-    
+
     if (!tokiId) {
       return res.status(400).json({
         success: false,
