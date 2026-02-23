@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Search, UserPlus, MapPin, Calendar, Users } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getBackendUrl } from '@/services/config';
@@ -30,7 +30,9 @@ interface ConnectionStatus {
 
 export default function FindPeopleScreen() {
   const { state, actions } = useApp();
-  const [searchQuery, setSearchQuery] = useState('');
+  const params = useLocalSearchParams();
+  const initialQuery = (params.q as string) || '';
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatuses, setConnectionStatuses] = useState<Map<string, ConnectionStatus>>(new Map());
@@ -54,6 +56,14 @@ export default function FindPeopleScreen() {
     loadPendingRequests();
   }, []);
 
+  // Auto-search when arriving with a pre-filled query (e.g. from "See all" on discover)
+  useEffect(() => {
+    if (initialQuery.trim()) {
+      searchUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Get real-time connection status for a user
   const getConnectionStatus = async (userId: string): Promise<ConnectionStatus> => {
     try {
@@ -63,7 +73,7 @@ export default function FindPeopleScreen() {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         return data.data;
@@ -71,14 +81,14 @@ export default function FindPeopleScreen() {
     } catch (error) {
       console.error('❌ Failed to get connection status:', error);
     }
-    
+
     return { status: 'none' };
   };
 
   // Update connection status for all users
   const updateConnectionStatuses = async (users: User[]) => {
     const statuses = new Map<string, ConnectionStatus>();
-    
+
     for (const user of users) {
       // If backend says they're connected, use that
       if (user.isConnected) {
@@ -89,22 +99,22 @@ export default function FindPeopleScreen() {
         statuses.set(user.id, status);
       }
     }
-    
+
     setConnectionStatuses(statuses);
   };
 
   const searchUsers = async () => {
     if (!searchQuery.trim()) return;
-    
+
     console.log('🔍 Searching users...');
     setIsLoading(true);
     try {
       const foundUsers = await actions.searchUsers(searchQuery);
       console.log('📱 Users found:', foundUsers.length);
-      
+
       // Update connection statuses for all found users
       await updateConnectionStatuses(foundUsers);
-      
+
       setUsers(foundUsers);
     } catch (error) {
       console.error('Failed to search users:', error);
@@ -117,23 +127,23 @@ export default function FindPeopleScreen() {
   const handleConnect = async (userId: string, userName: string) => {
     try {
       console.log('🔍 Sending connection request to:', userId, userName);
-      
+
       // Add to pending requests immediately for visual feedback
       const newPendingSet = new Set(pendingRequests);
       newPendingSet.add(userId);
       setPendingRequests(newPendingSet);
-      
+
       // Save to storage
       await AsyncStorage.setItem('pendingConnectionRequests', JSON.stringify(Array.from(newPendingSet)));
       console.log('📝 Updated pending requests:', Array.from(newPendingSet));
-      
+
       const success = await actions.sendConnectionRequest(userId);
       console.log('✅ Connection request result:', success);
       if (success) {
         // Update connection status to show pending
-        setConnectionStatuses(prev => new Map(prev).set(userId, { 
-          status: 'pending', 
-          isRequester: true 
+        setConnectionStatuses(prev => new Map(prev).set(userId, {
+          status: 'pending',
+          isRequester: true
         }));
         console.log(`✅ Connection request sent to ${userName}`);
       } else {
@@ -160,7 +170,7 @@ export default function FindPeopleScreen() {
   // Get the appropriate button text and action based on connection status
   const getConnectionButtonInfo = (userId: string) => {
     const status = connectionStatuses.get(userId);
-    
+
     if (!status || status.status === 'none') {
       return {
         text: 'Connect',
@@ -169,7 +179,7 @@ export default function FindPeopleScreen() {
         style: 'connect'
       };
     }
-    
+
     if (status.status === 'pending') {
       if (status.isRequester) {
         return {
@@ -187,7 +197,7 @@ export default function FindPeopleScreen() {
         };
       }
     }
-    
+
     if (status.status === 'accepted') {
       return {
         text: 'Connected',
@@ -196,7 +206,7 @@ export default function FindPeopleScreen() {
         style: 'connected'
       };
     }
-    
+
     return {
       text: 'Connect',
       action: () => handleConnect(userId, users.find(u => u.id === userId)?.name || 'User'),
@@ -215,11 +225,11 @@ export default function FindPeopleScreen() {
         },
         body: JSON.stringify({ action: 'accept' })
       });
-      
+
       if (response.ok) {
         // Update connection status
-        setConnectionStatuses(prev => new Map(prev).set(userId, { 
-          status: 'accepted' 
+        setConnectionStatuses(prev => new Map(prev).set(userId, {
+          status: 'accepted'
         }));
         console.log('✅ Connection request accepted');
       } else {
@@ -266,7 +276,7 @@ export default function FindPeopleScreen() {
             onSubmitEditing={searchUsers}
           />
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.searchButton}
           onPress={searchUsers}
           disabled={isLoading}
@@ -296,7 +306,7 @@ export default function FindPeopleScreen() {
           >
             <View style={styles.userCardHeader}>
               <Image
-                source={{ 
+                source={{
                   uri: user.avatar || 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg'
                 }}
                 style={styles.userAvatar}
@@ -313,12 +323,12 @@ export default function FindPeopleScreen() {
                 </View>
               </View>
             </View>
-            
+
             <View style={styles.userCardActions}>
               {(() => {
                 const buttonInfo = getConnectionButtonInfo(user.id);
                 return (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
                       styles.connectButton,
                       buttonInfo.style === 'pending' && styles.pendingButton,
@@ -339,14 +349,14 @@ export default function FindPeopleScreen() {
                   </TouchableOpacity>
                 );
               })()}
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.chatButton}
                 onPress={async () => {
                   try {
                     router.push({
                       pathname: '/chat',
-                      params: { 
+                      params: {
                         otherUserId: user.id,
                         otherUserName: user.name,
                         isGroup: 'false'
@@ -449,7 +459,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   userCard: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
@@ -473,6 +483,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   userInfo: {
+    flex: 1,
     marginLeft: 12,
   },
   userName: {
@@ -484,6 +495,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#666666',
+    marginTop: 2,
     marginBottom: 4,
   },
   userLocation: {
@@ -498,14 +510,13 @@ const styles = StyleSheet.create({
   },
   userCardActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   connectButton: {
+    flex: 1,
     backgroundColor: '#B49AFF',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minWidth: 100,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   pendingButton: {
@@ -534,11 +545,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   chatButton: {
+    flex: 1,
     backgroundColor: '#4F46E5',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minWidth: 100,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   chatButtonText: {

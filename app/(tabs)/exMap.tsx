@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput, ScrollView, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, ArrowUpDown, X } from 'lucide-react-native';
+import { Search, Filter, ArrowUpDown, X, Users, ChevronRight } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
 import DiscoverMap from '@/components/DiscoverMap';
 import { DiscoverCategories } from '@/components/DiscoverCategories';
 import TokiSortModal, { SortState } from '@/components/TokiSortModal';
+import UserSearchCard from '@/components/UserSearchCard';
 import { useApp } from '@/contexts/AppContext';
 import { useDiscoverData } from '@/hooks/useDiscoverData';
 import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
@@ -108,6 +109,8 @@ export default function ExMapScreen() {
         clearAllFilters,
         searchQuery,
         setSearchQuery,
+        userSearchResults,
+        isSearchingUsers,
     } = useDiscoverFilters(baseEvents, userConnections);
 
     // Profile-based center and radius (in meters) used to constrain map movement
@@ -117,7 +120,7 @@ export default function ExMapScreen() {
         // Ensure they're numbers, not strings
         const latNum = typeof lat === 'number' ? lat : parseFloat(String(lat || 0));
         const lngNum = typeof lng === 'number' ? lng : parseFloat(String(lng || 0));
-        
+
         // Only return if valid numbers
         if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
             return {
@@ -156,7 +159,7 @@ export default function ExMapScreen() {
         try {
             const lat = mapRegion?.latitude ?? state.currentUser?.latitude;
             const lng = mapRegion?.longitude ?? state.currentUser?.longitude;
-            
+
             const result = sortEvents(filteredEvents as any, sort, lat, lng);
             return result;
         } catch (error) {
@@ -358,18 +361,18 @@ export default function ExMapScreen() {
     useEffect(() => {
         if (!profileCenter || !profileCenter.latitude || !profileCenter.longitude) return;
         if (!state.isConnected) return;
-        
+
         // Create unique key for this profile center location
         const profileCenterKey = `${profileCenter.latitude},${profileCenter.longitude}`;
-        
+
         // Skip if we've already reloaded for this exact location (prevents infinite loop)
         if (hasReloadedForProfileCenterRef.current === profileCenterKey) {
             return;
         }
-        
+
         // Mark as reloaded for this location BEFORE making the call (prevents race conditions)
         hasReloadedForProfileCenterRef.current = profileCenterKey;
-        
+
         // Update mapRegion to match profileCenter
         updateMapRegion({
             latitude: profileCenter.latitude,
@@ -377,7 +380,7 @@ export default function ExMapScreen() {
             latitudeDelta: 0.0922,
             longitudeDelta: 0.0421,
         }, false);
-        
+
         // Reload tokis with new location - call directly with new coordinates to ensure we use the correct location
         const radius = parseFloat(String(selectedFilters.radius || '500')) || 500;
         Promise.all([
@@ -508,7 +511,7 @@ export default function ExMapScreen() {
         // Use profileCenter first, then fall back to mapRegion
         const lat = profileCenter?.latitude || mapRegion?.latitude;
         const lng = profileCenter?.longitude || mapRegion?.longitude;
-        
+
         if (lat && lng) {
             console.log('🏄 [MAP-FLOW] ApplyFilters: Using coordinates', { lat, lng, source: profileCenter ? 'profileCenter' : 'mapRegion' });
             queryParams.userLatitude = lat.toString();
@@ -706,7 +709,7 @@ export default function ExMapScreen() {
                                 <Search size={20} color="#666666" />
                                 <TextInput
                                     style={{ outline: 'none', ...styles.searchInput }}
-                                    placeholder="Search activities, locations, hosts..."
+                                    placeholder="Search activities, people..."
                                     value={searchQuery}
                                     onChangeText={setSearchQuery}
                                     placeholderTextColor="#999999"
@@ -719,7 +722,7 @@ export default function ExMapScreen() {
                         ) : (
                             <TouchableOpacity style={styles.searchButton} onPress={() => setShowSearch(true)}>
                                 <Search size={20} color="#666666" />
-                                <Text style={styles.searchPlaceholder}>Search activities...</Text>
+                                <Text style={styles.searchPlaceholder}>Search activities, people...</Text>
                             </TouchableOpacity>
                         )}
 
@@ -769,6 +772,40 @@ export default function ExMapScreen() {
                                     onCategoryToggle={handleCategoryToggle}
                                     showMap={showMap}
                                 />
+                                {/* People search results section */}
+                                {searchQuery.trim().length >= 2 && (userSearchResults.length > 0 || isSearchingUsers) && (
+                                    <View style={styles.peopleSectionContainer}>
+                                        <View style={styles.peopleSectionHeader}>
+                                            <View style={styles.peopleSectionTitleRow}>
+                                                <Users size={16} color="#B49AFF" />
+                                                <Text style={styles.peopleSectionTitle}>People</Text>
+                                                {isSearchingUsers && (
+                                                    <ActivityIndicator size="small" color="#B49AFF" style={{ marginLeft: 8 }} />
+                                                )}
+                                            </View>
+                                            {userSearchResults.length > 0 && (
+                                                <TouchableOpacity
+                                                    style={styles.seeAllButton}
+                                                    onPress={() => router.push({ pathname: '/find-people', params: { q: searchQuery.trim() } })}
+                                                >
+                                                    <Text style={styles.seeAllText}>See all</Text>
+                                                    <ChevronRight size={14} color="#B49AFF" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                        {userSearchResults.length > 0 && (
+                                            <ScrollView
+                                                horizontal
+                                                showsHorizontalScrollIndicator={false}
+                                                contentContainerStyle={styles.peopleScrollContent}
+                                            >
+                                                {userSearchResults.map((user) => (
+                                                    <UserSearchCard key={user.id} user={user} />
+                                                ))}
+                                            </ScrollView>
+                                        )}
+                                    </View>
+                                )}
                                 <View>
                                     <Text style={styles.sectionTitle}>{String(sectionTitle || '')}</Text>
                                 </View>
@@ -790,7 +827,7 @@ export default function ExMapScreen() {
                             </View>
                         );
                     }
-                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion])}
+                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion, userSearchResults, isSearchingUsers])}
                 renderItem={({ item, index }) => {
                     if (!item || typeof item !== 'object') {
                         return null;
@@ -1158,6 +1195,41 @@ const styles = StyleSheet.create({
         width: '60%',
         borderRadius: 4,
         backgroundColor: '#F3F4F6',
+    },
+    peopleSectionContainer: {
+        paddingTop: 12,
+        paddingBottom: 4,
+    },
+    peopleSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        marginBottom: 10,
+    },
+    peopleSectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    peopleSectionTitle: {
+        fontSize: 16,
+        fontFamily: 'Inter-SemiBold',
+        color: '#1C1C1C',
+    },
+    seeAllButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    seeAllText: {
+        fontSize: 13,
+        fontFamily: 'Inter-Medium',
+        color: '#B49AFF',
+    },
+    peopleScrollContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 8,
     },
 });
 
