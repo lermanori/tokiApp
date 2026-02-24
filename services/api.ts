@@ -410,7 +410,7 @@ class ApiService {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        await this.saveTokens(data.data.accessToken, data.data.refreshToken);
+        await this.saveTokens(data.data.tokens.accessToken, data.data.tokens.refreshToken);
         return true;
       }
 
@@ -1592,9 +1592,18 @@ class ApiService {
     return response;
   }
 
+  // Report a bug
+  async reportBug(data: { title: string; description: string; category: string; severity: string; steps?: string }): Promise<{ success: boolean; cardUrl?: string; message?: string }> {
+    const response = await this.makeRequest<{ success: boolean; cardUrl?: string; message?: string }>('/bug-report', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  }
+
   // Get my reports
   async getMyReports() {
-    const response = await this.get('/reports/my-reports');
+    const response = await this.makeRequest('/reports/my-reports');
     return response;
   }
 }
