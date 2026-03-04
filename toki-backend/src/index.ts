@@ -38,6 +38,7 @@ import waitlistRoutes from './routes/waitlist';
 import pushRoutes from './routes/push';
 import invitationRoutes from './routes/invitations';
 import reportsRoutes from './routes/reports';
+import bugReportRoutes from './routes/bug-report';
 import ogPreviewRoutes from './routes/og-preview';
 import tokiNotificationMuteRoutes from './routes/toki-notification-mutes';
 import { startNotificationScheduler } from './services/notificationScheduler';
@@ -305,6 +306,7 @@ app.use('/api/waitlist', corsMiddleware, waitlistRoutes);
 app.use('/api/push', corsMiddleware, pushRoutes);
 app.use('/api/invitations', corsMiddleware, invitationRoutes);
 app.use('/api/reports', corsMiddleware, reportsRoutes);
+app.use('/api/bug-report', corsMiddleware, bugReportRoutes);
 app.use('/api/toki-notification-mutes', corsMiddleware, tokiNotificationMuteRoutes);
 
 // Public share route for OG meta tag previews (no auth required)

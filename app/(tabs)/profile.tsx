@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff, Trash2 } from 'lucide-react-native';
+import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff, Trash2, Bug } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { apiService } from '@/services/api';
@@ -397,7 +397,7 @@ export default function ProfileScreen() {
     try {
       console.log('🗑️ Starting account deletion...');
       const result = await apiService.deleteAccount();
-      
+
       if (result.success) {
         console.log('✅ Account deleted successfully');
         Alert.alert(
@@ -422,21 +422,21 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       console.error('❌ Error deleting account:', error);
-      
+
       let errorMessage = 'Failed to delete account. Please try again.';
       if (error instanceof Error) {
         errorMessage = error.message;
       }
-      
+
       // Check if it's a network error
-      const isNetworkError = error instanceof TypeError || 
+      const isNetworkError = error instanceof TypeError ||
         (error instanceof Error && (
           error.message.includes('Network request failed') ||
           error.message.includes('Failed to fetch') ||
           error.message.includes('timeout') ||
           error.message.includes('network')
         ));
-      
+
       if (isNetworkError) {
         Alert.alert(
           'Network Error',
@@ -557,7 +557,7 @@ export default function ProfileScreen() {
         <View style={styles.connectionStatus}>
           <View style={[styles.connectionDot, { backgroundColor: state.isConnected ? '#10B981' : '#EF4444' }]} />
           <Text style={styles.connectionText}>
-            {state.isConnected ? 'Online' : 'Offline'} 
+            {state.isConnected ? 'Online' : 'Offline'}
           </Text>
         </View>
       </LinearGradient>
@@ -672,7 +672,7 @@ export default function ProfileScreen() {
               <Text style={styles.menuText}>Connections</Text>
               <Text style={styles.menuBadge}>{state.currentUser.connections}</Text>
             </TouchableOpacity>
-           
+
           </View>
 
           {/* My Activity cards + Show as member toggle */}
@@ -694,36 +694,37 @@ export default function ProfileScreen() {
                     const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
                     const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
                     return (
-                    <View key={a.id} style={{ width: 300, marginRight: 16, opacity: a.is_hidden ? 0.5 : 1 }}>
-                      <TokiCard
-                        toki={{
-                          id: a.id,
-                          title: a.title,
-                          description: a.description || '',
-                          image: a.image_url,
-                          category: a.category,
-                          location: a.location || '',
-                          time: a.time_slot || '',
-                          attendees: a.current_attendees || 0,
-                          maxAttendees: a.max_attendees || 0,
-                          scheduledTime: a.scheduled_time,
-                          host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
-                          visibility: a.visibility,
-                          tags: a.tags || [],
-                          distance,
-                        }}
-                        onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
-                      />
-                      {(
-                        <TouchableOpacity
-                          onPress={() => toggleActivityVisibility(a.id, a.is_hidden)}
-                          style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 9999, padding: 6 }}
-                        >
-                          {a.is_hidden ? <Eye size={18} color="#111827" /> : <EyeOff size={18} color="#111827" />}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )})}
+                      <View key={a.id} style={{ width: 300, marginRight: 16, opacity: a.is_hidden ? 0.5 : 1 }}>
+                        <TokiCard
+                          toki={{
+                            id: a.id,
+                            title: a.title,
+                            description: a.description || '',
+                            image: a.image_url,
+                            category: a.category,
+                            location: a.location || '',
+                            time: a.time_slot || '',
+                            attendees: a.current_attendees || 0,
+                            maxAttendees: a.max_attendees || 0,
+                            scheduledTime: a.scheduled_time,
+                            host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
+                            visibility: a.visibility,
+                            tags: a.tags || [],
+                            distance,
+                          }}
+                          onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
+                        />
+                        {(
+                          <TouchableOpacity
+                            onPress={() => toggleActivityVisibility(a.id, a.is_hidden)}
+                            style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 9999, padding: 6 }}
+                          >
+                            {a.is_hidden ? <Eye size={18} color="#111827" /> : <EyeOff size={18} color="#111827" />}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )
+                  })}
               </ScrollView>
             )}
           </View>
@@ -771,12 +772,16 @@ export default function ProfileScreen() {
               <CircleHelp size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>Help & Support</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/report-bug')}>
+              <Bug size={20} color="#1C1C1C" />
+              <Text style={styles.menuText}>Report Bug</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/health')}>
               <Activity size={20} color="#1C1C1C" />
               <Text style={styles.menuText}>System Health</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.menuItem} 
+            <TouchableOpacity
+              style={styles.menuItem}
               onPress={handleDeleteAccount}
               disabled={isDeletingAccount || state.loading}
             >

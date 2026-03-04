@@ -842,6 +842,7 @@ function RootLayoutNav() {
             'my-tokis',
             'saved-tokis',
             'complete-profile',
+            'report-bug',
           ];
 
           const isOnValidPage =
@@ -1098,6 +1099,7 @@ function RootLayoutNav() {
         <Stack.Screen name="terms-of-use" options={{ headerShown: false }} />
         <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
         <Stack.Screen name="support" options={{ headerShown: false }} />
+        <Stack.Screen name="report-bug" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
     </RedirectionGuard>
