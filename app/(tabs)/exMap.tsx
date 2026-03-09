@@ -111,6 +111,8 @@ export default function ExMapScreen() {
         setSearchQuery,
         userSearchResults,
         isSearchingUsers,
+        timeFilter,
+        setTimeFilter,
     } = useDiscoverFilters(baseEvents, userConnections);
 
     // Profile-based center and radius (in meters) used to constrain map movement
@@ -652,6 +654,7 @@ export default function ExMapScreen() {
         }
 
         const hasFilters = (selectedCategories.length > 0 && !selectedCategories.includes('all')) ||
+            timeFilter !== 'all' ||
             searchQuery ||
             Object.values(selectedFilters).some(v => v !== 'all' && v !== '');
 
@@ -771,6 +774,8 @@ export default function ExMapScreen() {
                                     selectedCategories={selectedCategories || []}
                                     onCategoryToggle={handleCategoryToggle}
                                     showMap={showMap}
+                                    timeFilter={timeFilter}
+                                    onTimeFilterChange={setTimeFilter}
                                 />
                                 {/* People search results section */}
                                 {searchQuery.trim().length >= 2 && (userSearchResults.length > 0 || isSearchingUsers) && (

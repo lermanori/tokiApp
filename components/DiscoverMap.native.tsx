@@ -43,10 +43,10 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
   const markerRefs = useRef<Map<string, any>>(new Map());
   // Track highlighted cluster info
   const highlightedClusterInfoRef = useRef<{ clusterKey: string; initialIndex: number } | null>(null);
-  
+
   // Track component renders
   renderCountRef.current += 1;
-  
+
   // Only set initialRegionRef on the very first render (check render count to avoid false positives)
   if (isFirstMountRef.current && renderCountRef.current === 1) {
     initialRegionRef.current = region;
@@ -56,12 +56,12 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
     // Component was remounted - reset the flag but keep initial region
     isFirstMountRef.current = false;
   }
-  
+
   // Update current region ref when region prop changes (but don't cause re-render)
   useEffect(() => {
     currentRegionRef.current = region;
   }, [region]);
-  
+
   // Proximity clustering (~50m)
   const clustered = useMemo(() => {
     const groups: { key: string; items: EventItem[]; lat: number; lng: number }[] = [];
@@ -94,7 +94,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
       hasCoordinates: !!highlightedCoordinates,
       clusteredCount: clustered.length
     });
-    
+
     if (!highlightedTokiId || !highlightedCoordinates) {
       highlightedClusterInfoRef.current = null;
       console.log(`🔵 [CALLOUT] No highlight - exiting`);
@@ -137,16 +137,16 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
             latitudeDelta: 0.002, // Very tight zoom (~200m view) for better focus
             longitudeDelta: 0.002,
           };
-          
+
           console.log(`🔵 [CALLOUT] Target region:`, {
             lat: targetRegion.latitude.toFixed(6),
             lng: targetRegion.longitude.toFixed(6),
             delta: targetRegion.latitudeDelta
           });
-          
+
           // Update state first to ensure region prop is set (important for iOS)
           onRegionChange(targetRegion);
-          
+
           // For iOS, wait a bit for the region prop to take effect, then animate
           const animationDuration = 800; // Longer duration for smoother, more fluid animation
           if (Platform.OS === 'ios') {
@@ -156,7 +156,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                 console.log(`🔵 [CALLOUT] Calling animateToRegion on iOS (${animationDuration}ms)`);
                 mapViewRef.current?.animateToRegion(targetRegion, animationDuration);
                 console.log(`✅ [CALLOUT] animateToRegion called successfully`);
-                
+
                 // Also try setCamera as backup (may provide smoother transition on some devices)
                 setTimeout(() => {
                   try {
@@ -206,7 +206,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
               console.log(`⚠️ [CALLOUT] animateToRegion failed:`, e);
             }
           }
-          
+
           // Schedule callout opening after animation completes (animationDuration + buffer)
           const firstAttemptDelay = animationDuration + 0; // 300ms buffer after animation
           const secondAttemptDelay = animationDuration + 800; // 800ms buffer as fallback
@@ -215,14 +215,14 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
           // Wait for map animation to complete, then open callout
           // Track if callout was successfully opened to prevent multiple opens
           let calloutOpened = false;
-          
+
           const openCallout = (attempt: number) => {
             // Don't try again if callout was already opened
             if (calloutOpened) {
               console.log(`🔵 [CALLOUT] Attempt ${attempt} skipped - already opened`);
               return;
             }
-            
+
             console.log(`🔵 [CALLOUT] Attempt ${attempt} - Opening callout for cluster: ${cluster.key}`);
             const marker = markerRefs.current.get(cluster.key);
             console.log(`🔵 [CALLOUT] Marker ref status:`, {
@@ -231,7 +231,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
               totalMarkers: markerRefs.current.size,
               allKeys: Array.from(markerRefs.current.keys())
             });
-            
+
             if (marker) {
               try {
                 // react-native-maps Marker ref has showCallout() method
@@ -242,7 +242,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                   console.log(`✅ [CALLOUT] Callout opened successfully via showCallout()`);
                   return; // Success, don't retry
                 }
-                
+
                 // Fallback: try accessing native component
                 const nativeHandle = (marker as any)._nativeComponent || (marker as any).getNode?.();
                 if (nativeHandle && typeof nativeHandle.showCallout === 'function') {
@@ -252,7 +252,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                   console.log(`✅ [CALLOUT] Callout opened successfully via native handle`);
                   return; // Success, don't retry
                 }
-                
+
                 // Last resort: trigger onPress which automatically opens callout
                 console.log(`🔵 [CALLOUT] Fallback: Using onMarkerPress`);
                 onMarkerPress(cluster.items[0]);
@@ -295,7 +295,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
             setTimeout(animateAndOpen, 100);
           });
         }
-        
+
         return () => {
           // Cleanup handled by timeouts in animateAndOpen
         };
@@ -351,7 +351,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                 {(() => {
                   const category = group.items[0].category;
                   const iconSource = CATEGORY_ICONS.map[category];
-                  
+
                   if (iconSource) {
                     return <Image source={iconSource} style={{ width: 22, height: 22 }} />;
                   } else {
@@ -364,16 +364,16 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
                   </View>
                 )}
               </View>
-              <RNCallout 
+              <RNCallout
                 onPress={group.items.length === 1 ? () => {
                   const selected = pendingSelectionRef.current || group.items[0];
                   onEventPress(selected);
                 } : undefined}>
-                  {group.items.length === 1 ? (
+                {group.items.length === 1 ? (
                   <Callout event={group.items[0]} />
-                  ) : (
-                  <ClusterCallout 
-                    events={group.items} 
+                ) : (
+                  <ClusterCallout
+                    events={group.items}
                     onEventPress={onEventPress}
                     initialIndex={
                       highlightedClusterInfoRef.current?.clusterKey === group.key
@@ -436,8 +436,8 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
 }
 
 const styles = StyleSheet.create({
-  container: { position: 'relative', backgroundColor: '#FFFFFF',marginTop: 10 },
-  map: { width: '100%', height: 300, borderRadius: 16 },
+  container: { position: 'relative', backgroundColor: '#FFFFFF', marginTop: 10 },
+  map: { width: '100%', height: 250, borderRadius: 16 },
   overlay: { position: 'absolute', top: 60, right: 16, gap: 8 },
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   zoomButton: { marginBottom: 6 },
@@ -451,7 +451,7 @@ export default memo(DiscoverMap, (prev, next) => {
     callbacksChanged: false,
     regionChanged: false,
   };
-  
+
   // Re-render if events array reference changed
   if (prev.events !== next.events) {
     // Deep check: compare event IDs to avoid re-renders when array is recreated with same content
@@ -466,7 +466,7 @@ export default memo(DiscoverMap, (prev, next) => {
       return false;
     }
   }
-  
+
   // Re-render if callbacks changed
   if (prev.onEventPress !== next.onEventPress) {
     shouldSkip.callbacksChanged = true;
@@ -480,28 +480,28 @@ export default memo(DiscoverMap, (prev, next) => {
     shouldSkip.callbacksChanged = true;
     return false;
   }
-  
+
   // Check if region changed
-  const regionChanged = 
+  const regionChanged =
     prev.region.latitude !== next.region.latitude ||
     prev.region.longitude !== next.region.longitude ||
     prev.region.latitudeDelta !== next.region.latitudeDelta ||
     prev.region.longitudeDelta !== next.region.longitudeDelta;
-  
+
   if (regionChanged) {
     shouldSkip.regionChanged = true;
   }
-  
+
   // Re-render if highlighted toki props changed (important for map animation and callout opening)
   const highlightedTokiIdChanged = prev.highlightedTokiId !== next.highlightedTokiId;
-  const highlightedCoordinatesChanged = 
+  const highlightedCoordinatesChanged =
     prev.highlightedCoordinates?.latitude !== next.highlightedCoordinates?.latitude ||
     prev.highlightedCoordinates?.longitude !== next.highlightedCoordinates?.longitude;
-  
+
   if (highlightedTokiIdChanged || highlightedCoordinatesChanged) {
     return false; // Force re-render
   }
-  
+
   // Intentionally ignore changes to region and onRegionChange to prevent re-renders during map drag
   const skipRender = !shouldSkip.eventsChanged && !shouldSkip.callbacksChanged;
   return skipRender;

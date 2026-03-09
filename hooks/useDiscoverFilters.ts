@@ -36,6 +36,7 @@ export const useDiscoverFilters = (
   const [selectedCategories, setSelectedCategories] = useState<string[]>(['all']);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<DiscoverFilters>(DEFAULT_FILTERS);
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'this_weekend'>('all');
 
   // User search state
   const [userSearchResults, setUserSearchResults] = useState<SearchUser[]>([]);
@@ -79,8 +80,8 @@ export const useDiscoverFilters = (
   }, [searchQuery]);
 
   const filteredEvents = useMemo(() => {
-    return filterEvents(events, searchQuery, selectedCategories, selectedFilters, userConnections);
-  }, [events, searchQuery, selectedCategories, selectedFilters, userConnections]);
+    return filterEvents(events, searchQuery, selectedCategories, selectedFilters, userConnections, timeFilter);
+  }, [events, searchQuery, selectedCategories, selectedFilters, userConnections, timeFilter]);
 
   const handleFilterChange = useCallback((filterType: string, value: string) => {
     setSelectedFilters(prev => ({ ...prev, [filterType]: value }));
@@ -91,6 +92,7 @@ export const useDiscoverFilters = (
     setSelectedCategories(['all']);
     setSearchQuery('');
     setUserSearchResults([]);
+    setTimeFilter('all');
   }, []);
 
   return {
@@ -105,6 +107,8 @@ export const useDiscoverFilters = (
     clearAllFilters,
     userSearchResults,
     isSearchingUsers,
+    timeFilter,
+    setTimeFilter,
   };
 };
 

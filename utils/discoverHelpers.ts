@@ -7,10 +7,10 @@ import { getActivityPhoto } from './activityPhotos';
 export const transformTokiToEvent = (toki: any): TokiEvent => {
   const hasValidImage = toki.image && toki.image.trim() !== '' && !toki.image.includes('activityPhotos');
   const imageUrl = hasValidImage ? toki.image : getActivityPhoto(toki.category);
-  
+
   // FIX: Use currentAttendees as fallback if attendees is not available
   const attendeesValue = toki.attendees ?? toki.currentAttendees ?? 0;
-  
+
   // DEBUG: Log if attendees is missing
   if (toki.attendees == null && toki.currentAttendees == null) {
     console.log('⚠️ [TRANSFORM DEBUG] Missing attendees for toki:', {
@@ -21,7 +21,7 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
       attendees: toki.attendees
     });
   }
-  
+
   return {
     id: toki.id,
     title: toki.title,
@@ -62,7 +62,8 @@ export const filterEvents = (
   searchQuery: string,
   selectedCategories: string[], // includes 'all' when none chosen
   selectedFilters: DiscoverFilters,
-  userConnections: string[]
+  userConnections: string[],
+  timeFilter: 'all' | 'today' | 'this_weekend' = 'all'
 ): TokiEvent[] => {
   return events.filter(event => {
     const matchesSearch = searchQuery === '' ||
@@ -73,7 +74,7 @@ export const filterEvents = (
 
     const categoryAnySelected = !selectedCategories.length || selectedCategories.includes('all');
     // Check if any selected category matches any tag in the event's tags array
-    const matchesMultiCategory = categoryAnySelected || 
+    const matchesMultiCategory = categoryAnySelected ||
       selectedCategories.some(selectedCat => event.tags.includes(selectedCat));
 
     // Category chips are the single source of truth; modal category is ignored
@@ -142,6 +143,46 @@ export const filterEvents = (
       return true;
     })();
 
+    const matchesTimeFilter = (() => {
+      if (timeFilter === 'all') return true;
+      const scheduled = event.scheduledTime ? new Date(event.scheduledTime) : null;
+      if (!scheduled || isNaN(scheduled.getTime())) return false;
+
+      const now = new Date();
+
+      if (timeFilter === 'today') {
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        return scheduled >= startOfDay && scheduled <= endOfDay;
+      }
+
+      if (timeFilter === 'this_weekend') {
+        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+        // Find next Friday (or current Friday if today is Fri/Sat/Sun)
+        let daysUntilFriday: number;
+        if (dayOfWeek === 0) {
+          // Sunday — use the weekend that started yesterday (Fri)
+          daysUntilFriday = -2;
+        } else if (dayOfWeek === 6) {
+          // Saturday — use the weekend that started yesterday (Fri)
+          daysUntilFriday = -1;
+        } else if (dayOfWeek === 5) {
+          // Friday — this is the start
+          daysUntilFriday = 0;
+        } else {
+          // Mon-Thu — find next Friday
+          daysUntilFriday = 5 - dayOfWeek;
+        }
+        const friday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday);
+        const weekendStart = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate(), 18, 0, 0);
+        const sunday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 2);
+        const weekendEnd = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59, 999);
+        return scheduled >= weekendStart && scheduled <= weekendEnd;
+      }
+
+      return true;
+    })();
+
     const matchesIsPaid = (() => {
       if (selectedFilters.isPaid === 'all') return true;
       if (selectedFilters.isPaid === 'free') return event.isPaid === false;
@@ -149,7 +190,7 @@ export const filterEvents = (
       return true;
     })();
 
-    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime && matchesIsPaid;
+    return matchesSearch && matchesCategory && matchesVisibility && matchesDistance && matchesAvailability && matchesParticipants && matchesTime && matchesTimeFilter && matchesIsPaid;
   });
 };
 

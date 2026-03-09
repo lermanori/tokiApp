@@ -168,7 +168,7 @@ function DiscoverMap({
       return [key, url] as [string, string];
     });
     const map = Object.fromEntries(entries) as Record<string, string>;
-    try { console.log('[DiscoverMap.web] ICON_WEB (from CATEGORY_CONFIG)', map); } catch {}
+    try { console.log('[DiscoverMap.web] ICON_WEB (from CATEGORY_CONFIG)', map); } catch { }
     return map;
   }, []);
   // Proximity clustering (~50 meters)
@@ -200,17 +200,17 @@ function DiscoverMap({
   const markerRefs = useRef<Map<string, any>>(new Map());
   // Store map instance ref
   const mapInstanceRef = useRef<any>(null);
-  
+
   // Memoize icon creation per cluster to prevent flickering
   const iconCache = useRef<Map<string, any>>(new Map());
-  
+
   const getMarkerIcon = useCallback((group: { key: string; items: EventItem[]; lat: number; lng: number }) => {
     const cacheKey = `${group.key}-${group.items[0].category}-${group.items.length}`;
-    
+
     if (iconCache.current.has(cacheKey)) {
       return iconCache.current.get(cacheKey);
     }
-    
+
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `
@@ -221,10 +221,10 @@ function DiscoverMap({
           <img src="${ICON_WEB[resolveCategoryKey(group.items[0].category)] || ''}" style="width: 22px; height: 22px; object-fit: contain;" />
           ${group.items.length > 1 ? `<div style="position:absolute; bottom:-6px; right:-6px; background:#111827; color:#fff; font-size:11px; border-radius:10px; padding:1px 5px; border:2px solid #fff;">${group.items.length}</div>` : ''}
         </div>`,
-      iconSize: [32, 32], 
+      iconSize: [32, 32],
       iconAnchor: [16, 16]
     });
-    
+
     iconCache.current.set(cacheKey, icon);
     return icon;
   }, [ICON_WEB]);
@@ -248,21 +248,21 @@ function DiscoverMap({
     const maxRadiusMetersRef = useRef(maxRadiusMeters);
     // Flag to prevent infinite loop when programmatically setting view
     const isClampingRef = useRef(false);
-    
+
     // Update refs when props change
     useEffect(() => {
       profileCenterRef.current = profileCenter;
       maxRadiusMetersRef.current = maxRadiusMeters;
     }, [profileCenter, maxRadiusMeters]);
-    
+
     useEffect(() => {
       mapInstanceRef.current = map;
-      
+
       // On first mount, restore last known position if available, otherwise use initial
       if (isFirstMountRef.current && !hasInitializedRef.current) {
         isFirstMountRef.current = false;
         hasInitializedRef.current = true;
-        
+
         // Check if we have highlighted coordinates on first mount (priority)
         if (highlightedTokiId && highlightedCoordinates) {
           const newCenter: [number, number] = [highlightedCoordinates.latitude, highlightedCoordinates.longitude];
@@ -273,7 +273,7 @@ function DiscoverMap({
         } else {
           // Check for profileCenter first (via ref to get current value)
           const currentProfileCenter = profileCenterRef.current;
-          
+
           // If we have both lastKnownMapCenter and profileCenter, check if they're close
           // If lastKnown is far from profileCenter, prioritize profileCenter (user's actual location)
           if (lastKnownMapCenter && lastKnownMapZoom !== null && currentProfileCenter && currentProfileCenter.latitude && currentProfileCenter.longitude) {
@@ -281,7 +281,7 @@ function DiscoverMap({
               { latitude: lastKnownMapCenter[0], longitude: lastKnownMapCenter[1] },
               { latitude: currentProfileCenter.latitude, longitude: currentProfileCenter.longitude }
             );
-            
+
             // If lastKnown is more than 1km from profileCenter, use profileCenter instead
             if (distance > 1000) {
               console.log('🏄 [MAP-FLOW] MapController: Last known position is far from profile center, using profile center', {
@@ -320,22 +320,22 @@ function DiscoverMap({
             console.log('🏄 [MAP-FLOW] MapController: Waiting for location - map not initialized yet');
           }
         }
-        
+
         // Set up maxBounds and drag handler if profileCenter and radius are available
         const currentProfileCenter = profileCenterRef.current;
         const currentMaxRadius = maxRadiusMetersRef.current;
-        
+
         console.log('🏄 [MAP-FLOW] MapController: Checking radius constraint setup', {
           hasProfileCenter: !!currentProfileCenter,
           profileCenter: currentProfileCenter,
           hasMaxRadius: !!currentMaxRadius,
           maxRadius: currentMaxRadius
         });
-        
+
         if (currentProfileCenter && currentMaxRadius && currentMaxRadius > 0) {
           // Validate and convert to numbers to prevent string concatenation
-          const lat = typeof currentProfileCenter.latitude === 'number' 
-            ? currentProfileCenter.latitude 
+          const lat = typeof currentProfileCenter.latitude === 'number'
+            ? currentProfileCenter.latitude
             : parseFloat(String(currentProfileCenter.latitude || 0));
           const lng = typeof currentProfileCenter.longitude === 'number'
             ? currentProfileCenter.longitude
@@ -343,9 +343,9 @@ function DiscoverMap({
           const radius = typeof currentMaxRadius === 'number'
             ? currentMaxRadius
             : parseFloat(String(currentMaxRadius || 0));
-          
+
           console.log('🏄 [MAP-FLOW] MapController: Validated values', { lat, lng, radius, isValid: Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radius) });
-          
+
           // Only proceed if all values are valid finite numbers
           if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radius) && radius > 0) {
             // Calculate maxBounds from profile center and radius
@@ -354,31 +354,31 @@ function DiscoverMap({
               [lat - radiusDegrees, lng - radiusDegrees],
               [lat + radiusDegrees, lng + radiusDegrees]
             );
-            console.log('🏄 [MAP-FLOW] MapController: Setting maxBounds', { 
-              center: [lat, lng], 
-              radiusMeters: radius, 
-              radiusDegrees, 
+            console.log('🏄 [MAP-FLOW] MapController: Setting maxBounds', {
+              center: [lat, lng],
+              radiusMeters: radius,
+              radiusDegrees,
               bounds: [[lat - radiusDegrees, lng - radiusDegrees], [lat + radiusDegrees, lng + radiusDegrees]]
             });
             map.setMaxBounds(bounds);
-          
+
             // Handle drag events to clamp during drag (not just after)
             const handleDrag = () => {
               if (isClampingRef.current) {
                 console.log('🏄 [MAP-FLOW] Drag handler: Skipping (already clamping)');
                 return;
               }
-              
+
               const center = map.getCenter();
               const distance = haversineDistanceMeters(
                 { latitude: lat, longitude: lng },
                 { latitude: center.lat, longitude: center.lng }
               );
-              
+
               if (distance > radius + 10) {
-                console.log('🏄 [MAP-FLOW] Drag handler: Clamping (distance exceeds radius)', { 
-                  distance, 
-                  radius, 
+                console.log('🏄 [MAP-FLOW] Drag handler: Clamping (distance exceeds radius)', {
+                  distance,
+                  radius,
                   center: [center.lat, center.lng],
                   profileCenter: [lat, lng]
                 });
@@ -387,23 +387,23 @@ function DiscoverMap({
                   { latitude: center.lat, longitude: center.lng },
                   radius
                 );
-                
+
                 isClampingRef.current = true;
                 map.setView([clamped.latitude, clamped.longitude], map.getZoom(), { animate: false });
                 setTimeout(() => { isClampingRef.current = false; }, 50);
               }
             };
-            
+
             console.log('🏄 [MAP-FLOW] MapController: Drag handler registered');
-          
+
             map.on('drag', handleDrag);
-            
+
             // Cleanup for drag handler
             const cleanupDrag = () => {
               map.off('drag', handleDrag);
               map.setMaxBounds(null);
             };
-            
+
             // Track user movements via map events (not props)
             const handleMoveEnd = () => {
               // Skip if we're currently programmatically setting the view (prevents infinite loop)
@@ -429,9 +429,9 @@ function DiscoverMap({
                 nextCenter
               );
 
-              console.log('🏄 [MAP-FLOW] MoveEnd handler: Checking distance', { 
-                distance, 
-                radius, 
+              console.log('🏄 [MAP-FLOW] MoveEnd handler: Checking distance', {
+                distance,
+                radius,
                 center: [center.lat, center.lng],
                 profileCenter: [lat, lng],
                 needsClamp: distance > radius + 10
@@ -452,23 +452,23 @@ function DiscoverMap({
                 // Set flag before calling setView to prevent recursive call
                 isClampingRef.current = true;
                 map.setView([clamped.latitude, clamped.longitude], zoom, { animate: false });
-                
+
                 // Reset flag after a short delay to allow moveend to fire and be ignored
                 setTimeout(() => {
                   isClampingRef.current = false;
                 }, 100);
-                
+
                 nextCenter = clamped;
               }
 
               lastKnownMapCenter = [nextCenter.latitude, nextCenter.longitude];
               lastKnownMapZoom = zoom;
             };
-            
+
             console.log('🏄 [MAP-FLOW] MapController: MoveEnd handler registered');
-            
+
             map.on('moveend', handleMoveEnd);
-            
+
             // Cleanup event listeners on unmount
             return () => {
               map.off('moveend', handleMoveEnd);
@@ -483,16 +483,16 @@ function DiscoverMap({
             lastKnownMapCenter = [center.lat, center.lng];
             lastKnownMapZoom = zoom;
           };
-          
+
           map.on('moveend', handleMoveEnd);
-          
+
           return () => {
             map.off('moveend', handleMoveEnd);
           };
         }
       }
     }, [map, highlightedTokiId, highlightedCoordinates]);
-    
+
     // Handle map centering when highlighted coordinates change after initial mount (programmatic jump)
     useEffect(() => {
       if (highlightedTokiId && highlightedCoordinates && map && hasInitializedRef.current) {
@@ -503,17 +503,17 @@ function DiscoverMap({
         lastKnownMapZoom = 16;
       }
     }, [highlightedTokiId, highlightedCoordinates, map]);
-    
+
     // Center map on profile location when it becomes available (handles async loading)
     const hasAppliedProfileCenterRef = useRef(false);
 
     useEffect(() => {
       if (
-        map && 
-        profileCenter && 
-        profileCenter.latitude && 
+        map &&
+        profileCenter &&
+        profileCenter.latitude &&
         profileCenter.longitude &&
-        hasInitializedRef.current && 
+        hasInitializedRef.current &&
         !hasAppliedProfileCenterRef.current
       ) {
         console.log('🏄 [MAP-FLOW] Profile center async effect: Profile center available', profileCenter);
@@ -524,14 +524,14 @@ function DiscoverMap({
             { latitude: currentCenter.lat, longitude: currentCenter.lng },
             { latitude: profileCenter.latitude, longitude: profileCenter.longitude }
           );
-          
-          console.log('🏄 [MAP-FLOW] Profile center async effect: Distance check', { 
-            distanceFromProfile, 
+
+          console.log('🏄 [MAP-FLOW] Profile center async effect: Distance check', {
+            distanceFromProfile,
             currentCenter: [currentCenter.lat, currentCenter.lng],
             profileCenter: [profileCenter.latitude, profileCenter.longitude],
             willCenter: distanceFromProfile > 1000
           });
-          
+
           // Only center if we're far from profile center (more than 1km away)
           // This prevents re-centering if user has already moved the map
           if (distanceFromProfile > 1000) {
@@ -552,7 +552,7 @@ function DiscoverMap({
         }
       }
     }, [map, profileCenter, highlightedTokiId, highlightedCoordinates]);
-    
+
     return null;
   };
 
@@ -563,7 +563,7 @@ function DiscoverMap({
       hasCoordinates: !!highlightedCoordinates,
       clusteredCount: clustered.length
     });
-    
+
     if (!highlightedTokiId || !highlightedCoordinates) {
       console.log(`🔵 [CALLOUT WEB] No highlight - exiting`);
       return;
@@ -573,7 +573,7 @@ function DiscoverMap({
     const cluster = clustered.find(group => {
       return group.items.some(item => item.id === highlightedTokiId);
     });
-    
+
     console.log(`🔵 [CALLOUT WEB] Cluster search result:`, {
       found: !!cluster,
       clusterKey: cluster?.key,
@@ -590,7 +590,7 @@ function DiscoverMap({
           console.log(`🔵 [CALLOUT WEB] Attempt ${attempt} skipped - already opened`);
           return;
         }
-        
+
         console.log(`🔵 [CALLOUT WEB] Attempt ${attempt} - Opening popup for cluster: ${cluster.key}`);
         const marker = markerRefs.current.get(cluster.key);
         console.log(`🔵 [CALLOUT WEB] Marker ref status:`, {
@@ -599,12 +599,12 @@ function DiscoverMap({
           totalMarkers: markerRefs.current.size,
           allKeys: Array.from(markerRefs.current.keys())
         });
-        
+
         if (marker) {
           // React Leaflet: Marker ref has leafletElement property that contains the Leaflet marker instance
           // Try direct access first
           let leafletMarker = null;
-          
+
           if ((marker as any).leafletElement) {
             leafletMarker = (marker as any).leafletElement;
             console.log(`🔵 [CALLOUT WEB] Found leafletElement directly`);
@@ -623,7 +623,7 @@ function DiscoverMap({
               }
             }
           }
-          
+
           if (leafletMarker && typeof leafletMarker.openPopup === 'function') {
             try {
               console.log(`🔵 [CALLOUT WEB] Using openPopup() method`);
@@ -704,7 +704,7 @@ function DiscoverMap({
 
   return (
     <View style={{ position: 'relative', backgroundColor: '#FFFFFF', marginTop: 20 }}>
-      <div style={{ position: 'relative', width: '100%', height: 300, borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', width: '100%', height: 250, borderRadius: 16, overflow: 'hidden' }}>
         <MapContainer
           center={initialMapCenter || [0, 0]} // Temporary - will be set by MapController
           zoom={initialMapZoom}
@@ -814,13 +814,13 @@ export default memo(DiscoverMap, (prev, next) => {
     const nextIds = next.events.map(e => e.id).sort().join(',');
     if (prevIds !== nextIds) return false;
   }
-  
+
   if (prev.onEventPress !== next.onEventPress) return false;
   if (prev.onMarkerPress !== next.onMarkerPress) return false;
   if (prev.onToggleList !== next.onToggleList) return false;
   if (prev.highlightedTokiId !== next.highlightedTokiId) return false;
   if (prev.highlightedCoordinates !== next.highlightedCoordinates) return false;
-  
+
   // Skip re-render if only region changed
   return true;
 });
