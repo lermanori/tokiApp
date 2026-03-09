@@ -437,7 +437,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
 
 const styles = StyleSheet.create({
   container: { position: 'relative', backgroundColor: '#FFFFFF', marginTop: 10 },
-  map: { width: '100%', height: 250, borderRadius: 16 },
+  map: { width: '100%', height: 275, borderRadius: 16 },
   overlay: { position: 'absolute', top: 60, right: 16, gap: 8 },
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   zoomButton: { marginBottom: 6 },
