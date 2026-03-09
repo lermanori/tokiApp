@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, Keyboard, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Send, Users, Flag } from 'lucide-react-native';
+import { ArrowLeft, Send, Users, Flag, Bell, BellOff } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import { socketService } from '@/services/socket';
+import { apiService } from '@/services/api';
 import ParticipantsModal from '@/components/ParticipantsModal';
 
 export default function ChatScreen() {
@@ -32,6 +33,10 @@ export default function ChatScreen() {
   }>>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
   const [isUserHost, setIsUserHost] = useState(false);
+
+  // Notification mute state (group chats only)
+  const [isMuted, setIsMuted] = useState(false);
+  const [isMuteLoading, setIsMuteLoading] = useState(false);
 
   // Report message function
   const handleReportMessage = async (messageId: string) => {
@@ -74,6 +79,7 @@ export default function ChatScreen() {
     setReportReason('');
     setReportingMessageId(null);
   };
+
 
   // Load Toki participants for the modal
   const loadTokiParticipants = async () => {
@@ -191,6 +197,44 @@ export default function ChatScreen() {
   const otherUserId = params.otherUserId as string;
   const otherUserName = params.otherUserName as string;
   const isGroup = params.isGroup === 'true';
+
+  // Check mute status on mount (group chats only)
+  useEffect(() => {
+    if (isGroup && tokiId) {
+      const checkMuteStatus = async () => {
+        try {
+          const muted = await apiService.checkTokiNotificationMute(tokiId);
+          setIsMuted(muted);
+        } catch (error) {
+          console.error('Check mute status error:', error);
+        }
+      };
+      checkMuteStatus();
+    }
+  }, [isGroup, tokiId]);
+
+  // Toggle mute notifications
+  const handleMuteToggle = async () => {
+    if (isMuteLoading || !tokiId) return;
+    setIsMuteLoading(true);
+    try {
+      const success = isMuted
+        ? await apiService.unmuteTokiNotifications(tokiId)
+        : await apiService.muteTokiNotifications(tokiId);
+      if (success) {
+        setIsMuted(!isMuted);
+        Alert.alert(
+          isMuted ? 'Notifications Unmuted' : 'Notifications Muted',
+          isMuted ? 'You will receive notifications for this Toki' : 'You will no longer receive notifications for this Toki'
+        );
+      }
+    } catch (error) {
+      console.error('Mute toggle error:', error);
+      Alert.alert('Error', 'Failed to update notification preference');
+    } finally {
+      setIsMuteLoading(false);
+    }
+  };
 
   // Support creating conversation only upon first send
   const [dynamicConversationId, setDynamicConversationId] = useState<string | undefined>(conversationId);
@@ -806,14 +850,27 @@ export default function ChatScreen() {
             </Text>
           </View>
           {isGroup && tokiId && (
-            <TouchableOpacity
-              onPress={() => {
-                setShowParticipantsModal(true);
-                loadTokiParticipants();
-              }}
-            >
-              <Users size={24} color="#8B5CF6" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <TouchableOpacity
+                onPress={handleMuteToggle}
+                disabled={isMuteLoading}
+                style={{ opacity: isMuteLoading ? 0.5 : 1 }}
+              >
+                {isMuted ? (
+                  <BellOff size={24} color="#8B5CF6" />
+                ) : (
+                  <Bell size={24} color="#8B5CF6" />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowParticipantsModal(true);
+                  loadTokiParticipants();
+                }}
+              >
+                <Users size={24} color="#8B5CF6" />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
         {!state.isConnected && (

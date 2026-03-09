@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, Modal, TextInput, Linking, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag, Bell, BellOff } from 'lucide-react-native';
+import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import * as Clipboard from 'expo-clipboard';
@@ -273,9 +273,6 @@ export default function TokiDetailsScreen() {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [participantToRemove, setParticipantToRemove] = useState<{ id: string, name: string } | null>(null);
 
-  // Notification mute state
-  const [isMuted, setIsMuted] = useState(false);
-  const [isMuteLoading, setIsMuteLoading] = useState(false);
 
   // Function to format time display smartly
 
@@ -283,51 +280,10 @@ export default function TokiDetailsScreen() {
   useEffect(() => {
     if (effectiveParams.tokiId) {
       checkSavedStatus();
-      checkMuteStatus();
     }
   }, [effectiveParams.tokiId]);
 
-  const checkMuteStatus = async () => {
-    try {
-      const muted = await apiService.checkTokiNotificationMute(effectiveParams.tokiId as string);
-      setIsMuted(muted);
-    } catch (error) {
-      console.error('Check mute status error:', error);
-    }
-  };
 
-  const handleMuteToggle = async () => {
-    if (isMuteLoading || !toki) return;
-    setIsMuteLoading(true);
-    try {
-      const success = isMuted
-        ? await apiService.unmuteTokiNotifications(toki.id)
-        : await apiService.muteTokiNotifications(toki.id);
-      if (success) {
-        setIsMuted(!isMuted);
-        Toast.show({
-          type: 'success',
-          text1: isMuted ? 'Notifications Unmuted' : 'Notifications Muted',
-          text2: isMuted ? 'You will receive notifications for this Toki' : 'You will no longer receive notifications for this Toki',
-          position: 'top',
-          visibilityTime: 3000,
-          topOffset: 60,
-        });
-      }
-    } catch (error) {
-      console.error('Mute toggle error:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to update notification preference',
-        position: 'top',
-        visibilityTime: 3000,
-        topOffset: 60,
-      });
-    } finally {
-      setIsMuteLoading(false);
-    }
-  };
 
   const checkSavedStatus = async () => {
     try {
@@ -1898,23 +1854,7 @@ export default function TokiDetailsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Mute Notifications Button */}
-            <View style={styles.muteSection}>
-              <TouchableOpacity
-                style={[styles.muteButton, isMuteLoading && { opacity: 0.6 }]}
-                onPress={handleMuteToggle}
-                disabled={isMuteLoading}
-              >
-                {isMuted ? (
-                  <BellOff size={20} color="#666666" />
-                ) : (
-                  <Bell size={20} color="#666666" />
-                )}
-                <Text style={styles.muteText}>
-                  {isMuteLoading ? 'Updating...' : (isMuted ? 'Unmute Notifications' : 'Mute Notifications')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+
 
             {/* Report Button - Only show for Tokis not hosted by current user */}
             {!toki.isHostedByUser && (
@@ -2846,25 +2786,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#EF4444',
-  },
-  muteSection: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  muteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  muteText: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#666666',
   },
   reportSection: {
     padding: 16,
