@@ -1076,7 +1076,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
         ) <= $3
     `;
 
-    // Filter out hidden activities if user is authenticated
+    // Filter out hidden activities and handle private Tokis if user is authenticated
     if (userId) {
       whereConditions += `
         AND NOT EXISTS (
@@ -1087,8 +1087,23 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
           SELECT 1 FROM toki_hidden_users thu
           WHERE thu.toki_id = t.id AND thu.user_id = $4
         )
+        AND (
+          t.visibility <> 'private'
+          OR t.host_id = $4
+          OR EXISTS (
+            SELECT 1 FROM toki_participants p
+            WHERE p.toki_id = t.id AND p.user_id = $4 AND p.status = 'approved'
+          )
+          OR EXISTS (
+            SELECT 1 FROM toki_invites ti
+            WHERE ti.toki_id = t.id AND ti.invited_user_id = $4 AND ti.status IN ('invited','accepted')
+          )
+        )
       `;
+    } else {
+      whereConditions += ` AND t.visibility <> 'private'`;
     }
+
 
     const baseParams: any[] = [lat, lng, radiusKm];
     let paramCount = 3;
