@@ -421,7 +421,17 @@ function RootLayoutNav() {
 
     const urlInfo = extractPathFromUrl();
     if (urlInfo && urlInfo.path) {
-      const { path, params } = urlInfo;
+      let { path, params } = urlInfo;
+
+      // Handle /share/:id URLs — rewrite to /toki-details with tokiId param
+      // /share/:id is a backend OG preview route, not a frontend route
+      const shareMatch = path.match(/^\/share\/(.+)$/);
+      if (shareMatch) {
+        const tokiId = shareMatch[1];
+        console.log('🔗 [INITIAL URL] Rewriting /share/ URL to /toki-details with tokiId:', tokiId);
+        path = '/toki-details';
+        params = { ...params, tokiId };
+      }
 
       console.log('🔗 [INITIAL URL] Handling universal link - navigating to:', path, params);
       console.log('🔗 [INITIAL URL] Params keys:', Object.keys(params));

@@ -8,8 +8,8 @@ interface AppInstallPromptProps {
   autoShow?: boolean;
 }
 
-export default function AppInstallPrompt({ 
-  currentUrl, 
+export default function AppInstallPrompt({
+  currentUrl,
   autoShow = true
 }: AppInstallPromptProps) {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -67,45 +67,26 @@ export default function AppInstallPrompt({
 
     console.log('🚀 [APP PROMPT] User clicked "Open in App" with URL:', url);
 
-    // For Chrome on iOS, try custom scheme first (more reliable)
-    // Then fallback to universal link via visible link click
+    // Use universal link directly — iOS will intercept this and open the app
+    // if the app is installed and the AASA file matches. If the app is not
+    // installed, the user stays on the current page (no-op).
     try {
-      // First, try custom scheme (tokimap://) - works better in Chrome on iOS
-      // Custom scheme format: tokimap://path?params (no domain)
-      // Extract path and params from the URL
-      const urlObj = new URL(url);
-      const customSchemeUrl = `tokimap:/${urlObj.pathname}${urlObj.search}`;
-      console.log('🔄 [APP PROMPT] Trying custom scheme first:', customSchemeUrl);
-      
-      Linking.openURL(customSchemeUrl).catch((schemeError) => {
-        console.log('⚠️ [APP PROMPT] Custom scheme failed, trying universal link:', schemeError);
-        
-        // Fallback: Create a visible link and click it for universal link
-        // This works better in Chrome on iOS than window.location.href
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank'; // Open in new context
-        link.rel = 'noopener noreferrer';
-        
-        // Make it visible briefly (required for some browsers)
-        link.style.position = 'absolute';
-        link.style.left = '-9999px';
-        link.style.top = '0';
-        
-        document.body.appendChild(link);
-        
-        // Trigger click
-        link.click();
-        
-        // Clean up after a delay
-        setTimeout(() => {
-          if (link.parentNode) {
-            document.body.removeChild(link);
-          }
-        }, 100);
-      });
+      // Ensure we're using the https:// universal link URL (not custom scheme)
+      // This is the most reliable way to trigger universal links from Safari
+      const universalUrl = url.startsWith('https://') ? url : `https://toki-app.com${new URL(url).pathname}${new URL(url).search}`;
+      console.log('🔗 [APP PROMPT] Opening universal link:', universalUrl);
+      window.location.href = universalUrl;
     } catch (error) {
       console.error('❌ [APP PROMPT] Error opening app:', error);
+      // Fallback: try custom scheme
+      try {
+        const urlObj = new URL(url);
+        const customSchemeUrl = `tokimap:/${urlObj.pathname}${urlObj.search}`;
+        console.log('🔄 [APP PROMPT] Falling back to custom scheme:', customSchemeUrl);
+        Linking.openURL(customSchemeUrl);
+      } catch (schemeError) {
+        console.error('❌ [APP PROMPT] Custom scheme also failed:', schemeError);
+      }
     }
   };
 
@@ -134,14 +115,14 @@ export default function AppInstallPrompt({
           Get the best experience by opening this in the Toki app
         </Text>
         <View style={styles.buttons}>
-          <TouchableOpacity 
-            style={styles.openButton} 
+          <TouchableOpacity
+            style={styles.openButton}
             onPress={handleOpenApp}
           >
             <Text style={styles.openButtonText}>Open in App</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.cancelButton} 
+          <TouchableOpacity
+            style={styles.cancelButton}
             onPress={handleDismiss}
           >
             <Text style={styles.cancelText}>Continue in Browser</Text>
