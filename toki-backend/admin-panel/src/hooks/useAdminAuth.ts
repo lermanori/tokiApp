@@ -38,11 +38,13 @@ export const useAdminAuth = () => {
         setIsAuthenticated(true);
       } else {
         localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_refresh_token');
         setIsAuthenticated(false);
       }
     } catch (error) {
       console.error('Auth check error:', error);
       localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_refresh_token');
       setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
@@ -63,6 +65,7 @@ export const useAdminAuth = () => {
 
       if (response.ok && data.success) {
         localStorage.setItem('admin_token', data.data.tokens.accessToken);
+        localStorage.setItem('admin_refresh_token', data.data.tokens.refreshToken);
         setUser(data.data.user);
         setIsAuthenticated(true);
         return { success: true };
@@ -77,6 +80,7 @@ export const useAdminAuth = () => {
 
   const logout = () => {
     localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_refresh_token');
     setIsAuthenticated(false);
     setUser(null);
   };

@@ -357,9 +357,8 @@ class ApiService {
             }
             return retryData;
           } else {
-            console.error('❌ [API] Token refresh failed');
-            // Token refresh failed, clear tokens and throw authentication error
-            await this.clearTokens();
+            console.error('❌ [API] Token refresh failed or skipped');
+            // refreshAccessToken already handles clearing tokens on explicit 401/403
             throw new Error('Authentication failed. Please log in again.');
           }
         }
@@ -1548,17 +1547,15 @@ class ApiService {
     // All attempts failed - only clear tokens if it's a clear authentication error
     console.log('❌ [API] All authentication attempts failed');
 
-    // Only clear tokens if it's a clear authentication error (401, 403)
-    // Don't clear tokens for network errors or other issues
-    if (lastError && typeof lastError === 'object' && lastError.message) {
-      if (lastError.message.includes('Authentication failed') ||
-        lastError.message.includes('Token expired') ||
-        lastError.message.includes('Invalid token')) {
-        console.log('🗑️ [API] Clearing tokens due to authentication error');
+    // Only clear tokens if the last error was an explicit authentication failure (401/403)
+    // We check for these markers in the error object if they were added by makeRequest
+    if (lastError && typeof lastError === 'object') {
+      if (lastError.isAuthError || lastError.status === 401 || lastError.status === 403) {
+        console.log('🗑️ [API] Clearing tokens due to explicit authentication failure');
         await this.clearTokens();
         this.authCache = { isValid: false, timestamp: Date.now() }; // Invalidate cache on clear
       } else {
-        console.log('⚠️ [API] Keeping tokens - error appears to be network-related');
+        console.log('⚠️ [API] Keeping tokens - error appears to be network-related or transient');
       }
     }
 

@@ -1,44 +1,109 @@
-// Admin API service
-// Handles all API calls to the backend with JWT authentication
-
 const API_BASE = '/api/admin';
 
-const getAuthHeaders = (includeContentType: boolean = true): HeadersInit => {
+// Unified request helper with automatic token refresh
+const makeRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
   const token = localStorage.getItem('admin_token');
-  const headers: HeadersInit = {};
-  if (includeContentType) {
-    headers['Content-Type'] = 'application/json';
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
 
-const handleResponse = async <T>(response: Response): Promise<T> => {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || 'Request failed');
+  const headers: HeadersInit = {
+    ...(options.headers || {}),
+  };
+
+  // Only add Content-Type if not FormData and not already set
+  if (!(options.body instanceof FormData) && !headers['Content-Type' as keyof HeadersInit]) {
+    (headers as any)['Content-Type'] = 'application/json';
   }
-  const data = await response.json();
-  return data;
+
+  if (token) {
+    (headers as any)['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(url, { ...options, headers });
+
+    // Handle 401 Unauthorized by attempting a token refresh
+    if (response.status === 401) {
+      const refreshToken = localStorage.getItem('admin_refresh_token');
+      if (refreshToken) {
+        console.debug('🔄 [Admin API] Attempting token refresh...');
+        try {
+          const refreshResponse = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          const refreshData = await refreshResponse.json();
+          if (refreshResponse.ok && refreshData.success) {
+            console.debug('✅ [Admin API] Token refresh successful');
+            const { accessToken, refreshToken: newRefreshToken } = refreshData.data.tokens;
+            localStorage.setItem('admin_token', accessToken);
+            localStorage.setItem('admin_refresh_token', newRefreshToken);
+
+            // Retry the original request with the new token
+            const retryHeaders = {
+              ...headers,
+              'Authorization': `Bearer ${accessToken}`
+            };
+            const retryResponse = await fetch(url, { ...options, headers: retryHeaders });
+            return await retryResponse.json();
+          } else {
+            // Only clear tokens if the server explicitly rejected the refresh token (401/403)
+            if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+              console.warn('❌ [Admin API] Token refresh explicitly failed, clearing tokens');
+              localStorage.removeItem('admin_token');
+              localStorage.removeItem('admin_refresh_token');
+              window.location.href = '/admin/login';
+              throw new Error('Session expired');
+            } else {
+              console.warn(`⚠️ [Admin API] Token refresh failed with status ${refreshResponse.status}, keeping tokens`);
+              throw new Error('Token refresh failed (server error)');
+            }
+          }
+        } catch (refreshError) {
+          // If it's a network error during refresh, don't clear tokens
+          console.error('❌ [Admin API] Error during token refresh:', refreshError);
+          // Check if this looks like a network error
+          const isNetworkError = refreshError instanceof TypeError ||
+            (refreshError instanceof Error &&
+              (refreshError.message.includes('fetch') || refreshError.message.includes('Network')));
+
+          if (!isNetworkError) {
+            // If it's not a network error and we haven't handled it above, it might be safer to keep tokens 
+            // but let the original error propagate.
+          }
+          throw refreshError;
+        }
+      } else {
+        // No refresh token available - clear access token and redirect
+        localStorage.removeItem('admin_token');
+        window.location.href = '/admin/login';
+        throw new Error('Authentication required');
+      }
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Request failed' }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`❌ [Admin API] Request failed for ${url}:`, error);
+    throw error;
+  }
 };
 
 export const adminApi = {
   // Settings
   getPasswordExpiry: async () => {
-    const response = await fetch(`${API_BASE}/settings/password-reset-expiry`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest('/settings/password-reset-expiry');
   },
   updatePasswordExpiry: async (hours: number) => {
-    const response = await fetch(`${API_BASE}/settings/password-reset-expiry`, {
+    return makeRequest('/settings/password-reset-expiry', {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ hours })
     });
-    return handleResponse(response);
   },
 
   // Waitlist
@@ -49,69 +114,50 @@ export const adminApi = {
         if (value !== undefined) query.append(key, String(value));
       });
     }
-    const response = await fetch(`${API_BASE}/waitlist?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/waitlist?${query}`);
   },
 
   getWaitlistEntry: async (id: string) => {
-    const response = await fetch(`${API_BASE}/waitlist/${id}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/waitlist/${id}`);
   },
 
   getWaitlistStats: async () => {
-    const response = await fetch(`${API_BASE}/waitlist/stats`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest('/waitlist/stats');
   },
 
   createUserFromWaitlist: async (waitlistId: string, userData: any) => {
-    const response = await fetch(`${API_BASE}/waitlist/${waitlistId}/user`, {
+    return makeRequest(`/waitlist/${waitlistId}/user`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(userData)
     });
-    return handleResponse(response);
   },
 
   sendEmailToWaitlist: async (waitlistId: string, emailData: { subject: string; body: string }) => {
-    const response = await fetch(`${API_BASE}/waitlist/${waitlistId}/email`, {
+    return makeRequest(`/waitlist/${waitlistId}/email`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(emailData)
     });
-    return handleResponse(response);
   },
 
   // Waitlist CRUD
   createWaitlistEntry: async (data: { email: string; phone?: string | null; location?: string | null; platform?: string | null }) => {
-    const response = await fetch(`${API_BASE}/waitlist`, {
+    return makeRequest('/waitlist', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   updateWaitlistEntry: async (id: string, data: Partial<{ email: string; phone: string | null; location: string | null; platform: string | null }>) => {
-    const response = await fetch(`${API_BASE}/waitlist/${id}`, {
+    return makeRequest(`/waitlist/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   deleteWaitlistEntry: async (id: string) => {
-    const response = await fetch(`${API_BASE}/waitlist/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    return makeRequest(`/waitlist/${id}`, {
+      method: 'DELETE'
     });
-    return handleResponse(response);
   },
 
   // Users
@@ -122,60 +168,44 @@ export const adminApi = {
         if (value !== undefined) query.append(key, String(value));
       });
     }
-    const response = await fetch(`${API_BASE}/users?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/users?${query}`);
   },
 
   getUser: async (id: string) => {
-    const response = await fetch(`${API_BASE}/users/${id}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/users/${id}`);
   },
 
   createUser: async (userData: any) => {
-    const response = await fetch(`${API_BASE}/users`, {
+    return makeRequest('/users', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(userData)
     });
-    return handleResponse(response);
   },
 
   updateUser: async (id: string, userData: any) => {
-    const response = await fetch(`${API_BASE}/users/${id}`, {
+    return makeRequest(`/users/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(userData)
     });
-    return handleResponse(response);
   },
 
   deleteUser: async (id: string) => {
-    const response = await fetch(`${API_BASE}/users/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    return makeRequest(`/users/${id}`, {
+      method: 'DELETE'
     });
-    return handleResponse(response);
   },
   issuePasswordLink: async (id: string, purpose: 'welcome' | 'reset', send: boolean, templateId?: string, includeLink: boolean = true) => {
-    const response = await fetch(`${API_BASE}/users/${id}/password-link`, {
+    return makeRequest(`/users/${id}/password-link`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ purpose, send, templateId, includeLink })
     });
-    return handleResponse(response);
   },
 
   addInvitationCredits: async (userId: string, credits: number) => {
-    const response = await fetch(`${API_BASE}/users/${userId}/invitation-credits`, {
+    return makeRequest(`/users/${userId}/invitation-credits`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ credits })
     });
-    return handleResponse(response);
   },
 
   // Tokis
@@ -186,158 +216,113 @@ export const adminApi = {
         if (value !== undefined) query.append(key, String(value));
       });
     }
-    const response = await fetch(`${API_BASE}/tokis?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/tokis?${query}`);
   },
 
   getToki: async (id: string) => {
-    const response = await fetch(`${API_BASE}/tokis/${id}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/tokis/${id}`);
   },
 
   getTokiParticipants: async (id: string) => {
-    const response = await fetch(`${API_BASE}/tokis/${id}/participants`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/tokis/${id}/participants`);
   },
 
   createToki: async (tokiData: any) => {
-    const response = await fetch(`${API_BASE}/tokis`, {
+    return makeRequest('/tokis', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(tokiData)
     });
-    return handleResponse(response);
   },
 
   updateToki: async (id: string, tokiData: any) => {
-    const response = await fetch(`${API_BASE}/tokis/${id}`, {
+    return makeRequest(`/tokis/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(tokiData)
     });
-    return handleResponse(response);
   },
 
   deleteToki: async (id: string) => {
-    const response = await fetch(`${API_BASE}/tokis/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    return makeRequest(`/tokis/${id}`, {
+      method: 'DELETE'
     });
-    return handleResponse(response);
   },
 
   // Batch upload
   previewBatchTokis: async (zipFile: File) => {
     const formData = new FormData();
     formData.append('zipFile', zipFile);
-
-    const response = await fetch(`${API_BASE}/tokis/batch/preview`, {
+    return makeRequest('/tokis/batch/preview', {
       method: 'POST',
-      headers: getAuthHeaders(false), // Don't set Content-Type for FormData
       body: formData
     });
-    return handleResponse(response);
   },
 
   createBatchTokis: async (zipFile: File) => {
     const formData = new FormData();
     formData.append('zipFile', zipFile);
-
-    const response = await fetch(`${API_BASE}/tokis/batch/create`, {
+    return makeRequest('/tokis/batch/create', {
       method: 'POST',
-      headers: getAuthHeaders(false), // Don't set Content-Type for FormData
       body: formData
     });
-    return handleResponse(response);
   },
 
   // MCP API Keys
   getMcpKeys: async () => {
-    const response = await fetch(`${API_BASE}/mcp-keys`, {
-      headers: getAuthHeaders(),
-    });
-    return handleResponse(response);
+    return makeRequest('/mcp-keys');
   },
 
   createMcpKey: async (data: { name: string; scopes?: string[]; user_id: string }) => {
-    const response = await fetch(`${API_BASE}/mcp-keys`, {
+    return makeRequest('/mcp-keys', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    return handleResponse(response);
   },
 
   revokeMcpKey: async (id: string) => {
-    const response = await fetch(`${API_BASE}/mcp-keys/${id}/revoke`, {
+    return makeRequest(`/mcp-keys/${id}/revoke`, {
       method: 'POST',
-      headers: getAuthHeaders(),
     });
-    return handleResponse(response);
   },
 
   // Algorithm Hyperparameters
   getAlgorithm: async () => {
-    const response = await fetch(`${API_BASE}/algorithm`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest('/algorithm');
   },
 
   updateAlgorithm: async (weights: any) => {
-    const response = await fetch(`${API_BASE}/algorithm`, {
+    return makeRequest('/algorithm', {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(weights)
     });
-    return handleResponse(response);
   },
 
   // Email Templates
   getEmailTemplates: async () => {
-    const response = await fetch(`${API_BASE}/email-templates`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest('/email-templates');
   },
 
   getEmailTemplate: async (id: string) => {
-    const response = await fetch(`${API_BASE}/email-templates/${id}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/email-templates/${id}`);
   },
 
   createEmailTemplate: async (templateData: any) => {
-    const response = await fetch(`${API_BASE}/email-templates`, {
+    return makeRequest('/email-templates', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(templateData)
     });
-    return handleResponse(response);
   },
 
   updateEmailTemplate: async (id: string, templateData: any) => {
-    const response = await fetch(`${API_BASE}/email-templates/${id}`, {
+    return makeRequest(`/email-templates/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(templateData)
     });
-    return handleResponse(response);
   },
 
   deleteEmailTemplate: async (id: string) => {
-    const response = await fetch(`${API_BASE}/email-templates/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    return makeRequest(`/email-templates/${id}`, {
+      method: 'DELETE'
     });
-    return handleResponse(response);
   },
 
   // Analytics
@@ -346,10 +331,7 @@ export const adminApi = {
     if (hours !== undefined) {
       query.append('hours', String(hours));
     }
-    const response = await fetch(`${API_BASE}/analytics?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/analytics?${query}`);
   },
 
   // Notification Schedule
@@ -360,17 +342,11 @@ export const adminApi = {
         if (value !== undefined) query.append(key, String(value));
       });
     }
-    const response = await fetch(`${API_BASE}/notification-schedule?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/notification-schedule?${query}`);
   },
 
   getNotificationScheduleEntry: async (id: string) => {
-    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/notification-schedule/${id}`);
   },
 
   createNotificationSchedule: async (data: {
@@ -381,12 +357,10 @@ export const adminApi = {
     minute: number;
     enabled?: boolean;
   }) => {
-    const response = await fetch(`${API_BASE}/notification-schedule`, {
+    return makeRequest('/notification-schedule', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   updateNotificationSchedule: async (id: string, data: {
@@ -397,28 +371,22 @@ export const adminApi = {
     minute?: number;
     enabled?: boolean;
   }) => {
-    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
+    return makeRequest(`/notification-schedule/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   deleteNotificationSchedule: async (id: string) => {
-    const response = await fetch(`${API_BASE}/notification-schedule/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    return makeRequest(`/notification-schedule/${id}`, {
+      method: 'DELETE'
     });
-    return handleResponse(response);
   },
 
   testNotificationSchedule: async (id: string) => {
-    const response = await fetch(`${API_BASE}/notification-schedule/${id}/test`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    return makeRequest(`/notification-schedule/${id}/test`, {
+      method: 'POST'
     });
-    return handleResponse(response);
   },
 
   // Reports
@@ -434,37 +402,32 @@ export const adminApi = {
         if (value !== undefined) query.append(key, String(value));
       });
     }
-    const response = await fetch(`${API_BASE}/reports?${query}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/reports?${query}`);
   },
 
   updateReport: async (reportId: string, data: { status: string; notes?: string }) => {
-    const response = await fetch(`${API_BASE}/reports/${reportId}`, {
+    return makeRequest(`/reports/${reportId}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   // Block/Unblock Toki
   blockToki: async (tokiId: string, data: { block: boolean; reason?: string }) => {
-    const response = await fetch(`${API_BASE}/tokis/${tokiId}/block`, {
+    return makeRequest(`/tokis/${tokiId}/block`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
-    return handleResponse(response);
   },
 
   // Token Debug
   getTokenDebug: async (userId: string) => {
-    const response = await fetch(`${API_BASE}/token-debug/${userId}`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(response);
+    return makeRequest(`/token-debug/${userId}`);
   },
+
+  // Auth check
+  me: async () => {
+    return makeRequest('/me');
+  }
 };
 
