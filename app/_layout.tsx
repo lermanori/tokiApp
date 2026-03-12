@@ -180,7 +180,10 @@ function RootLayoutNav() {
 
           // If it's a custom scheme, convert to http for parsing
           if (urlToParse.startsWith('tokimap://')) {
-            urlToParse = urlToParse.replace('tokimap://', 'http://');
+            // Standardize: tokimap://path -> http://toki-app.com/path
+            urlToParse = urlToParse.replace('tokimap://', 'http://toki-app.com/');
+          } else if (urlToParse.startsWith('tokimap:/')) {
+            urlToParse = urlToParse.replace('tokimap:/', 'http://toki-app.com/');
           }
 
           // For native, the URL might be a full URL or just a path
@@ -193,18 +196,25 @@ function RootLayoutNav() {
           }
 
           const pathname = url.pathname;
-          if (pathname && pathname !== '/' && pathname !== '/+not-found') {
+          // Robust check: if pathname is empty/root but host is a valid route
+          let finalPath = pathname;
+          if ((!finalPath || finalPath === '/') && url.hostname !== 'toki-app.com' && url.hostname !== 'localhost') {
+            finalPath = `/${url.hostname}`;
+            console.log('🔗 [INITIAL URL] Fell back to hostname as path:', finalPath);
+          }
+
+          if (finalPath && finalPath !== '/' && finalPath !== '/+not-found') {
             const params: Record<string, string> = {};
             url.searchParams.forEach((value, key) => {
               params[key] = value;
             });
-            console.log('🔗 [INITIAL URL] Extracted from initialUrl state:', pathname, params);
+            console.log('🔗 [INITIAL URL] Extracted from initialUrl state:', finalPath, params);
             // Clear it after use
             setInitialUrl(null);
             if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
               sessionStorage.removeItem('toki-initial-url');
             }
-            return { path: pathname, params };
+            return { path: finalPath, params };
           }
         } catch (error) {
           console.error('❌ [INITIAL URL] Error parsing initialUrl state:', error);
