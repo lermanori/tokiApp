@@ -12,7 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "5",
+      buildNumber: "7",
       usesAppleSignIn: true,
       config: {},
       infoPlist: {
@@ -71,7 +71,9 @@ module.exports = {
     },
     owner: "lermanori",
     updates: {
-      url: "https://u.expo.dev/41a24d0b-1d53-429a-8753-acd4a5b9972c"
+      url: "https://u.expo.dev/41a24d0b-1d53-429a-8753-acd4a5b9972c",
+      checkAutomatically: "ON_ERROR_RECOVERY",
+      fallbackToCacheTimeout: 0
     },
     android: {
       versionCode: 5,
