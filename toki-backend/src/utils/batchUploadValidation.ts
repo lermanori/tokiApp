@@ -175,8 +175,31 @@ export async function validateTokiData(
   errors.push(...requiredErrors);
 
   // Validate category
-  if (toki.category && !validateCategory(toki.category)) {
-    errors.push(`Invalid category: ${toki.category}. Must be one of: ${Object.keys(CATEGORY_CONFIG).join(', ')}`);
+  if (toki.category) {
+    if (Array.isArray(toki.category)) {
+      if (toki.category.length > 0) {
+        // Map first category as primary, attach rest to tags
+        const primaryCategory = String(toki.category[0]).toLowerCase();
+        if (!validateCategory(primaryCategory)) {
+          errors.push(`Invalid category: ${primaryCategory}. Must be one of: ${Object.keys(CATEGORY_CONFIG).join(', ')}`);
+        } else {
+          // Move remaining to tags (the actual object mutation happens here during validation so it propagates)
+          const restCategories = toki.category.slice(1).map(String);
+          toki.category = primaryCategory;
+
+          if (!toki.tags || !Array.isArray(toki.tags)) {
+            toki.tags = [];
+          }
+          toki.tags.push(...restCategories);
+          // deduplicate tags just in case
+          toki.tags = [...new Set(toki.tags)];
+        }
+      } else {
+        errors.push(`Category array cannot be empty`);
+      }
+    } else if (!validateCategory(toki.category)) {
+      errors.push(`Invalid category: ${toki.category}. Must be one of: ${Object.keys(CATEGORY_CONFIG).join(', ')}`);
+    }
   }
 
   // Validate timeSlot (deprecated - warn but don't error)

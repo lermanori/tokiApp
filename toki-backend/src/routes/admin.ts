@@ -1609,11 +1609,39 @@ router.post('/tokis', authenticateToken, requireAdmin, async (req: Request, res:
   }
 });
 
+// Get single toki
+router.get('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT * FROM tokis WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Toki not found' });
+      return;
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+    return;
+  } catch (error) {
+    console.error('Error fetching toki:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch toki' });
+    return;
+  }
+});
+
 // Update toki
 router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, category, status, location, host_id } = req.body;
+    const {
+      title, description, category, status, location, host_id,
+      scheduled_time, max_attendees, visibility, tags, is_paid,
+      latitude, longitude, external_link, auto_approve
+    } = req.body;
+
     const upd = await pool.query(
       `UPDATE tokis SET
         title = COALESCE($1, title),
@@ -1621,10 +1649,36 @@ router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
         category = COALESCE($3, category),
         status = COALESCE($4, status),
         location = COALESCE($5, location),
-        host_id = COALESCE($6, host_id)
-       WHERE id = $7
-       RETURNING id, title, category, status, location, host_id, created_at`,
-      [title || null, description || null, category || null, status || null, location || null, host_id || null, id]
+        host_id = COALESCE($6, host_id),
+        scheduled_time = COALESCE($7, scheduled_time),
+        max_attendees = COALESCE($8, max_attendees),
+        visibility = COALESCE($9, visibility),
+        tags = COALESCE($10, tags),
+        is_paid = COALESCE($11, is_paid),
+        latitude = COALESCE($12, latitude),
+        longitude = COALESCE($13, longitude),
+        external_link = COALESCE($14, external_link),
+        auto_approve = COALESCE($15, auto_approve)
+       WHERE id = $16
+       RETURNING *`,
+      [
+        title || null,
+        description || null,
+        category || null,
+        status || null,
+        location || null,
+        host_id || null,
+        scheduled_time || null,
+        max_attendees !== undefined ? max_attendees : null,
+        visibility || null,
+        tags || null,
+        is_paid !== undefined ? is_paid : null,
+        latitude !== undefined ? latitude : null,
+        longitude !== undefined ? longitude : null,
+        external_link !== undefined ? external_link : null,
+        auto_approve !== undefined ? auto_approve : null,
+        id
+      ]
     );
     if (upd.rows.length === 0) {
       res.status(404).json({ success: false, message: 'Toki not found' });
@@ -2417,7 +2471,8 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
     const defaultHostId = req.user!.id;
 
     // Fix invalid or missing host_ids - first pass: check which host_ids exist
-    const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter(Boolean))];
+    const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter((id: any) => id && isValidUUID(id)))];
     const existingHostIds = new Set<string>();
 
     if (allHostIds.length > 0) {
@@ -2436,6 +2491,11 @@ router.post('/tokis/batch/preview', authenticateToken, requireAdmin, batchUpload
 
     // Fix tokis with invalid/missing host_ids
     const fixedTokis = tokis.map((t: any) => {
+      // Map isFree to isPaid if present
+      if (t.isPaid === undefined && typeof t.isFree === 'boolean') {
+        t.isPaid = !t.isFree;
+      }
+
       if (!t.host_id || !existingHostIds.has(t.host_id)) {
         return { ...t, host_id: defaultHostId, _hostFixed: true };
       }
@@ -2646,7 +2706,8 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
     const defaultHostId = req.user!.id;
 
     // Fix invalid or missing host_ids - first pass: check which host_ids exist
-    const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter(Boolean))];
+    const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const allHostIds = [...new Set(tokis.map((t: any) => t.host_id).filter((id: any) => id && isValidUUID(id)))];
     const existingHostIds = new Set<string>();
 
     if (allHostIds.length > 0) {
@@ -2665,6 +2726,11 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
 
     // Fix tokis with invalid/missing host_ids
     const fixedTokis = tokis.map((t: any) => {
+      // Map isFree to isPaid if present
+      if (t.isPaid === undefined && typeof t.isFree === 'boolean') {
+        t.isPaid = !t.isFree;
+      }
+
       if (!t.host_id || !existingHostIds.has(t.host_id)) {
         return { ...t, host_id: defaultHostId };
       }
@@ -2738,8 +2804,8 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
         const tokiResult = await client.query(
           `INSERT INTO tokis (
             host_id, title, description, location, latitude, longitude,
-            time_slot, scheduled_time, max_attendees, category, visibility, external_link, auto_approve, status
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            time_slot, scheduled_time, max_attendees, category, visibility, external_link, auto_approve, is_paid, status
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           RETURNING *`,
           [
             matchedToki.toki.host_id,
@@ -2757,6 +2823,7 @@ router.post('/tokis/batch/create', authenticateToken, requireAdmin, batchUpload.
             matchedToki.toki.visibility || 'public',
             matchedToki.toki.externalLink || null,
             matchedToki.toki.autoApprove || false,
+            matchedToki.toki.isPaid !== undefined ? matchedToki.toki.isPaid : false,
             'active'
           ]
         );
