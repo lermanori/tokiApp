@@ -39,8 +39,8 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
       zIndex: 1000,
       padding: 20
     }} onClick={onClose}>
-      <div 
-        className="glass-card" 
+      <div
+        className="glass-card"
         style={{
           width: '100%',
           maxWidth: 800,
@@ -84,8 +84,8 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
             zIndex: 10,
             padding: '6px 16px',
             borderRadius: 9999,
-            background: validation.status === 'valid' 
-              ? 'linear-gradient(135deg,#10B981,#4DC4AA)' 
+            background: validation.status === 'valid'
+              ? 'linear-gradient(135deg,#10B981,#4DC4AA)'
               : 'linear-gradient(135deg,#EF4444,#EC4899)',
             color: 'white',
             fontSize: 14,
@@ -95,7 +95,7 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
             {validation.status === 'valid' ? '✓ Valid' : '✗ Invalid'}
           </div>
         )}
-        
+
         {/* Hero Image */}
         <div style={{
           width: '100%',
@@ -105,8 +105,8 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
           overflow: 'hidden'
         }}>
           {displayImage ? (
-            <img 
-              src={displayImage} 
+            <img
+              src={displayImage}
               alt={toki.title}
               style={{
                 width: '100%',
@@ -127,7 +127,7 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
             </div>
           )}
         </div>
-        
+
         {/* Content */}
         <div style={{ padding: 24 }}>
           <h1 style={{
@@ -138,7 +138,7 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
           }}>
             {toki.title}
           </h1>
-          
+
           {toki.description && (
             <p style={{
               fontSize: 16,
@@ -149,7 +149,7 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
               {toki.description}
             </p>
           )}
-          
+
           {/* Info Grid */}
           <div style={{
             display: 'grid',
@@ -162,7 +162,64 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
             {toki.scheduledTime && (
               <InfoItem icon="📅" label="Scheduled Time" value={new Date(toki.scheduledTime).toLocaleString()} />
             )}
-            <InfoItem icon="📂" label="Category" value={toki.category} />
+
+            {/* Category / Tags combined display */}
+            <div style={{
+              padding: 12,
+              background: 'rgba(255, 255, 255, 0.6)',
+              borderRadius: 8
+            }}>
+              <div style={{
+                fontSize: 12,
+                color: '#6B7280',
+                marginBottom: 4,
+                fontFamily: 'var(--font-medium)'
+              }}>
+                Category
+              </div>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6
+              }}>
+                {(toki.tags?.length && toki.tags.length > 0) ? (
+                  [toki.category, ...toki.tags.filter((t: string) => t !== toki.category)].slice(0, 3).map((cat, i) => (
+                    <span key={i} style={{
+                      padding: '4px 10px',
+                      borderRadius: 9999,
+                      background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+                      color: 'white',
+                      fontSize: 14,
+                      fontFamily: 'var(--font-semi)',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}>
+                      {i === 0 && <span>📂</span>}
+                      {cat || toki.category}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: 9999,
+                    background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+                    color: 'white',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-semi)',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    <span>📂</span>
+                    {toki.category}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {toki.maxAttendees && (
               <InfoItem icon="👥" label="Max Attendees" value={String(toki.maxAttendees)} />
             )}
@@ -177,33 +234,6 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
             )}
           </div>
 
-          {/* Tags */}
-          {toki.tags && toki.tags.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{
-                fontSize: 16,
-                fontFamily: 'var(--font-semi)',
-                color: '#1C1C1C',
-                marginBottom: 12
-              }}>
-                Tags
-              </h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {toki.tags.map((tag: string, idx: number) => (
-                  <span key={idx} style={{
-                    padding: '6px 12px',
-                    borderRadius: 9999,
-                    background: 'rgba(139, 92, 246, 0.1)',
-                    color: '#8B5CF6',
-                    fontSize: 14
-                  }}>
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* External Link */}
           {toki.externalLink && (
             <div style={{ marginBottom: 24 }}>
@@ -215,9 +245,9 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
               }}>
                 External Link
               </h3>
-              <a 
-                href={toki.externalLink} 
-                target="_blank" 
+              <a
+                href={toki.externalLink}
+                target="_blank"
                 rel="noopener noreferrer"
                 style={{
                   color: '#8B5CF6',
@@ -284,8 +314,8 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={onClose}
               style={{
                 background: 'rgba(107, 114, 128, 0.8)'
@@ -294,8 +324,8 @@ export default function TokiDetailsPreviewModal({ toki, validation, onClose, onE
               Close
             </button>
             {onEdit && (
-              <button 
-                className="btn-primary" 
+              <button
+                className="btn-primary"
                 onClick={onEdit}
               >
                 Edit

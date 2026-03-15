@@ -14,6 +14,7 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
     location: toki.location || '',
     category: toki.category || '',
     timeSlot: toki.timeSlot || '',
+    isPaid: toki.isPaid !== undefined ? toki.isPaid : false,
     scheduledTime: toki.scheduledTime || '',
     maxAttendees: toki.maxAttendees || '',
     visibility: toki.visibility || 'public',
@@ -66,17 +67,29 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
   }, []);
 
   const selectedUser = users.find(u => u.id === formData.host_id);
-  const filteredUsers = users.filter(u => 
+  const filteredUsers = users.filter(u =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase())
   ).slice(0, 10); // Limit to 10 results
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Split categories by comma
+    const categoryList = formData.category.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean);
+    const primaryCategory = categoryList[0] || '';
+
+    // Existing tags from tags input
+    const inputTags = formData.tags ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+
+    // Combined tags (all categories + input tags)
+    const combinedTags = [...new Set([...categoryList, ...inputTags])];
+
     const updated = {
       ...toki,
       ...formData,
-      tags: formData.tags ? formData.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [],
+      category: primaryCategory,
+      tags: combinedTags,
       maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : null,
       latitude: formData.latitude ? parseFloat(formData.latitude) : null,
       longitude: formData.longitude ? parseFloat(formData.longitude) : null
@@ -95,8 +108,8 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
       zIndex: 1000,
       padding: 20
     }} onClick={onClose}>
-      <div 
-        className="glass-card" 
+      <div
+        className="glass-card"
         style={{
           width: '100%',
           maxWidth: 600,
@@ -215,6 +228,21 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
                   style={{ width: '100%' }}
                   placeholder="e.g., wellness, sports"
                 />
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
+                  {formData.category.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean).map((cat: string, i: number) => (
+                    <span key={i} style={{
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+                      color: 'white',
+                      fontSize: 11,
+                      fontFamily: 'var(--font-semi)',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {cat}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -301,6 +329,27 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
                   <option value="connections">Connections</option>
                   <option value="friends">Friends</option>
                   <option value="private">Private</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: 14,
+                  fontFamily: 'var(--font-semi)',
+                  color: '#1C1C1C',
+                  marginBottom: 8
+                }}>
+                  Pricing
+                </label>
+                <select
+                  className="input-glass"
+                  value={formData.isPaid ? 'paid' : 'free'}
+                  onChange={(e) => setFormData({ ...formData, isPaid: e.target.value === 'paid' })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="free">Free</option>
+                  <option value="paid">Paid</option>
                 </select>
               </div>
             </div>

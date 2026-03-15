@@ -71,9 +71,9 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
   const displayImage = toki.previewImage || toki.image || (toki.images && toki.images[0]?.url);
 
   return (
-    <div 
-      className="glass-card" 
-      style={{ 
+    <div
+      className="glass-card"
+      style={{
         overflow: 'hidden',
         position: 'relative',
         cursor: onViewDetails ? 'pointer' : 'default',
@@ -100,8 +100,8 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
           zIndex: 10,
           padding: '4px 12px',
           borderRadius: 9999,
-          background: validation.status === 'valid' 
-            ? 'linear-gradient(135deg,#10B981,#4DC4AA)' 
+          background: validation.status === 'valid'
+            ? 'linear-gradient(135deg,#10B981,#4DC4AA)'
             : 'linear-gradient(135deg,#EF4444,#EC4899)',
           color: 'white',
           fontSize: 12,
@@ -111,7 +111,7 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
           {validation.status === 'valid' ? '✓ Valid' : '✗ Invalid'}
         </div>
       )}
-      
+
       {/* Image Header */}
       <div style={{
         width: '100%',
@@ -121,8 +121,8 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
         overflow: 'hidden'
       }}>
         {displayImage && !imageError ? (
-          <img 
-            src={displayImage} 
+          <img
+            src={displayImage}
             alt={toki.title}
             style={{
               width: '100%',
@@ -152,7 +152,7 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
           background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)'
         }} />
       </div>
-      
+
       {/* Content */}
       <div style={{ padding: 16 }}>
         <div style={{
@@ -171,19 +171,38 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
           }}>
             {toki.title}
           </h3>
-          <span style={{
-            padding: '4px 10px',
-            borderRadius: 9999,
-            background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
-            color: 'white',
-            fontSize: 12,
-            fontFamily: 'var(--font-semi)',
-            whiteSpace: 'nowrap'
-          }}>
-            {toki.category}
-          </span>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '40%' }}>
+            {/* Display multiple categories or fall back to primary */}
+            {(toki.tags?.length && toki.tags.length > 0) ? (
+              [toki.category, ...toki.tags.filter(t => t !== toki.category)].slice(0, 3).map((cat, i) => (
+                <span key={i} style={{
+                  padding: '4px 10px',
+                  borderRadius: 9999,
+                  background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+                  color: 'white',
+                  fontSize: 12,
+                  fontFamily: 'var(--font-semi)',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {cat || toki.category}
+                </span>
+              ))
+            ) : (
+              <span style={{
+                padding: '4px 10px',
+                borderRadius: 9999,
+                background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+                color: 'white',
+                fontSize: 12,
+                fontFamily: 'var(--font-semi)',
+                whiteSpace: 'nowrap'
+              }}>
+                {toki.category}
+              </span>
+            )}
+          </div>
         </div>
-        
+
         {toki.description && (
           <p style={{
             fontSize: 14,
@@ -198,7 +217,7 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
             {toki.description}
           </p>
         )}
-        
+
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -231,7 +250,7 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
             </div>
           )}
         </div>
-        
+
         {toki.tags && toki.tags.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
             {toki.tags.slice(0, 3).map((tag, idx) => (
@@ -258,7 +277,7 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
             )}
           </div>
         )}
-        
+
         {/* Error Messages */}
         {validation?.errors && validation.errors.length > 0 && (
           <div style={{
@@ -295,12 +314,12 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
             ))}
           </div>
         )}
-        
+
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8 }}>
           {onEdit && (
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               style={{ flex: 1, fontSize: 14, padding: '8px 16px' }}
             >
@@ -308,12 +327,12 @@ export default function TokiPreviewCard({ toki, validation, onEdit, onViewDetail
             </button>
           )}
           {onViewDetails && (
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
-              style={{ 
-                flex: 1, 
-                fontSize: 14, 
+              style={{
+                flex: 1,
+                fontSize: 14,
                 padding: '8px 16px',
                 background: 'linear-gradient(135deg,#4DC4AA,#10B981)'
               }}
