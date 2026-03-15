@@ -23,7 +23,20 @@ export async function sendPushToUsers(userIds: string[], payload: { title: strin
   }));
 
   for (const chunk of expo.chunkPushNotifications(messages)) {
-    await expo.sendPushNotificationsAsync(chunk);
+    try {
+      const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+
+      // Cleanup invalid tokens
+      for (let i = 0; i < ticketChunk.length; i++) {
+        const ticket = ticketChunk[i];
+        if (ticket.status === 'error' && ticket.details && ticket.details.error === 'DeviceNotRegistered') {
+          const invalidToken = chunk[i].to;
+          await pool.query('DELETE FROM push_tokens WHERE token = $1', [invalidToken]);
+        }
+      }
+    } catch (e) {
+      console.error('Error sending push chunk:', e);
+    }
   }
 }
 

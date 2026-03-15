@@ -19,18 +19,19 @@ async function checkAndSendNotifications() {
     // Query for notifications that match current day, hour, and minute
     // and haven't been sent today (or never sent)
     const result = await pool.query(
-      `SELECT id, title, message, last_sent_at
-       FROM scheduled_notifications
+      `UPDATE scheduled_notifications
+       SET last_sent_at = NOW()
        WHERE enabled = true
          AND day_of_week = $1
          AND hour = $2
          AND minute = $3
-         AND (last_sent_at IS NULL OR DATE(last_sent_at) < CURRENT_DATE)`,
+         AND (last_sent_at IS NULL OR DATE(last_sent_at) < CURRENT_DATE)
+       RETURNING id, title, message`,
       [dayOfWeek, hour, minute]
     );
 
     if (result.rows.length === 0) {
-      return; // No notifications to send
+      return; // No notifications to send (or already claimed by another cron job instance)
     }
 
     logger.info(`📬 [SCHEDULER] Found ${result.rows.length} notification(s) to send`);
@@ -54,14 +55,6 @@ async function checkAndSendNotifications() {
           body: notification.message,
           data: { type: 'scheduled_notification', scheduledId: notification.id }
         });
-
-        // Update last_sent_at timestamp
-        await pool.query(
-          `UPDATE scheduled_notifications
-           SET last_sent_at = NOW()
-           WHERE id = $1`,
-          [notification.id]
-        );
 
         logger.info(`✅ [SCHEDULER] Notification ${notification.id} sent to ${userIds.length} users`);
       } catch (error) {
@@ -88,11 +81,12 @@ async function checkAndSendEventDayNotifications() {
        FROM tokis
        WHERE status = 'active'
          AND scheduled_time IS NOT NULL
-         AND DATE(scheduled_time) = CURRENT_DATE`
+         AND DATE(scheduled_time) = CURRENT_DATE
+         AND (last_event_reminder_sent_at IS NULL OR DATE(last_event_reminder_sent_at) < CURRENT_DATE)`
     );
 
     if (tokisResult.rows.length === 0) {
-      logger.info('🎉 [EVENT-DAY] No events happening today');
+      logger.info('🎉 [EVENT-DAY] No events happening today (or all reminded already)');
       return;
     }
 
@@ -133,6 +127,12 @@ async function checkAndSendEventDayNotifications() {
           body: `${toki.title} is happening today. Don't miss it!`,
           data: { type: 'event_reminder', tokiId: toki.id }
         });
+
+        // Update the toki to track that it sent its reminder today
+        await pool.query(
+          `UPDATE tokis SET last_event_reminder_sent_at = NOW() WHERE id = $1`,
+          [toki.id]
+        );
 
         logger.info(`✅ [EVENT-DAY] Reminder sent for "${toki.title}" to ${userIds.length} users`);
       } catch (error) {

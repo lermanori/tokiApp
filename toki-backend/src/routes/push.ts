@@ -15,7 +15,7 @@ router.post('/register', authenticateToken, async (req: Request, res: Response) 
     await pool.query(
       `INSERT INTO push_tokens (user_id, token, platform, updated_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform, updated_at = NOW()`,
+       ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, platform = EXCLUDED.platform, updated_at = NOW()`,
       [userId, token, platform || 'unknown']
     );
 
