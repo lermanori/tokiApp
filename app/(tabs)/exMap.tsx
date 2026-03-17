@@ -990,11 +990,11 @@ const styles = StyleSheet.create({
     header: {
         // paddingTop: 20,
         paddingHorizontal: 20,
-        paddingTop: 70,
-        paddingBottom: 20,
+        paddingTop: 35,
+        paddingBottom: 10,
     },
     headerContent: {
-        marginBottom: 30,
+        marginBottom: 20,
     },
     greeting: {
         fontSize: 28,
