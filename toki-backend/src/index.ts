@@ -243,6 +243,10 @@ app.use('/api/mcp', (req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Analytics middleware - captures all API requests
+import { analyticsMiddleware } from './middleware/analytics';
+app.use('/api', analyticsMiddleware);
+
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 

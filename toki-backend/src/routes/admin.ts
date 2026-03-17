@@ -1230,6 +1230,29 @@ router.get('/users', authenticateToken, requireAdmin, async (req: Request, res: 
   }
 });
 
+// Get single user
+router.get('/users/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT id, email, name, role, verified, location, created_at, invitation_credits FROM users WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+    return;
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user' });
+    return;
+  }
+});
+
 // Create user
 router.post('/users', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -1588,24 +1611,75 @@ router.get('/tokis', authenticateToken, requireAdmin, async (req: Request, res: 
 
 // Create toki
 router.post('/tokis', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
-    const { title, description, category, status, location, host_id } = req.body;
+    const {
+      title, description, category, status, location, host_id,
+      scheduled_time, max_attendees, visibility, tags, is_paid,
+      latitude, longitude, external_link, auto_approve
+    } = req.body;
+
     if (!title || !host_id) {
       res.status(400).json({ success: false, message: 'Title and host_id are required' });
       return;
     }
-    const ins = await pool.query(
-      `INSERT INTO tokis (title, description, category, status, location, host_id)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       RETURNING id, title, category, status, location, host_id, created_at`,
-      [title, description || null, category || null, status || 'draft', location || null, host_id]
+
+    await client.query('BEGIN');
+
+    const ins = await client.query(
+      `INSERT INTO tokis (
+        title, description, category, status, location, host_id,
+        scheduled_time, max_attendees, visibility, is_paid,
+        latitude, longitude, external_link, auto_approve
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      RETURNING *`,
+      [
+        title,
+        description || null,
+        category || null,
+        status || 'draft',
+        location || null,
+        host_id,
+        scheduled_time || null,
+        max_attendees !== undefined ? max_attendees : null,
+        visibility || 'public',
+        is_paid !== undefined ? is_paid : false,
+        latitude !== undefined ? latitude : null,
+        longitude !== undefined ? longitude : null,
+        external_link !== undefined ? external_link : null,
+        auto_approve !== undefined ? auto_approve : false
+      ]
     );
-    res.json({ success: true, data: ins.rows[0] });
+
+    const toki = ins.rows[0];
+
+    // Handle tags if provided
+    if (tags) {
+      const tagList = Array.isArray(tags)
+        ? tags
+        : (typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+
+      for (const tag of tagList) {
+        if (tag) {
+          await client.query(
+            'INSERT INTO toki_tags (toki_id, tag_name) VALUES ($1, $2)',
+            [toki.id, tag.trim()]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, data: toki });
     return;
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating toki:', error);
     res.status(500).json({ success: false, message: 'Failed to create toki' });
     return;
+  } finally {
+    client.release();
   }
 });
 
@@ -1614,7 +1688,13 @@ router.get('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
   try {
     const { id } = req.params;
     const result = await pool.query(
-      `SELECT * FROM tokis WHERE id = $1`,
+      `SELECT 
+        t.*,
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+      FROM tokis t
+      LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+      WHERE t.id = $1
+      GROUP BY t.id`,
       [id]
     );
 
@@ -1634,6 +1714,7 @@ router.get('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
 
 // Update toki
 router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const {
@@ -1642,7 +1723,9 @@ router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
       latitude, longitude, external_link, auto_approve
     } = req.body;
 
-    const upd = await pool.query(
+    await client.query('BEGIN');
+
+    const upd = await client.query(
       `UPDATE tokis SET
         title = COALESCE($1, title),
         description = COALESCE($2, description),
@@ -1653,13 +1736,13 @@ router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
         scheduled_time = COALESCE($7, scheduled_time),
         max_attendees = COALESCE($8, max_attendees),
         visibility = COALESCE($9, visibility),
-        tags = COALESCE($10, tags),
-        is_paid = COALESCE($11, is_paid),
-        latitude = COALESCE($12, latitude),
-        longitude = COALESCE($13, longitude),
-        external_link = COALESCE($14, external_link),
-        auto_approve = COALESCE($15, auto_approve)
-       WHERE id = $16
+        is_paid = COALESCE($10, is_paid),
+        latitude = COALESCE($11, latitude),
+        longitude = COALESCE($12, longitude),
+        external_link = COALESCE($13, external_link),
+        auto_approve = COALESCE($14, auto_approve),
+        updated_at = NOW()
+       WHERE id = $15
        RETURNING *`,
       [
         title || null,
@@ -1671,7 +1754,6 @@ router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
         scheduled_time || null,
         max_attendees !== undefined ? max_attendees : null,
         visibility || null,
-        tags || null,
         is_paid !== undefined ? is_paid : null,
         latitude !== undefined ? latitude : null,
         longitude !== undefined ? longitude : null,
@@ -1680,16 +1762,49 @@ router.put('/tokis/:id', authenticateToken, requireAdmin, async (req: Request, r
         id
       ]
     );
+
     if (upd.rows.length === 0) {
+      await client.query('ROLLBACK');
       res.status(404).json({ success: false, message: 'Toki not found' });
       return;
     }
+
+    // Handle tags update if provided
+    if (tags !== undefined) {
+      // Clear existing tags
+      await client.query('DELETE FROM toki_tags WHERE toki_id = $1', [id]);
+
+      // Insert new tags
+      if (Array.isArray(tags) && tags.length > 0) {
+        for (const tag of tags) {
+          if (tag) {
+            await client.query(
+              'INSERT INTO toki_tags (toki_id, tag_name) VALUES ($1, $2)',
+              [id, tag.trim()]
+            );
+          }
+        }
+      } else if (typeof tags === 'string' && tags.trim()) {
+        const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
+        for (const tag of tagList) {
+          await client.query(
+            'INSERT INTO toki_tags (toki_id, tag_name) VALUES ($1, $2)',
+            [id, tag]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
     res.json({ success: true, data: upd.rows[0] });
     return;
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error updating toki:', error);
     res.status(500).json({ success: false, message: 'Failed to update toki' });
     return;
+  } finally {
+    client.release();
   }
 });
 
@@ -2098,6 +2213,77 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     console.error('Error fetching analytics:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
     return;
+  }
+});
+
+// Get most active users based on request logs
+router.get('/analytics/active-users', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { limit = '10', days = '7' } = req.query;
+    const limitNum = parseInt(limit as string) || 10;
+    const daysNum = parseInt(days as string) || 7;
+
+    const result = await pool.query(
+      `SELECT 
+        u.id, 
+        u.name, 
+        u.email, 
+        u.avatar_url,
+        COUNT(l.id) as request_count,
+        COUNT(DISTINCT l.device_platform) as platform_count,
+        MAX(l.created_at) as last_active
+      FROM users u
+      JOIN user_activity_logs l ON l.user_id = u.id
+      WHERE l.event_type = 'request'
+        AND l.created_at >= NOW() - ($1 || ' days')::INTERVAL
+      GROUP BY u.id
+      ORDER BY request_count DESC
+      LIMIT $2`,
+      [daysNum, limitNum]
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching active users:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch active users' });
+  }
+});
+
+// Get detailed activity timeline for a specific user
+router.get('/analytics/user-activity/:userId', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { limit = '100' } = req.query;
+    const limitNum = parseInt(limit as string) || 100;
+
+    const result = await pool.query(
+      `SELECT 
+        id, 
+        event_type, 
+        method, 
+        path, 
+        status_code, 
+        device_platform, 
+        duration_ms, 
+        metadata, 
+        created_at
+      FROM user_activity_logs
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2`,
+      [userId, limitNum]
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching user activity:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch user activity' });
   }
 });
 
