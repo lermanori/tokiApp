@@ -30,6 +30,7 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [userSearch, setUserSearch] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Load detailed Toki data and users
   useEffect(() => {
@@ -38,10 +39,12 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
         setLoading(true);
         const [tokiRes, usersRes] = await Promise.all([
           adminApi.getToki(toki.id) as any,
-          adminApi.getUsers({ limit: 200 }) as any
+          adminApi.getUsers({ limit: 50 }) as any
         ]);
 
         const fullToki = tokiRes.data;
+        console.debug('Loaded full Toki:', fullToki.id, 'Host ID:', fullToki.host_id);
+
         setFormData({
           title: fullToki.title || '',
           description: fullToki.description || '',
@@ -65,9 +68,28 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
         setUsers(loadedUsers);
 
         if (fullToki.host_id) {
-          const user = loadedUsers.find((u: any) => u.id === fullToki.host_id);
-          if (user) {
-            setUserSearch(`${user.name} (${user.email})`);
+          console.debug('Looking for host info for ID:', fullToki.host_id);
+          // Check if host is in loaded users, if not, fetch them explicitly
+          let host = loadedUsers.find((u: any) => u.id === fullToki.host_id);
+          if (!host) {
+            console.debug('Host not in initial list, fetching from server...');
+            try {
+              const hostRes = await adminApi.getUser(fullToki.host_id) as any;
+              console.debug('Host fetch response:', hostRes);
+              if (hostRes?.success && hostRes.data) {
+                host = hostRes.data;
+                setUsers(prev => [host, ...prev]);
+              }
+            } catch (err) {
+              console.error('Failed to load host user:', err);
+            }
+          }
+
+          if (host) {
+            console.debug('Found host info, setting search text:', host.name);
+            setUserSearch(`${host.name} (${host.email})`);
+          } else {
+            console.warn('Could not find host info for ID:', fullToki.host_id);
           }
         }
       } catch (err: any) {
@@ -79,6 +101,25 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
     };
     init();
   }, [toki.id]);
+
+  // Handle server-side search with debounce
+  useEffect(() => {
+    if (!userSearch || userSearch.includes('(')) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setLoadingUsers(true);
+        const response = await adminApi.getUsers({ search: userSearch, limit: 20 }) as any;
+        setUsers(response.data?.users || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [userSearch]);
 
   // Click outside handler for dropdown
   useEffect(() => {
@@ -93,10 +134,6 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
   }, []);
 
   const selectedUser = users.find(u => u.id === formData.host_id);
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(userSearch.toLowerCase())
-  ).slice(0, 10);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,10 +317,11 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
                   required
                   className="input-glass"
                   placeholder="Search by name or email"
-                  value={userSearch}
+                  value={selectedUser ? `${selectedUser.name} (${selectedUser.email})` : userSearch}
                   onChange={(e) => {
-                    setUserSearch(e.target.value);
-                    if (selectedUser && selectedUser.name !== e.target.value && selectedUser.email !== e.target.value) {
+                    const value = e.target.value;
+                    setUserSearch(value);
+                    if (selectedUser && value !== `${selectedUser.name} (${selectedUser.email})`) {
                       setFormData({ ...formData, host_id: '' });
                     }
                     setShowUserDropdown(true);
@@ -292,15 +330,17 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
                   style={{ width: '100%', borderColor: !formData.host_id ? '#EF4444' : undefined }}
                 />
 
-                {showUserDropdown && userSearch && (
+                {showUserDropdown && (userSearch || loadingUsers) && (
                   <div style={{
                     position: 'absolute', top: '100%', left: 0, right: 0,
                     background: 'white', border: '1px solid rgba(0,0,0,0.1)',
                     borderRadius: 12, marginTop: 4, zIndex: 10,
                     boxShadow: '0 4px 20px rgba(0,0,0,0.1)', maxHeight: 200, overflowY: 'auto'
                   }}>
-                    {filteredUsers.length > 0 ? (
-                      filteredUsers.map(u => (
+                    {loadingUsers ? (
+                      <div style={{ padding: '12px 16px', color: '#666', textAlign: 'center' }}>Searching...</div>
+                    ) : users.length > 0 ? (
+                      users.map(u => (
                         <div
                           key={u.id}
                           style={{
@@ -324,9 +364,9 @@ export default function TokiEditModal({ toki, onClose, onSaved }: { toki: TokiRo
                           </div>
                         </div>
                       ))
-                    ) : (
+                    ) : userSearch ? (
                       <div style={{ padding: '12px 16px', color: '#666', textAlign: 'center' }}>No users found</div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>

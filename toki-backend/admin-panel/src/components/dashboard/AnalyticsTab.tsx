@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { adminApi } from '../../services/adminApi';
+import UserActionsTimeline from './UserActionsTimeline';
 
 interface TimeSeriesData {
   date: string;
@@ -43,12 +44,16 @@ export default function AnalyticsTab() {
   });
   const [hours, setHours] = useState(720); // default 30 days
   const [error, setError] = useState<string | null>(null);
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserName, setSelectedUserName] = useState<string | undefined>(undefined);
 
   // Determine if we're grouping by hour (<= 72 hours)
   const groupByHour = hours <= 72;
 
   useEffect(() => {
     loadAnalytics();
+    loadActiveUsers();
   }, [hours]);
 
   const loadAnalytics = async () => {
@@ -71,6 +76,17 @@ export default function AnalyticsTab() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadActiveUsers = async () => {
+    try {
+      const resp = await adminApi.getActiveUsers({ limit: 10, days: 7 }) as any;
+      if (resp.success) {
+        setActiveUsers(resp.data);
+      }
+    } catch (e) {
+      console.error('Failed to load active users', e);
     }
   };
 
@@ -161,7 +177,8 @@ export default function AnalyticsTab() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          gap: '24px'
+          gap: '24px',
+          marginBottom: '40px'
         }}>
           <ChartCard
             title="Active Users"
@@ -196,6 +213,83 @@ export default function AnalyticsTab() {
             groupByHour={groupByHour}
           />
         </div>
+      )}
+
+      {/* Most Active Users Table */}
+      <div className="glass-card" style={{ padding: '24px' }}>
+        <h3 style={{
+          fontSize: '18px',
+          fontFamily: 'var(--font-semi)',
+          marginBottom: '20px',
+          color: '#1C1C1C'
+        }}>
+          Most Active Users (Last 7 Days)
+        </h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>USER</th>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>EMAIL</th>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>ACTIONS</th>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>PLATFORMS</th>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>LAST ACTIVE</th>
+                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>DETAILS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeUsers.map((user) => (
+                <tr key={user.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                  <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                    ) : (
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#E5E7EB', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px' }}>
+                        {user.name?.charAt(0)}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '14px', fontFamily: 'var(--font-medium)' }}>{user.name}</span>
+                  </td>
+                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>{user.email}</td>
+                  <td style={{ padding: '12px', fontSize: '14px', fontFamily: 'var(--font-semi)' }}>{user.request_count}</td>
+                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>{user.platform_count}</td>
+                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                    {new Date(user.last_active).toLocaleDateString()}
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <button
+                      onClick={() => {
+                        setSelectedUserId(user.id);
+                        setSelectedUserName(user.name);
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: 'var(--color-primary)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-medium)'
+                      }}
+                    >
+                      View Timeline
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Timeline Overlay */}
+      {selectedUserId && (
+        <UserActionsTimeline
+          userId={selectedUserId}
+          userName={selectedUserName}
+          onClose={() => setSelectedUserId(null)}
+        />
       )}
     </div>
   );

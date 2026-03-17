@@ -333,6 +333,22 @@ export const adminApi = {
     }
     return makeRequest(`/analytics?${query}`);
   },
+  getActiveUsers: async (params?: { limit?: number; days?: number }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    return makeRequest(`/analytics/active-users?${query}`);
+  },
+  getUserActivity: async (userId: string, limit?: number) => {
+    const query = new URLSearchParams();
+    if (limit !== undefined) {
+      query.append('limit', String(limit));
+    }
+    return makeRequest(`/analytics/user-activity/${userId}?${query}`);
+  },
 
   // Notification Schedule
   getNotificationSchedule: async (params?: { page?: number; limit?: number }) => {

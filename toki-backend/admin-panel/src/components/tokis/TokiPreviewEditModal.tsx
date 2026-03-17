@@ -28,31 +28,59 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [userSearch, setUserSearch] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Load users on mount
+  // Load initial users and the current host on mount
   useEffect(() => {
-    const loadUsers = async () => {
+    const init = async () => {
       try {
-        const response = await adminApi.getUsers({ limit: 200 }) as any;
-        setUsers(response.data?.users || []);
+        setLoadingUsers(true);
+        const [usersRes, hostRes] = await Promise.all([
+          adminApi.getUsers({ limit: 50 }) as any,
+          toki.host_id ? adminApi.getUser(toki.host_id) as any : Promise.resolve(null)
+        ]);
+
+        const loadedUsers = usersRes.data?.users || [];
+        setUsers(loadedUsers);
+
+        if (hostRes?.success && hostRes.data) {
+          const host = hostRes.data;
+          console.debug('Found host info in TokiPreviewEditModal:', host.name);
+          // Ensure host is in the users list for find() to work, or we can just use hostRes directly
+          if (!loadedUsers.find((u: any) => u.id === host.id)) {
+            setUsers(prev => [host, ...prev]);
+          }
+          setUserSearch(`${host.name} (${host.email})`);
+        } else if (toki.host_id) {
+          console.warn('Could not find host info for ID in TokiPreviewEditModal:', toki.host_id);
+        }
       } catch (err) {
-        console.error('Failed to load users:', err);
+        console.error('Failed to initialize users:', err);
+      } finally {
+        setLoadingUsers(false);
       }
     };
-    loadUsers();
-  }, []);
+    init();
+  }, [toki.host_id]);
 
-  // Initialize userSearch when toki changes
+  // Handle server-side search with debounce
   useEffect(() => {
-    if (toki.host_id) {
-      const user = users.find(u => u.id === toki.host_id);
-      if (user) {
-        setUserSearch(`${user.name} (${user.email})`);
-      } else {
-        setUserSearch('');
+    if (!userSearch || userSearch.includes('(')) return; // Don't search if empty or if it looks like a selected user string
+
+    const timer = setTimeout(async () => {
+      try {
+        setLoadingUsers(true);
+        const response = await adminApi.getUsers({ search: userSearch, limit: 20 }) as any;
+        setUsers(response.data?.users || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setLoadingUsers(false);
       }
-    }
-  }, [toki.host_id, users]);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [userSearch]);
 
   // Click outside handler
   useEffect(() => {
@@ -67,10 +95,6 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
   }, []);
 
   const selectedUser = users.find(u => u.id === formData.host_id);
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email.toLowerCase().includes(userSearch.toLowerCase())
-  ).slice(0, 10); // Limit to 10 results
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,23 +390,21 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
               </label>
               <input
                 className="input-glass"
-                type="text"
+                placeholder="Host (Search by name or email)"
                 value={selectedUser ? `${selectedUser.name} (${selectedUser.email})` : userSearch}
                 onChange={(e) => {
                   const value = e.target.value;
                   setUserSearch(value);
                   setShowUserDropdown(true);
-                  // Clear host_id if user is typing (not selecting)
-                  if (!selectedUser || value !== `${selectedUser.name} (${selectedUser.email})`) {
+                  if (selectedUser && value !== `${selectedUser.name} (${selectedUser.email})`) {
                     setFormData({ ...formData, host_id: '' });
                   }
                 }}
                 onFocus={() => setShowUserDropdown(true)}
-                placeholder="Search for user by name or email"
                 required
                 style={{ width: '100%' }}
               />
-              {showUserDropdown && userSearch && filteredUsers.length > 0 && (
+              {showUserDropdown && (userSearch || loadingUsers) && (
                 <div style={{
                   position: 'absolute',
                   top: '100%',
@@ -397,54 +419,42 @@ export default function TokiPreviewEditModal({ toki, onClose, onSave }: TokiPrev
                   boxShadow: 'var(--shadow-lg)',
                   marginTop: 4
                 }}>
-                  {filteredUsers.map(user => (
-                    <div
-                      key={user.id}
-                      onClick={() => {
-                        setFormData({ ...formData, host_id: user.id });
-                        setUserSearch(`${user.name} (${user.email})`);
-                        setShowUserDropdown(false);
-                      }}
-                      style={{
-                        padding: '12px 16px',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #F3F4F6',
-                        transition: 'background 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#F9FAFB';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'white';
-                      }}
-                    >
-                      <div style={{ fontFamily: 'var(--font-semi)', color: '#1C1C1C', fontSize: 14 }}>
-                        {user.name}
+                  {loadingUsers ? (
+                    <div style={{ padding: '12px 16px', color: '#6B7280', fontSize: 14 }}>Searching...</div>
+                  ) : users.length > 0 ? (
+                    users.map(user => (
+                      <div
+                        key={user.id}
+                        onClick={() => {
+                          setFormData({ ...formData, host_id: user.id });
+                          setUserSearch(`${user.name} (${user.email})`);
+                          setShowUserDropdown(false);
+                        }}
+                        style={{
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #F3F4F6',
+                          transition: 'background 0.2s',
+                          background: user.id === formData.host_id ? '#F3F4F6' : 'white'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (user.id !== formData.host_id) e.currentTarget.style.background = '#F9FAFB';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (user.id !== formData.host_id) e.currentTarget.style.background = 'white';
+                        }}
+                      >
+                        <div style={{ fontFamily: 'var(--font-semi)', color: '#1C1C1C', fontSize: 14 }}>
+                          {user.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                          {user.email}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                        {user.email}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {showUserDropdown && userSearch && filteredUsers.length === 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  background: 'white',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: 8,
-                  padding: '12px 16px',
-                  zIndex: 1000,
-                  boxShadow: 'var(--shadow-lg)',
-                  marginTop: 4,
-                  color: '#6B7280',
-                  fontSize: 14
-                }}>
-                  No users found
+                    ))
+                  ) : userSearch ? (
+                    <div style={{ padding: '12px 16px', color: '#6B7280', fontSize: 14 }}>No users found</div>
+                  ) : null}
                 </div>
               )}
             </div>
