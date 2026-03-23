@@ -157,26 +157,21 @@ export const filterEvents = (
       }
 
       if (timeFilter === 'this_weekend') {
-        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
-        // Find next Friday (or current Friday if today is Fri/Sat/Sun)
-        let daysUntilFriday: number;
-        if (dayOfWeek === 0) {
-          // Sunday — use the weekend that started yesterday (Fri)
-          daysUntilFriday = -2;
-        } else if (dayOfWeek === 6) {
-          // Saturday — use the weekend that started yesterday (Fri)
-          daysUntilFriday = -1;
-        } else if (dayOfWeek === 5) {
-          // Friday — this is the start
-          daysUntilFriday = 0;
-        } else {
-          // Mon-Thu — find next Friday
-          daysUntilFriday = 5 - dayOfWeek;
-        }
-        const friday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilFriday);
-        const weekendStart = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate(), 18, 0, 0);
-        const sunday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 2);
-        const weekendEnd = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate(), 23, 59, 59, 999);
+        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 4=Thu, 5=Fri, 6=Sat
+        // Find Thursday (or look back to Thursday if today is Fri/Sat)
+        // Sunday (0) -> 4 (next Thu)
+        // Mon (1) -> 3 (next Thu)
+        // Tue (2) -> 2 (next Thu)
+        // Wed (3) -> 1 (next Thu)
+        // Thu (4) -> 0 (today)
+        // Fri (5) -> -1 (yesterday)
+        // Sat (6) -> -2 (2 days ago)
+        const daysUntilThursday = 4 - dayOfWeek;
+
+        const thursday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilThursday);
+        const weekendStart = new Date(thursday.getFullYear(), thursday.getMonth(), thursday.getDate(), 18, 0, 0);
+        const saturday = new Date(thursday.getFullYear(), thursday.getMonth(), thursday.getDate() + 2);
+        const weekendEnd = new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate(), 23, 59, 59, 999);
         return scheduled >= weekendStart && scheduled <= weekendEnd;
       }
 
