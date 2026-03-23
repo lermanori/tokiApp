@@ -2106,6 +2106,48 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
          AND created_at >= NOW() - INTERVAL '7 days'`
     );
 
+    // Online Users (any activity in last 10 minutes)
+    const onlineUsersResult = await pool.query(
+      `SELECT COUNT(DISTINCT user_id) as count
+       FROM user_activity_logs
+       WHERE created_at >= NOW() - INTERVAL '10 minutes'`
+    );
+
+    // Platform Distribution
+    const platformStatsResult = await pool.query(
+      `SELECT 
+         CASE 
+           WHEN device_platform IS NULL OR device_platform = '' THEN 'unknown'
+           ELSE LOWER(device_platform)
+         END as platform,
+         COUNT(DISTINCT user_id) as count
+       FROM user_activity_logs
+       WHERE created_at >= NOW() - INTERVAL '30 days'
+       GROUP BY platform`
+    );
+
+    // Global Average Session Length (Last 30 days)
+    const globalSessionResult = await pool.query(
+      `WITH daily_activity AS (
+         SELECT 
+           user_id,
+           DATE(created_at) as active_date,
+           MIN(created_at) as first_action,
+           MAX(created_at) as last_action
+         FROM user_activity_logs
+         WHERE created_at >= NOW() - INTERVAL '30 days'
+         GROUP BY user_id, DATE(created_at)
+       )
+       SELECT AVG(EXTRACT(EPOCH FROM (last_action - first_action))) as avg_seconds
+       FROM daily_activity
+       WHERE last_action > first_action`
+    );
+
+    let avgSessionSeconds = 0;
+    if (globalSessionResult.rows.length > 0 && globalSessionResult.rows[0].avg_seconds) {
+      avgSessionSeconds = Math.round(parseFloat(globalSessionResult.rows[0].avg_seconds));
+    }
+
     const totalAccountsResult2 = await pool.query(
       'SELECT COUNT(*) as count FROM users'
     );
@@ -2196,16 +2238,19 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
 
     const summary = {
       currentActiveUsers: parseInt(currentActiveUsersResult.rows[0].count),
+      onlineUsers: parseInt(onlineUsersResult.rows[0].count),
       totalAccounts: parseInt(totalAccountsResult2.rows[0].count),
       uniqueLoginsToday: parseInt(uniqueLoginsTodayResult.rows[0].count),
-      tokisCreatedToday: parseInt(tokisCreatedTodayResult.rows[0].count)
+      tokisCreatedToday: parseInt(tokisCreatedTodayResult.rows[0].count),
+      averageSessionLength: avgSessionSeconds
     };
 
     res.json({
       success: true,
       data: {
         timeSeries,
-        summary
+        summary,
+        platformStats: platformStatsResult.rows
       }
     });
     return;
@@ -2230,7 +2275,7 @@ router.get('/analytics/active-users', authenticateToken, requireAdmin, async (re
         u.email, 
         u.avatar_url,
         COUNT(l.id) as request_count,
-        COUNT(DISTINCT l.device_platform) as platform_count,
+        ARRAY_AGG(DISTINCT l.device_platform) as platforms,
         MAX(l.created_at) as last_active
       FROM users u
       JOIN user_activity_logs l ON l.user_id = u.id
@@ -2261,18 +2306,21 @@ router.get('/analytics/user-activity/:userId', authenticateToken, requireAdmin, 
 
     const result = await pool.query(
       `SELECT 
-        id, 
-        event_type, 
-        method, 
-        path, 
-        status_code, 
-        device_platform, 
-        duration_ms, 
-        metadata, 
-        created_at
-      FROM user_activity_logs
-      WHERE user_id = $1
-      ORDER BY created_at DESC
+        l.id, 
+        l.event_type, 
+        l.method, 
+        l.path, 
+        l.status_code, 
+        l.device_platform, 
+        l.duration_ms, 
+        l.metadata, 
+        l.created_at,
+        t.title as resource_name
+      FROM user_activity_logs l
+      LEFT JOIN tokis t ON l.metadata->>'resourceId' = t.id::text 
+        AND (l.path LIKE '%/tokis/%' OR l.path LIKE '%/event/%')
+      WHERE l.user_id = $1
+      ORDER BY l.created_at DESC
       LIMIT $2`,
       [userId, limitNum]
     );
@@ -2284,6 +2332,171 @@ router.get('/analytics/user-activity/:userId', authenticateToken, requireAdmin, 
   } catch (error) {
     console.error('Error fetching user activity:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch user activity' });
+  }
+});
+
+// Get aggregated stats for a single user profile (Daniela-style profile stats)
+router.get('/analytics/users/:id/stats', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // 1. App Opens (Count of connect events or frontend_action 'app_open')
+    const appOpensResult = await pool.query(
+      `SELECT COUNT(*) as count 
+       FROM user_activity_logs 
+       WHERE user_id = $1 
+         AND (event_type = 'connect' OR (event_type = 'frontend_action' AND metadata->>'action' = 'app_open'))`,
+      [id]
+    );
+
+    // 2. Active Days
+    const activeDaysResult = await pool.query(
+      `SELECT COUNT(DISTINCT DATE(created_at)) as count 
+       FROM user_activity_logs 
+       WHERE user_id = $1`,
+      [id]
+    );
+
+    // 3. Avg Session Length (Approximated: difference between last activity and first activity per day. 
+    // This is a simplified proxy since true sessions are hard to track definitively without explicit start/end markers)
+    const sessionResult = await pool.query(
+      `WITH daily_activity AS (
+         SELECT 
+           DATE(created_at) as active_date,
+           MIN(created_at) as first_action,
+           MAX(created_at) as last_action
+         FROM user_activity_logs
+         WHERE user_id = $1
+         GROUP BY DATE(created_at)
+       )
+       SELECT AVG(EXTRACT(EPOCH FROM (last_action - first_action))) as avg_seconds
+       FROM daily_activity
+       WHERE last_action > first_action`,
+      [id]
+    );
+
+    let avgSessionSeconds = 0;
+    if (sessionResult.rows.length > 0 && sessionResult.rows[0].avg_seconds) {
+      avgSessionSeconds = Math.round(parseFloat(sessionResult.rows[0].avg_seconds));
+    }
+
+    // 4. Event Views (GET requests to /api/tokis/:id or frontend_action 'event_viewed')
+    const eventViewsResult = await pool.query(
+      `SELECT COUNT(*) as count 
+       FROM user_activity_logs 
+       WHERE user_id = $1 
+         AND (
+           (method = 'GET' AND path LIKE '/api/tokis/%' AND path NOT LIKE '/api/tokis') OR 
+           (event_type = 'frontend_action' AND metadata->>'action' = 'event_viewed')
+         )`,
+      [id]
+    );
+
+    // 5. Event Clicks (Proxy: map taps or similar interactions from frontend events)
+    const eventClicksResult = await pool.query(
+      `SELECT COUNT(*) as count 
+       FROM user_activity_logs 
+       WHERE user_id = $1 
+         AND event_type = 'frontend_action' 
+         AND metadata->>'action' = 'map_tap'`,
+      [id]
+    );
+
+    // 6. Tokis Created
+    const tokisCreatedResult = await pool.query(
+      `SELECT COUNT(*) as count FROM tokis WHERE host_id = $1`,
+      [id]
+    );
+
+    // 7. Tokis Joined
+    const tokisJoinedResult = await pool.query(
+      `SELECT COUNT(*) as count FROM toki_participants WHERE user_id = $1 AND status = 'approved'`,
+      [id]
+    );
+
+    // 8. Last Active
+    const lastActiveResult = await pool.query(
+      `SELECT MAX(created_at) as last_active FROM user_activity_logs WHERE user_id = $1`,
+      [id]
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        appOpens: parseInt(appOpensResult.rows[0].count),
+        activeDays: parseInt(activeDaysResult.rows[0].count),
+        avgSessionSeconds: avgSessionSeconds,
+        eventViews: parseInt(eventViewsResult.rows[0].count),
+        eventClicks: parseInt(eventClicksResult.rows[0].count),
+        tokisCreated: parseInt(tokisCreatedResult.rows[0].count),
+        tokisJoined: parseInt(tokisJoinedResult.rows[0].count),
+        lastActive: lastActiveResult.rows[0].last_active
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching single user analytics stats:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch user stats' });
+  }
+});
+
+// Get push notification campaign performance
+router.get('/analytics/push-performance', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+         pc.id,
+         pc.name,
+         pc.sent_count,
+         COUNT(ua.id) as open_count,
+         CASE 
+           WHEN pc.sent_count > 0 THEN ROUND((COUNT(ua.id)::numeric / pc.sent_count::numeric) * 100, 1)
+           ELSE 0
+         END as open_rate
+       FROM push_campaigns pc
+       LEFT JOIN user_activity_logs ua 
+         ON ua.event_type = 'frontend_action' 
+        AND ua.metadata->>'action' = 'push_opened'
+        AND ua.metadata->>'campaign_id' = pc.id::text
+       GROUP BY pc.id, pc.name, pc.sent_count
+       ORDER BY pc.created_at DESC`
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching push performance:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch push performance' });
+  }
+});
+
+// Get screen interaction analytics
+router.get('/analytics/interactions', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { days = '30' } = req.query;
+    const daysNum = parseInt(days as string) || 30;
+
+    const result = await pool.query(
+      `SELECT 
+         metadata->>'action' as action,
+         COUNT(*) as count
+       FROM user_activity_logs
+       WHERE event_type = 'frontend_action'
+         AND metadata->>'action' IN ('map_tap', 'event_viewed', 'filter_applied', 'profile_viewed')
+         AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+       GROUP BY metadata->>'action'
+       ORDER BY count DESC`,
+      [daysNum]
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching screen interactions:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch screen interactions' });
   }
 });
 

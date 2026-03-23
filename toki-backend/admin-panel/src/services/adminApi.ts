@@ -349,6 +349,15 @@ export const adminApi = {
     }
     return makeRequest(`/analytics/user-activity/${userId}?${query}`);
   },
+  getUserAnalyticsStats: async (userId: string) => {
+    return makeRequest(`/analytics/users/${userId}/stats`).then((res: any) => res.data);
+  },
+  getPushPerformance: async () => {
+    return makeRequest(`/analytics/push-performance`).then((res: any) => res.data);
+  },
+  getInteractions: async () => {
+    return makeRequest(`/analytics/interactions`).then((res: any) => res.data);
+  },
 
   // Notification Schedule
   getNotificationSchedule: async (params?: { page?: number; limit?: number }) => {
