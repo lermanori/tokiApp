@@ -40,19 +40,28 @@ async function logRequest(req: Request, res: Response, duration: number) {
 
     let platform = 'web';
     if (xPlatform) {
-        platform = String(xPlatform).toLowerCase();
-    } else if (userAgent.includes('iPhone') || userAgent.includes('iPad') || userAgent.includes('iOS')) {
+        const p = String(xPlatform).toLowerCase();
+        if (p.includes('ios')) platform = 'ios';
+        else if (p.includes('android')) platform = 'android';
+        else platform = p;
+    } else if (userAgent.includes('TokiApp/')) {
+        // Custom User-Agent potential
+        if (userAgent.includes('iOS')) platform = 'ios';
+        else if (userAgent.includes('Android')) platform = 'android';
+    } else if (/iPad|iPhone|iPod/.test(userAgent)) {
         platform = 'ios';
-    } else if (userAgent.includes('Android')) {
+    } else if (/Android/.test(userAgent)) {
         platform = 'android';
-    } else if (userAgent.includes('Expo') || userAgent.includes('Dalvik')) {
-        platform = 'mobile';
     }
 
-    // Optional metadata (could be extended)
+    // Try to extract a potential resource ID (UUID) from the path
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = path.match(uuidRegex);
+    const resourceId = match ? match[0] : null;
+
     const metadata = {
         query: req.query,
-        // We could add more here, but keep it light
+        resourceId: resourceId,
     };
 
     try {

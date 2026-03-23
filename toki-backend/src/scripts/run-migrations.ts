@@ -315,6 +315,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 19: Push Campaigns
+    try {
+      console.log('📝 Migration 19: Creating push_campaigns table...');
+      const pushCampaignsSql = readFileSync(
+        join(sqlDir, 'create-push-campaigns.sql'),
+        'utf-8'
+      );
+      await pool.query(pushCampaignsSql);
+      console.log('✅ Push campaigns migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  push_campaigns table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

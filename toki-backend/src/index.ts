@@ -41,6 +41,7 @@ import reportsRoutes from './routes/reports';
 import bugReportRoutes from './routes/bug-report';
 import ogPreviewRoutes from './routes/og-preview';
 import tokiNotificationMuteRoutes from './routes/toki-notification-mutes';
+import analyticsRoutes from './routes/analytics';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcp/server';
@@ -122,7 +123,7 @@ const corsMiddleware = cors({
   origin: originFunction,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Add OPTIONS
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'User-Agent'], // Add common headers
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'User-Agent', 'x-platform'], // Add common headers
   exposedHeaders: ['Content-Type', 'Content-Length'],
   preflightContinue: false,
   optionsSuccessStatus: 200,
@@ -312,6 +313,7 @@ app.use('/api/invitations', corsMiddleware, invitationRoutes);
 app.use('/api/reports', corsMiddleware, reportsRoutes);
 app.use('/api/bug-report', corsMiddleware, bugReportRoutes);
 app.use('/api/toki-notification-mutes', corsMiddleware, tokiNotificationMuteRoutes);
+app.use('/api/analytics', corsMiddleware, analyticsRoutes);
 
 // Public share route for OG meta tag previews (no auth required)
 app.use('/share', ogPreviewRoutes);
@@ -413,16 +415,36 @@ io.on('connection', (socket) => {
     socket.join(roomName);
     currentUserId = userId; // Store for disconnect tracking
 
+    // Try to detect platform from handshake (prioritize explicit auth object, then headers)
+    const auth = socket.handshake.auth;
+    const headers = socket.handshake.headers;
+    const userAgent = (headers['user-agent'] || '').toString();
+    const xPlatform = (auth.platform || headers['x-platform'] || headers['expo-platform'] || '').toString();
+
+    let platform = 'web';
+    if (xPlatform) {
+      const p = xPlatform.toLowerCase();
+      if (p.includes('ios')) platform = 'ios';
+      else if (p.includes('android')) platform = 'android';
+      else platform = p;
+    } else if (/iPad|iPhone|iPod/.test(userAgent)) {
+      platform = 'ios';
+    } else if (/Android/.test(userAgent)) {
+      platform = 'android';
+    } else if (userAgent.includes('TokiApp/')) {
+      if (userAgent.includes('iOS')) platform = 'ios';
+      else if (userAgent.includes('Android')) platform = 'android';
+    }
+
     // Log connection event
     try {
       await pool.query(
-        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
-        [userId, 'connect']
+        'INSERT INTO user_activity_logs (user_id, event_type, device_platform) VALUES ($1, $2, $3)',
+        [userId, 'connect', platform]
       );
-      logger.debug(`📊 [ACTIVITY] Logged connect event for user ${userId}`);
+      logger.debug(`📊 [ACTIVITY] Logged connect event for user ${userId} on ${platform}`);
     } catch (error) {
       logger.error('Error logging connect event:', error);
-      // Don't fail the connection if logging fails
     }
 
     const roomMembers = io.sockets.adapter.rooms.get(roomName);
@@ -462,14 +484,28 @@ io.on('connection', (socket) => {
     // Log disconnect event if we have a user ID
     if (currentUserId) {
       try {
+        // Platform detection for disconnect
+        const auth = socket.handshake.auth;
+        const headers = socket.handshake.headers;
+        const userAgent = (headers['user-agent'] || '').toString();
+        const xPlatform = (auth.platform || headers['x-platform'] || headers['expo-platform'] || '').toString();
+
+        let platform = 'web';
+        if (xPlatform) {
+          const p = xPlatform.toLowerCase();
+          if (p.includes('ios')) platform = 'ios';
+          else if (p.includes('android')) platform = 'android';
+          else platform = p;
+        } else if (/iPad|iPhone|iPod/.test(userAgent)) platform = 'ios';
+        else if (/Android/.test(userAgent)) platform = 'android';
+
         await pool.query(
-          'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
-          [currentUserId, 'disconnect']
+          'INSERT INTO user_activity_logs (user_id, event_type, device_platform) VALUES ($1, $2, $3)',
+          [currentUserId, 'disconnect', platform]
         );
-        logger.debug(`📊 [ACTIVITY] Logged disconnect event for user ${currentUserId}`);
+        logger.debug(`📊 [ACTIVITY] Logged disconnect event for user ${currentUserId} on ${platform}`);
       } catch (error) {
         logger.error('Error logging disconnect event:', error);
-        // Don't fail disconnect if logging fails
       }
     }
   });
