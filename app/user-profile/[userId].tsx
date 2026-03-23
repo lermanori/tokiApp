@@ -41,7 +41,7 @@ interface PublicUserProfile {
 export default function UserProfileScreen() {
   const { state, actions } = useApp();
   const { userId } = useLocalSearchParams<{ userId: string }>();
-  
+
   const [userProfile, setUserProfile] = useState<PublicUserProfile | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -177,18 +177,18 @@ export default function UserProfileScreen() {
 
   const handleRequestConnection = async () => {
     if (!userId) return;
-    
+
     try {
       setIsActionLoading(true);
       await apiService.sendConnectionRequest(userId);
-      
+
       // Update local state
       setConnectionStatus({
         status: 'pending',
         isRequester: true,
         createdAt: new Date().toISOString()
       });
-      
+
       Alert.alert('Connection Request Sent', 'Your connection request has been sent successfully!');
     } catch (error) {
       console.error('❌ Failed to send connection request:', error);
@@ -198,19 +198,54 @@ export default function UserProfileScreen() {
     }
   };
 
+  const handleCancelRequest = async () => {
+    if (!userId) return;
+
+    Alert.alert(
+      'Cancel Request',
+      'Are you sure you want to cancel this connection request?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsActionLoading(true);
+              await actions.cancelConnectionRequest(userId);
+
+              // Update local state
+              setConnectionStatus({
+                status: 'none',
+                isRequester: false
+              });
+
+              Alert.alert('Request Cancelled', 'Your connection request has been cancelled.');
+            } catch (error) {
+              console.error('❌ Failed to cancel connection request:', error);
+              Alert.alert('Error', 'Failed to cancel connection request. Please try again.');
+            } finally {
+              setIsActionLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleSendMessage = () => {
     if (!userProfile) return;
-    
+
     // Check if conversation already exists with this user
     const existingConversation = state.conversations?.find(
       (conv: any) => conv.other_user_id === userId
     );
-    
+
     if (existingConversation) {
       // Navigate to existing conversation
       router.push({
         pathname: '/chat',
-        params: { 
+        params: {
           conversationId: existingConversation.id,
           otherUserId: userId,
           otherUserName: userProfile.name,
@@ -221,7 +256,7 @@ export default function UserProfileScreen() {
       // Navigate to new conversation - let chat screen create conversation on first message
       router.push({
         pathname: '/chat',
-        params: { 
+        params: {
           otherUserId: userId,
           otherUserName: userProfile.name,
           isGroup: 'false'
@@ -236,7 +271,7 @@ export default function UserProfileScreen() {
 
   const handleBlockUser = () => {
     if (!userProfile) return;
-    
+
     Alert.alert(
       'Block User',
       `Are you sure you want to block ${userProfile.name}?\n\nThis will immediately:\n\n• Remove all their content from your feeds\n• Remove them from your connections\n• Prevent them from messaging you\n• Hide your Tokis from them\n• Notify our team for review\n\nYou can unblock them later from your settings.`,
@@ -253,12 +288,12 @@ export default function UserProfileScreen() {
                 'User Blocked',
                 `${userProfile.name} has been blocked successfully. Their content has been removed from your feed.`
               );
-              
+
               // Refresh feeds to show instant content removal
               if (actions.loadTokis) {
                 await actions.loadTokis();
               }
-              
+
               // Don't navigate back - let user see the unblock button
             } catch (error) {
               console.error('❌ Failed to block user:', error);
@@ -272,7 +307,7 @@ export default function UserProfileScreen() {
 
   const handleUnblockUser = () => {
     if (!userProfile) return;
-    
+
     Alert.alert(
       'Unblock User',
       `Are you sure you want to unblock ${userProfile.name}?\n\nThis will:\n\n• Restore their ability to message you\n• Make your Tokis visible to them again\n• Allow them to send connection requests\n• Restore their content in your feeds`,
@@ -289,7 +324,7 @@ export default function UserProfileScreen() {
                 'User Unblocked',
                 `${userProfile.name} has been unblocked successfully.`
               );
-              
+
               // Refresh feeds to show restored content
               if (actions.loadTokis) {
                 await actions.loadTokis();
@@ -307,7 +342,7 @@ export default function UserProfileScreen() {
   // Report user handler
   const handleReportUser = async (reason: string) => {
     if (!userId) return;
-    
+
     try {
       const success = await actions.reportUser(userId, reason);
       if (!success) {
@@ -325,8 +360,8 @@ export default function UserProfileScreen() {
     // Self-profile guard: disable actions when viewing your own public profile
     if (state.currentUser?.id && state.currentUser.id === userId) {
       return (
-        <TouchableOpacity 
-          style={styles.disabledButton} 
+        <TouchableOpacity
+          style={styles.disabledButton}
           disabled={true}
         >
           <Clock size={20} color="#9CA3AF" />
@@ -338,8 +373,8 @@ export default function UserProfileScreen() {
     // For non-authenticated users, show login prompt
     if (!state.currentUser) {
       return (
-        <TouchableOpacity 
-          style={styles.primaryButton} 
+        <TouchableOpacity
+          style={styles.primaryButton}
           onPress={() => {
             Alert.alert(
               'Login Required',
@@ -360,8 +395,8 @@ export default function UserProfileScreen() {
     switch (connectionStatus.status) {
       case 'none':
         return (
-          <TouchableOpacity 
-            style={styles.primaryButton} 
+          <TouchableOpacity
+            style={styles.primaryButton}
             onPress={handleRequestConnection}
             disabled={isActionLoading}
           >
@@ -375,35 +410,42 @@ export default function UserProfileScreen() {
             )}
           </TouchableOpacity>
         );
-        
+
       case 'pending':
         return (
-          <TouchableOpacity 
-            style={styles.disabledButton} 
-            disabled={true}
+          <TouchableOpacity
+            style={styles.disabledButton}
+            onPress={connectionStatus.isRequester ? handleCancelRequest : undefined}
+            disabled={!connectionStatus.isRequester || isActionLoading}
           >
-            <Clock size={20} color="#9CA3AF" />
-            <Text style={styles.disabledButtonText}>
-              {connectionStatus.isRequester ? 'Request Sent' : 'Request Pending'}
-            </Text>
+            {isActionLoading ? (
+              <ActivityIndicator color="#9CA3AF" size="small" />
+            ) : (
+              <>
+                <Clock size={20} color="#9CA3AF" />
+                <Text style={styles.disabledButtonText}>
+                  {connectionStatus.isRequester ? 'Undo Request' : 'Request Pending'}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         );
-        
+
       case 'accepted':
         return (
-          <TouchableOpacity 
-            style={styles.secondaryButton} 
+          <TouchableOpacity
+            style={styles.secondaryButton}
             onPress={handleSendMessage}
           >
             <MessageCircle size={20} color="#8B5CF6" />
             <Text style={styles.secondaryButtonText}>Send Message</Text>
           </TouchableOpacity>
         );
-        
+
       case 'declined':
         return (
-          <TouchableOpacity 
-            style={styles.primaryButton} 
+          <TouchableOpacity
+            style={styles.primaryButton}
             onPress={handleRequestConnection}
             disabled={isActionLoading}
           >
@@ -417,7 +459,7 @@ export default function UserProfileScreen() {
             )}
           </TouchableOpacity>
         );
-        
+
       default:
         return null;
     }
@@ -471,205 +513,206 @@ export default function UserProfileScreen() {
           colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
           style={styles.header}
         >
-        <View style={styles.headerContent}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <ArrowLeft size={24} color="#1C1C1C" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-          {/* Removed overflow menu for other user profile */}
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <TappableAvatar
-                userId={userProfile.id}
-                userName={userProfile.name}
-                avatarUrl={userProfile.avatar}
-                size={80}
-                imageStyle={styles.avatarImage}
-                fallbackStyle={styles.avatarFallback}
-                initialsStyle={styles.avatarInitials}
-              />
-              {userProfile.verified && (
-                <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedText}>✓</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.userName}>{userProfile.name}</Text>
-              <Text style={styles.userBio}>{userProfile.bio}</Text>
-
-              <View style={styles.locationContainer}>
-                <MapPin size={14} color="#666666" />
-                <Text style={styles.locationText}>{userProfile.location}</Text>
-              </View>
-              <Text style={styles.memberSince}>
-                Member since {userProfile.memberSince ? 
-                  new Date(userProfile.memberSince).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long'
-                  }) : 
-                  'Recently'
-                }
-              </Text>
-
-              {/* Social Media Links */}
-              {Object.keys(userProfile.socialLinks).length > 0 && (
-                <View style={styles.socialLinksContainer}>
-                  {Object.entries(userProfile.socialLinks).map(([platform, username]) => (
-                    username && (
-                      <TouchableOpacity
-                        key={platform}
-                        style={styles.socialLink}
-                        onPress={() => handleSocialPress(platform, username)}
-                      >
-                        {getPlatformIcon(platform)}
-                        <Text style={styles.socialUsername}>{username}</Text>
-                      </TouchableOpacity>
-                    )
-                  ))}
-                </View>
-              )}
-            </View>
+          <View style={styles.headerContent}>
+            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+              <ArrowLeft size={24} color="#1C1C1C" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Profile</Text>
+            {/* Removed overflow menu for other user profile */}
           </View>
+        </LinearGradient>
 
-          {/* Action Button */}
-          <View style={styles.actionButtonContainer}>
-            {renderActionButton()}
-          </View>
-
-          {/* Report Button - Only show if not viewing own profile */}
-          {state.currentUser?.id && state.currentUser.id !== userId && (
-            <View style={styles.reportSection}>
-              <TouchableOpacity
-                style={styles.reportButton}
-                onPress={() => setShowReportModal(true)}
-              >
-                <Flag size={18} color="#EF4444" />
-                <Text style={styles.reportText}>Report User</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Block/Unblock Button - Only show if not viewing own profile */}
-          {state.currentUser?.id && state.currentUser.id !== userId && (
-            <View style={styles.blockSection}>
-              {isBlocked ? (
-                <TouchableOpacity
-                  style={styles.unblockButton}
-                  onPress={handleUnblockUser}
-                >
-                  <UserCheck size={18} color="#10B981" />
-                  <Text style={styles.unblockText}>Unblock User</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.blockButton}
-                  onPress={handleBlockUser}
-                >
-                  <UserX size={18} color="#EF4444" />
-                  <Text style={styles.blockText}>Block User</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-
-          {/* Statistics */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile.tokisJoined}</Text>
-              <Text style={styles.statLabel}>Tokis Joined</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile.tokisCreated}</Text>
-              <Text style={styles.statLabel}>Tokis Created</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{userProfile.connections}</Text>
-              <Text style={styles.statLabel}>Connections</Text>
-            </View>
-          </View>
-          {/* Public Activity */}
-          <View style={{ paddingHorizontal: 8, marginTop: 8 }}>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold', color: '#111827', marginBottom: 8 }}>
-              {userProfile.name.split(' ')[0]}'s Activity
-            </Text>
-            {(() => {
-              // Check if user is viewing their own profile
-              const isOwnProfile = state.currentUser?.id === userId;
-              // Check if users are connected
-              const isConnected = connectionStatus?.status === 'accepted';
-              
-              // Show activity only if connected or viewing own profile
-              if (!isOwnProfile && !isConnected) {
-                return (
-                  <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-                    <Text style={{ color: '#6B7280', fontSize: 14, textAlign: 'center' }}>
-                      Connect with this user to see their activity
-                    </Text>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Profile Header */}
+          <View style={styles.profileSection}>
+            <View style={styles.profileHeader}>
+              <View style={styles.avatarContainer}>
+                <TappableAvatar
+                  userId={userProfile.id}
+                  userName={userProfile.name}
+                  avatarUrl={userProfile.avatar}
+                  size={80}
+                  imageStyle={styles.avatarImage}
+                  fallbackStyle={styles.avatarFallback}
+                  initialsStyle={styles.avatarInitials}
+                />
+                {userProfile.verified && (
+                  <View style={styles.verifiedBadge}>
+                    <Text style={styles.verifiedText}>✓</Text>
                   </View>
-                );
-              }
-              
-              // Show activity if connected or own profile
-              if (publicActivity.length === 0) {
-                return <Text style={{ color: '#6B7280' }}>No public activity</Text>;
-              }
-              
-              return (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {publicActivity.map(a => {
-                    const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
-                    const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
-                    return (
-                    <View key={a.id} style={{ width: 285, marginRight: 16 }}>
-                      <TokiCard
-                        toki={{
-                          id: a.id,
-                          title: a.title,
-                          description: a.description || '',
-                          image: a.image_url,
-                          category: a.category,
-                          location: a.location || '',
-                          time: a.time_slot || '',
-                          attendees: a.current_attendees || 0,
-                          maxAttendees: a.max_attendees || 0,
-                          scheduledTime: a.scheduled_time,
-                          host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
-                          visibility: a.visibility,
-                          tags: a.tags || [],
-                          distance,
-                        }}
-                        onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
-                      />
+                )}
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.userName}>{userProfile.name}</Text>
+                <Text style={styles.userBio}>{userProfile.bio}</Text>
+
+                <View style={styles.locationContainer}>
+                  <MapPin size={14} color="#666666" />
+                  <Text style={styles.locationText}>{userProfile.location}</Text>
+                </View>
+                <Text style={styles.memberSince}>
+                  Member since {userProfile.memberSince ?
+                    new Date(userProfile.memberSince).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long'
+                    }) :
+                    'Recently'
+                  }
+                </Text>
+
+                {/* Social Media Links */}
+                {Object.keys(userProfile.socialLinks).length > 0 && (
+                  <View style={styles.socialLinksContainer}>
+                    {Object.entries(userProfile.socialLinks).map(([platform, username]) => (
+                      username && (
+                        <TouchableOpacity
+                          key={platform}
+                          style={styles.socialLink}
+                          onPress={() => handleSocialPress(platform, username)}
+                        >
+                          {getPlatformIcon(platform)}
+                          <Text style={styles.socialUsername}>{username}</Text>
+                        </TouchableOpacity>
+                      )
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Action Button */}
+            <View style={styles.actionButtonContainer}>
+              {renderActionButton()}
+            </View>
+
+            {/* Report Button - Only show if not viewing own profile */}
+            {state.currentUser?.id && state.currentUser.id !== userId && (
+              <View style={styles.reportSection}>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={() => setShowReportModal(true)}
+                >
+                  <Flag size={18} color="#EF4444" />
+                  <Text style={styles.reportText}>Report User</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Block/Unblock Button - Only show if not viewing own profile */}
+            {state.currentUser?.id && state.currentUser.id !== userId && (
+              <View style={styles.blockSection}>
+                {isBlocked ? (
+                  <TouchableOpacity
+                    style={styles.unblockButton}
+                    onPress={handleUnblockUser}
+                  >
+                    <UserCheck size={18} color="#10B981" />
+                    <Text style={styles.unblockText}>Unblock User</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.blockButton}
+                    onPress={handleBlockUser}
+                  >
+                    <UserX size={18} color="#EF4444" />
+                    <Text style={styles.blockText}>Block User</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* Statistics */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{userProfile.tokisJoined}</Text>
+                <Text style={styles.statLabel}>Tokis Joined</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{userProfile.tokisCreated}</Text>
+                <Text style={styles.statLabel}>Tokis Created</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{userProfile.connections}</Text>
+                <Text style={styles.statLabel}>Connections</Text>
+              </View>
+            </View>
+            {/* Public Activity */}
+            <View style={{ paddingHorizontal: 8, marginTop: 8 }}>
+              <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold', color: '#111827', marginBottom: 8 }}>
+                {userProfile.name.split(' ')[0]}'s Activity
+              </Text>
+              {(() => {
+                // Check if user is viewing their own profile
+                const isOwnProfile = state.currentUser?.id === userId;
+                // Check if users are connected
+                const isConnected = connectionStatus?.status === 'accepted';
+
+                // Show activity only if connected or viewing own profile
+                if (!isOwnProfile && !isConnected) {
+                  return (
+                    <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                      <Text style={{ color: '#6B7280', fontSize: 14, textAlign: 'center' }}>
+                        Connect with this user to see their activity
+                      </Text>
                     </View>
-                  )})}
-                </ScrollView>
-              );
-            })()}
+                  );
+                }
+
+                // Show activity if connected or own profile
+                if (publicActivity.length === 0) {
+                  return <Text style={{ color: '#6B7280' }}>No public activity</Text>;
+                }
+
+                return (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {publicActivity.map(a => {
+                      const km = typeof a.distance_km === 'number' ? Math.round(a.distance_km * 10) / 10 : undefined;
+                      const distance = typeof km === 'number' ? { km, miles: Math.round((km * 0.621371) * 10) / 10 } : undefined;
+                      return (
+                        <View key={a.id} style={{ width: 285, marginRight: 16 }}>
+                          <TokiCard
+                            toki={{
+                              id: a.id,
+                              title: a.title,
+                              description: a.description || '',
+                              image: a.image_url,
+                              category: a.category,
+                              location: a.location || '',
+                              time: a.time_slot || '',
+                              attendees: a.current_attendees || 0,
+                              maxAttendees: a.max_attendees || 0,
+                              scheduledTime: a.scheduled_time,
+                              host: { id: a.host_id, name: a.host_name, avatar: a.host_avatar },
+                              visibility: a.visibility,
+                              tags: a.tags || [],
+                              distance,
+                            }}
+                            onPress={() => router.push({ pathname: '/toki-details', params: { tokiId: a.id } })}
+                          />
+                        </View>
+                      )
+                    })}
+                  </ScrollView>
+                );
+              })()}
+            </View>
           </View>
-        </View>
 
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+          <View style={styles.bottomSpacing} />
+        </ScrollView>
 
-      {/* Report Modal */}
-      <ReportModal
-        visible={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        onSubmit={handleReportUser}
-        title="Report User"
-        subtitle="Please let us know why this user's profile is inappropriate."
-        contentType="User"
-      />
-    </SafeAreaView>
+        {/* Report Modal */}
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          onSubmit={handleReportUser}
+          title="Report User"
+          subtitle="Please let us know why this user's profile is inappropriate."
+          contentType="User"
+        />
+      </SafeAreaView>
     </>
   );
 }

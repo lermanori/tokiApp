@@ -568,6 +568,7 @@ interface AppContextType {
     acceptConnectionRequest: (userId: string) => Promise<boolean>;
     declineConnectionRequest: (userId: string) => Promise<boolean>;
     removeConnection: (userId: string) => Promise<boolean>;
+    cancelConnectionRequest: (userId: string) => Promise<boolean>;
     // Rating actions
     getUserRatings: (userId: string) => Promise<void>;
     submitRating: (ratedUserId: string, tokiId: string, rating: number, reviewText?: string) => Promise<boolean>;
@@ -610,6 +611,8 @@ interface AppContextType {
     // Mark as read actions
     markConversationAsRead: (conversationId: string) => Promise<boolean>;
     markTokiAsRead: (tokiId: string) => Promise<boolean>;
+    reportToki: (tokiId: string, reason: string) => Promise<boolean>;
+    reportUser: (userId: string, reason: string) => Promise<boolean>;
     reportMessage: (messageId: string, reason: string) => Promise<boolean>;
 
     // Socket management actions
@@ -2509,6 +2512,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const cancelConnectionRequest = async (userId: string): Promise<boolean> => {
+    try {
+      await apiService.cancelConnectionRequest(userId);
+      // Pending requests are not in the main 'connections' state usually, 
+      // but we might need to refresh pending connections if we're tracking them.
+      // For now, removeConnection also covers the backend side.
+      console.log('✅ Connection request cancelled successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to cancel connection request:', error);
+      return false;
+    }
+  };
+
   const searchUsers = async (query?: string): Promise<any[]> => {
     try {
       console.log('🔍 Searching for users with query:', query);
@@ -3112,6 +3129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     acceptConnectionRequest,
     declineConnectionRequest,
     removeConnection,
+    cancelConnectionRequest,
     // Rating actions
     getUserRatings,
     submitRating,

@@ -167,6 +167,37 @@ export default function FindPeopleScreen() {
     }
   };
 
+  const handleCancelRequest = async (userId: string, userName: string) => {
+    try {
+      console.log('🔍 Cancelling connection request to:', userId, userName);
+
+      const success = await actions.cancelConnectionRequest(userId);
+      if (success) {
+        // Update connection status
+        setConnectionStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(userId, { status: 'none', isRequester: false });
+          return newMap;
+        });
+
+        // Remove from pending requests if it was there
+        const newPendingSet = new Set(pendingRequests);
+        if (newPendingSet.has(userId)) {
+          newPendingSet.delete(userId);
+          setPendingRequests(newPendingSet);
+          await AsyncStorage.setItem('pendingConnectionRequests', JSON.stringify(Array.from(newPendingSet)));
+        }
+
+        console.log(`✅ Connection request to ${userName} cancelled`);
+      } else {
+        Alert.alert('Error', 'Failed to cancel connection request. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error cancelling connection request:', error);
+      Alert.alert('Error', 'Failed to cancel connection request. Please try again.');
+    }
+  };
+
   // Get the appropriate button text and action based on connection status
   const getConnectionButtonInfo = (userId: string) => {
     const status = connectionStatuses.get(userId);
@@ -183,9 +214,9 @@ export default function FindPeopleScreen() {
     if (status.status === 'pending') {
       if (status.isRequester) {
         return {
-          text: 'Request Sent',
-          action: null,
-          disabled: true,
+          text: 'Undo Request',
+          action: () => handleCancelRequest(userId, users.find(u => u.id === userId)?.name || 'User'),
+          disabled: false,
           style: 'pending'
         };
       } else {

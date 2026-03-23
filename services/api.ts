@@ -1192,6 +1192,10 @@ class ApiService {
     await this.makeRequest(`/connections/${userId}`, { method: 'DELETE' });
   }
 
+  async cancelConnectionRequest(userId: string): Promise<void> {
+    return this.removeConnection(userId);
+  }
+
   // User Search
   async searchUsers(params?: {
     q?: string;
