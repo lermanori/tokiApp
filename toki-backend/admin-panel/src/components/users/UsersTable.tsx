@@ -5,6 +5,7 @@ import UserEditModal from './UserEditModal';
 import DeleteConfirmDialog from '../shared/DeleteConfirmDialog';
 import PasswordLinkModal from './PasswordLinkModal';
 import InvitationCreditsModal from './InvitationCreditsModal';
+import UserAnalyticsModal from './UserAnalyticsModal';
 
 interface UserRow {
   id: string;
@@ -45,6 +46,7 @@ export default function UsersTable() {
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [passwordLinkModal, setPasswordLinkModal] = useState<{ user: UserRow; purpose: 'welcome' | 'reset' } | null>(null);
   const [invitationCreditsModal, setInvitationCreditsModal] = useState<UserRow | null>(null);
+  const [analyticsModal, setAnalyticsModal] = useState<UserRow | null>(null);
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -94,7 +96,7 @@ export default function UsersTable() {
     <div className="glass-card" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16 }}>
         <div style={{ color: '#1C1C1C', fontFamily: 'var(--font-semi)' }}>Users</div>
-        <button className="btn-primary" onClick={()=>setCreating(true)}>Create User</button>
+        <button className="btn-primary" onClick={() => setCreating(true)}>Create User</button>
       </div>
       {/* Filters */}
       <div style={{ padding: 16, display: 'grid', gap: 12, gridTemplateColumns: '1fr 200px 200px auto' }}>
@@ -158,8 +160,8 @@ export default function UsersTable() {
                 </td>
                 <td style={{ padding: '12px 16px' }}>{formatDate(u.created_at)}</td>
                 <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
-                  <button className="btn-primary" onClick={()=>setEditing(u)} style={{ marginRight: 8 }}>Edit</button>
-                  <button className="btn-primary" onClick={()=>setDeleting(u)} style={{ background: 'linear-gradient(135deg,#EF4444,#EC4899)' }}>Delete</button>
+                  <button className="btn-primary" onClick={() => setEditing(u)} style={{ marginRight: 8 }}>Edit</button>
+                  <button className="btn-primary" onClick={() => setDeleting(u)} style={{ background: 'linear-gradient(135deg,#EF4444,#EC4899)' }}>Delete</button>
                   <div style={{ height: 8 }} />
                   <button
                     className="btn-primary"
@@ -182,6 +184,13 @@ export default function UsersTable() {
                   >
                     Send Reset Password Link
                   </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => setAnalyticsModal(u)}
+                    style={{ marginTop: 8, background: 'linear-gradient(135deg,#3B82F6,#2DD4BF)' }}
+                  >
+                    View Analytics
+                  </button>
                 </td>
               </tr>
             ))}
@@ -200,23 +209,23 @@ export default function UsersTable() {
 
       {creating && (
         <UserCreateModal
-          onClose={()=>setCreating(false)}
-          onCreated={()=>{ setCreating(false); loadUsers(); }}
+          onClose={() => setCreating(false)}
+          onCreated={() => { setCreating(false); loadUsers(); }}
         />
       )}
       {editing && (
         <UserEditModal
           user={editing}
-          onClose={()=>setEditing(null)}
-          onSaved={()=>{ setEditing(null); loadUsers(); }}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); loadUsers(); }}
         />
       )}
       {deleting && (
         <DeleteConfirmDialog
           title="Delete user"
           message={`Are you sure you want to delete ${deleting.email}? This cannot be undone.`}
-          onCancel={()=>setDeleting(null)}
-          onConfirm={async ()=>{ setDeletingBusy(true); try { await adminApi.deleteUser(deleting.id); setDeleting(null); loadUsers(); } finally { setDeletingBusy(false); } }}
+          onCancel={() => setDeleting(null)}
+          onConfirm={async () => { setDeletingBusy(true); try { await adminApi.deleteUser(deleting.id); setDeleting(null); loadUsers(); } finally { setDeletingBusy(false); } }}
           loading={deletingBusy}
         />
       )}
@@ -241,6 +250,13 @@ export default function UsersTable() {
             setInvitationCreditsModal(null);
             loadUsers();
           }}
+        />
+      )}
+      {analyticsModal && (
+        <UserAnalyticsModal
+          userId={analyticsModal.id}
+          userName={analyticsModal.name}
+          onClose={() => setAnalyticsModal(null)}
         />
       )}
     </div>

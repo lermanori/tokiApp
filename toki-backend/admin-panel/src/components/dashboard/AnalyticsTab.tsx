@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { adminApi } from '../../services/adminApi';
+import { Smartphone, Globe, Terminal, Activity, Users, Clock, LogIn, Plus } from 'lucide-react';
 import UserActionsTimeline from './UserActionsTimeline';
 
 interface TimeSeriesData {
@@ -11,16 +12,40 @@ interface TimeSeriesData {
   tokisCreatedToday: number;
 }
 
+interface PushPerformance {
+  id: string;
+  name: string;
+  sent_count: number;
+  open_count: number;
+  open_rate: number;
+}
+
+interface Interaction {
+  action: string;
+  count: number;
+}
+
+const INTERACTION_COLORS = ['#8B5CF6', '#EC4899', '#3B82F6', '#F59E0B', '#10B981', '#6366F1'];
+const PLATFORM_COLORS: { [key: string]: string } = {
+  ios: '#8B5CF6',
+  android: '#10B981',
+  web: '#3B82F6',
+  unknown: '#9CA3AF'
+};
+
 interface AnalyticsResponse {
   success: boolean;
   data?: {
     timeSeries: TimeSeriesData[];
     summary: {
       currentActiveUsers: number;
+      onlineUsers: number;
       totalAccounts: number;
       uniqueLoginsToday: number;
       tokisCreatedToday: number;
+      averageSessionLength: number;
     };
+    platformStats: { platform: string; count: string }[];
   };
 }
 
@@ -38,15 +63,21 @@ export default function AnalyticsTab() {
   const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
   const [summary, setSummary] = useState({
     currentActiveUsers: 0,
+    onlineUsers: 0,
     totalAccounts: 0,
     uniqueLoginsToday: 0,
-    tokisCreatedToday: 0
+    tokisCreatedToday: 0,
+    averageSessionLength: 0
   });
+  const [platformStats, setPlatformStats] = useState<any[]>([]);
   const [hours, setHours] = useState(720); // default 30 days
   const [error, setError] = useState<string | null>(null);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | undefined>(undefined);
+  const [pushPerformance, setPushPerformance] = useState<PushPerformance[]>([]);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
 
   // Determine if we're grouping by hour (<= 72 hours)
   const groupByHour = hours <= 72;
@@ -54,7 +85,21 @@ export default function AnalyticsTab() {
   useEffect(() => {
     loadAnalytics();
     loadActiveUsers();
+    loadGlobalAnalytics();
   }, [hours]);
+
+  const loadGlobalAnalytics = async () => {
+    try {
+      const [pushData, interactionData] = await Promise.all([
+        adminApi.getPushPerformance(),
+        adminApi.getInteractions()
+      ]);
+      setPushPerformance(pushData);
+      setInteractions(interactionData);
+    } catch (err) {
+      console.error('Failed to fetch global analytics', err);
+    }
+  };
 
   const loadAnalytics = async () => {
     setLoading(true);
@@ -64,16 +109,20 @@ export default function AnalyticsTab() {
       if (resp.data) {
         setTimeSeries(resp.data.timeSeries);
         setSummary(resp.data.summary);
+        setPlatformStats(resp.data.platformStats || []);
       }
     } catch (e: any) {
       setError(e.message || 'Failed to load analytics');
       setTimeSeries([]);
       setSummary({
         currentActiveUsers: 0,
+        onlineUsers: 0,
         totalAccounts: 0,
         uniqueLoginsToday: 0,
-        tokisCreatedToday: 0
+        tokisCreatedToday: 0,
+        averageSessionLength: 0
       });
+      setPlatformStats([]);
     } finally {
       setLoading(false);
     }
@@ -81,7 +130,7 @@ export default function AnalyticsTab() {
 
   const loadActiveUsers = async () => {
     try {
-      const resp = await adminApi.getActiveUsers({ limit: 10, days: 7 }) as any;
+      const resp = await adminApi.getActiveUsers({ limit: 30, days: 30 }) as any;
       if (resp.success) {
         setActiveUsers(resp.data);
       }
@@ -135,7 +184,33 @@ export default function AnalyticsTab() {
       {/* Summary Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: '16px',
+        marginBottom: '16px'
+      }}>
+        <StatCard
+          title="Online Now"
+          value={loading ? '…' : summary.onlineUsers.toLocaleString()}
+          gradient="linear-gradient(135deg, #10B981, #059669)"
+          isLive
+          icon={<Activity size={20} />}
+        />
+        <StatCard
+          title="Avg Session Length"
+          value={loading ? '…' : `${Math.floor(summary.averageSessionLength / 60)}m ${summary.averageSessionLength % 60}s`}
+          gradient="linear-gradient(135deg, #3B82F6, #2563EB)"
+          icon={<Clock size={20} />}
+        />
+        <StatCard
+          title="Total Accounts"
+          value={loading ? '…' : summary.totalAccounts.toLocaleString()}
+          gradient="var(--gradient-secondary)"
+          icon={<Users size={20} />}
+        />
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         gap: '16px',
         marginBottom: '32px'
       }}>
@@ -143,21 +218,19 @@ export default function AnalyticsTab() {
           title="Active Users (7d)"
           value={loading ? '…' : summary.currentActiveUsers.toLocaleString()}
           gradient="var(--gradient-primary)"
-        />
-        <StatCard
-          title="Total Accounts"
-          value={loading ? '…' : summary.totalAccounts.toLocaleString()}
-          gradient="var(--gradient-secondary)"
+          icon={<Activity size={20} />}
         />
         <StatCard
           title="Logins Today"
           value={loading ? '…' : summary.uniqueLoginsToday.toLocaleString()}
-          gradient="linear-gradient(135deg, #10B981, #3B82F6)"
+          gradient="linear-gradient(135deg, #F59E0B, #D97706)"
+          icon={<LogIn size={20} />}
         />
         <StatCard
           title="Tokis Created Today"
           value={loading ? '…' : summary.tokisCreatedToday.toLocaleString()}
-          gradient="linear-gradient(135deg, #F59E0B, #EC4899)"
+          gradient="linear-gradient(135deg, #EC4899, #DB2777)"
+          icon={<Plus size={20} />}
         />
       </div>
 
@@ -216,70 +289,203 @@ export default function AnalyticsTab() {
       )}
 
       {/* Most Active Users Table */}
-      <div className="glass-card" style={{ padding: '24px' }}>
-        <h3 style={{
-          fontSize: '18px',
-          fontFamily: 'var(--font-semi)',
-          marginBottom: '20px',
-          color: '#1C1C1C'
+      <div className="glass-card" style={{ padding: '24px', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{
+            fontSize: '18px',
+            fontFamily: 'var(--font-semi)',
+            margin: 0,
+            color: '#1C1C1C'
+          }}>
+            Most Active Users (Last 30 Days)
+          </h3>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                fontSize: '14px',
+                width: '240px',
+                outline: 'none',
+                fontFamily: 'var(--font-regular)'
+              }}
+            />
+          </div>
+        </div>
+        <div style={{
+          maxHeight: '450px',
+          overflowY: 'auto',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '12px',
+          background: 'rgba(255, 255, 255, 0.3)'
         }}>
-          Most Active Users (Last 7 Days)
-        </h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>USER</th>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>EMAIL</th>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>ACTIONS</th>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>PLATFORMS</th>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>LAST ACTIVE</th>
-                <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>DETAILS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeUsers.map((user) => (
-                <tr key={user.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                  <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
-                    ) : (
-                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#E5E7EB', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px' }}>
-                        {user.name?.charAt(0)}
-                      </div>
-                    )}
-                    <span style={{ fontSize: '14px', fontFamily: 'var(--font-medium)' }}>{user.name}</span>
-                  </td>
-                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>{user.email}</td>
-                  <td style={{ padding: '12px', fontSize: '14px', fontFamily: 'var(--font-semi)' }}>{user.request_count}</td>
-                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>{user.platform_count}</td>
-                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
-                    {new Date(user.last_active).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px' }}>
-                    <button
-                      onClick={() => {
-                        setSelectedUserId(user.id);
-                        setSelectedUserName(user.name);
-                      }}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: 'var(--color-primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-medium)'
-                      }}
-                    >
-                      View Timeline
-                    </button>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 1, boxShadow: '0 1px 0 var(--glass-border)' }}>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>USER</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>EMAIL</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>ACTIONS</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>PLATFORMS</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>LAST ACTIVE</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>DETAILS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {activeUsers
+                  .filter(u =>
+                    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((user: any) => (
+                    <tr key={user.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                      <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+                        ) : (
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#E5E7EB', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '12px' }}>
+                            {user.name?.charAt(0)}
+                          </div>
+                        )}
+                        <span style={{ fontSize: '14px', fontFamily: 'var(--font-medium)' }}>{user.name}</span>
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>{user.email}</td>
+                      <td style={{ padding: '12px', fontSize: '14px', fontFamily: 'var(--font-semi)' }}>{user.request_count}</td>
+                      <td style={{ padding: '12px' }}>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {user.platforms?.map((p: string) => (
+                            <div
+                              key={p}
+                              title={p.toUpperCase()}
+                              style={{
+                                padding: '4px',
+                                borderRadius: '4px',
+                                background: PLATFORM_COLORS[p] + '20',
+                                color: PLATFORM_COLORS[p],
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              {p === 'ios' || p === 'android' ? <Smartphone size={14} /> :
+                                p === 'web' ? <Globe size={14} /> : <Terminal size={14} />}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                        {new Date(user.last_active).toLocaleDateString()}
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <button
+                          onClick={() => {
+                            setSelectedUserId(user.id);
+                            setSelectedUserName(user.name);
+                          }}
+                          className="btn-primary-sm"
+                          style={{ fontSize: '12px' }}
+                        >
+                          Timeline
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+        {/* Push Notification Performance */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '20px' }}>
+            Push Performance
+          </h3>
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>NAME</th>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>SENT</th>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>OPEN RATE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pushPerformance.map((item: PushPerformance) => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                    <td style={{ padding: '8px', fontSize: '13px' }}>{item.name}</td>
+                    <td style={{ padding: '8px', fontSize: '13px' }}>{item.sent_count}</td>
+                    <td style={{ padding: '8px', fontSize: '13px' }}>
+                      <span style={{ fontWeight: 'bold', color: item.open_rate > 20 ? '#10B981' : '#666' }}>
+                        {item.open_rate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Interaction Chart */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '20px' }}>
+            Screen Interactions (30d)
+          </h3>
+          <div style={{ height: '300px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={interactions}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                <XAxis
+                  dataKey="action"
+                  tickFormatter={(val) => val.split('_')[0]}
+                  fontSize={10}
+                />
+                <YAxis fontSize={10} />
+                <Tooltip
+                  formatter={(value: number) => [value, 'Occurrences']}
+                  labelFormatter={(name) => name.replace('_', ' ').toUpperCase()}
+                />
+                <Bar dataKey="count">
+                  {interactions.map((_: Interaction, index: number) => (
+                    <Cell key={`cell-${index}`} fill={INTERACTION_COLORS[index % INTERACTION_COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Platform Breakdown */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '20px' }}>
+            Device Distribution (30d)
+          </h3>
+          <div style={{ height: '300px', display: 'flex', alignItems: 'center' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={platformStats}
+                  dataKey="count"
+                  nameKey="platform"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={(entry) => `${entry.platform} (${entry.count})`}
+                >
+                  {platformStats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PLATFORM_COLORS[entry.platform] || PLATFORM_COLORS.unknown} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
@@ -368,12 +574,36 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
   );
 }
 
-function StatCard({ title, value, gradient }: { title: string; value: string; gradient: string; }) {
+function StatCard({ title, value, gradient, isLive, icon }: { title: string; value: string; gradient: string; isLive?: boolean, icon: React.ReactNode }) {
   return (
-    <div className="glass-card" style={{ padding: '20px' }}>
-      <div style={{ color: '#666', fontSize: '13px', marginBottom: '8px', fontFamily: 'var(--font-medium)' }}>
-        {title}
+    <div className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+      {isLive && (
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: '#10B981',
+            boxShadow: '0 0 8px #10B981'
+          }} />
+          <span style={{ fontSize: '10px', color: '#10B981', fontFamily: 'var(--font-bold)', textTransform: 'uppercase' }}>Live</span>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <div style={{ color: '#666', fontSize: '13px', fontFamily: 'var(--font-medium)' }}>
+          {title}
+        </div>
+        <div style={{ color: '#9CA3AF' }}>{icon}</div>
       </div>
+
       <div style={{
         fontSize: '28px',
         fontFamily: 'var(--font-bold)',
@@ -387,3 +617,4 @@ function StatCard({ title, value, gradient }: { title: string; value: string; gr
     </div>
   );
 }
+

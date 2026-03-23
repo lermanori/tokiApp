@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
-import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer } from 'lucide-react';
 import WaitlistTab from './WaitlistTab';
 import DatabaseTab from './DatabaseTab';
 import AlgorithmTab from './AlgorithmTab';
@@ -10,6 +9,7 @@ import NotificationScheduleTab from './NotificationScheduleTab';
 import McpKeysTab from './McpKeysTab';
 import ReportsTab from './ReportsTab';
 import TokenDebugTab from './TokenDebugTab';
+import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
