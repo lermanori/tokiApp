@@ -12,7 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "7",
+      buildNumber: "8",
       usesAppleSignIn: true,
       config: {},
       infoPlist: {

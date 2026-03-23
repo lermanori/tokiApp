@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWebSocketUrl } from './config';
 
@@ -25,7 +26,7 @@ class SocketService {
       try {
         const wsUrl = getWebSocketUrl();
         console.info('🔌 [FRONTEND] Attempting to connect to WebSocket at:', wsUrl);
-        
+
         // For now, connect without authentication to test
         this.socket = io(wsUrl, {
           transports: ['websocket', 'polling'],
@@ -33,12 +34,15 @@ class SocketService {
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: 1000,
           timeout: 20000,
+          auth: {
+            platform: Platform.OS
+          }
         });
 
         this.socket.on('connect', () => {
           this.isConnected = true;
           this.reconnectAttempts = 0;
-          
+
           // Rejoin rooms after reconnection
           this.rejoinRooms();
           resolve();
@@ -48,7 +52,7 @@ class SocketService {
           console.info('🔌 [FRONTEND] WebSocket disconnected, reason:', reason);
           console.debug('🔌 [FRONTEND] Current rooms at disconnect:', Array.from(this.currentRooms));
           this.isConnected = false;
-          
+
           if (this.connectionPromise) {
             this.connectionPromise = null;
           }
@@ -57,7 +61,7 @@ class SocketService {
         this.socket.on('connect_error', (error) => {
           console.error('❌ [FRONTEND] WebSocket connection error:', error);
           this.reconnectAttempts++;
-          
+
           if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.log('❌ [FRONTEND] Max reconnection attempts reached');
             reject(error);
@@ -101,7 +105,7 @@ class SocketService {
     if (this.isConnected && this.socket?.connected) {
       return;
     }
-    
+
     await this.connect();
   }
 
@@ -118,7 +122,7 @@ class SocketService {
   // Join user to their personal room
   async joinUser(userId: string) {
     await this.ensureConnected();
-    
+
     if (this.socket && this.isConnected) {
       const roomName = `user-${userId}`;
       this.socket.emit('join-user', userId);
@@ -129,11 +133,11 @@ class SocketService {
   // Join conversation room
   async joinConversation(conversationId: string) {
     await this.ensureConnected();
-    
+
     console.debug('🔌 [FRONTEND] Attempting to join conversation:', conversationId);
     console.debug('🔌 [FRONTEND] Socket connected:', this.isConnected);
     console.debug('🔌 [FRONTEND] Socket instance:', !!this.socket);
-    
+
     if (this.socket && this.isConnected) {
       const roomName = `conversation-${conversationId}`;
       this.socket.emit('join-conversation', conversationId);
@@ -148,8 +152,8 @@ class SocketService {
   // Join Toki group chat
   async joinToki(tokiId: string) {
     await this.ensureConnected();
-    
-    
+
+
     if (this.socket && this.isConnected) {
       const roomName = `toki-${tokiId}`;
       console.debug('🏷️ [FRONTEND] Emitting join-toki event for room:', roomName);
@@ -189,7 +193,7 @@ class SocketService {
   // Rejoin all rooms after reconnection
   private async rejoinRooms() {
     const roomsToRejoin = Array.from(this.currentRooms);
-    
+
     for (const roomName of roomsToRejoin) {
       if (roomName.startsWith('user-')) {
         const userId = roomName.replace('user-', '');
@@ -210,7 +214,7 @@ class SocketService {
       console.debug('👂 [FRONTEND] Setting up message-received listener');
       console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
       console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
-      
+
       this.socket.on('message-received', (message) => {
         console.debug('📨 [FRONTEND] RECEIVED EVENT: message-received');
         console.debug('📨 [FRONTEND] Message data:', message);
@@ -228,7 +232,7 @@ class SocketService {
       console.debug('👂 [FRONTEND] Setting up toki-message-received listener');
       console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
       console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
-      
+
       this.socket.on('toki-message-received', (message) => {
         console.debug('📨 [FRONTEND] RECEIVED EVENT: toki-message-received');
         console.debug('📨 [FRONTEND] Message data:', message);
@@ -246,7 +250,7 @@ class SocketService {
       console.debug('👂 [FRONTEND] Setting up notification-received listener');
       console.debug('👂 [FRONTEND] Socket ID when setting up listener:', this.socket.id);
       console.debug('👂 [FRONTEND] Socket connected state when setting up listener:', this.socket.connected);
-      
+
       this.socket.on('notification-received', (notification) => {
         console.debug('📬 [FRONTEND] RECEIVED EVENT: notification-received');
         console.debug('📬 [FRONTEND] Notification data:', notification);

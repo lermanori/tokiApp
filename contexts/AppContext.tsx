@@ -7,6 +7,7 @@ import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, Us
 import { socketService } from '../services/socket';
 import { getBackendUrl } from '../services/config';
 import { registerForPushNotificationsAsync, configureForegroundNotificationHandler } from '../utils/notifications';
+import { useAnalytics } from '../hooks/useAnalytics';
 
 interface Toki {
   id: string;
@@ -661,6 +662,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const { trackEvent } = useAnalytics();
   const [isFetchingTokis, setIsFetchingTokis] = useState(false);
   const [lastTokisFetchMs, setLastTokisFetchMs] = useState(0);
   // Ref to track in-flight nearby requests with their parameters to prevent duplicates
@@ -697,6 +699,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           tokisCount: tokis.length,
           currentUserName: currentUser.name,
           hasValidUser: currentUser.id && currentUser.id !== ''
+        });
+
+        // Track app open
+        trackEvent('app_open', 'app_start', {
+          hasValidUser: !!(currentUser && currentUser.id && currentUser.id !== '')
         });
 
         // Check connection status
@@ -818,6 +825,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as Record<string, any> | undefined;
       console.log('👆 [PUSH] Notification tapped:', data);
+
+      // Track push opened 
+      // Extract campaign_id from the notification data if it exists
+      trackEvent('push_opened', 'notification', {
+        campaign_id: data?.campaign_id || data?.campaignId || undefined,
+        notification_type: data?.type || undefined,
+        toki_id: data?.tokiId || undefined
+      });
 
       // Navigate to chat screen if this is a chat message notification
       if (data?.type === 'chat_message') {

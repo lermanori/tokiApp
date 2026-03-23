@@ -1,4 +1,5 @@
 // API Configuration
+import { Platform } from 'react-native';
 import { getBackendUrl } from './config';
 
 const API_BASE_URL = `${getBackendUrl()}/api`;
@@ -314,6 +315,7 @@ class ApiService {
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'x-platform': Platform.OS,
     };
 
     if (this.accessToken) {

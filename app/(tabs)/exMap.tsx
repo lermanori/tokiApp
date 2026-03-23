@@ -13,6 +13,7 @@ import UserSearchCard from '@/components/UserSearchCard';
 import { useApp } from '@/contexts/AppContext';
 import { useDiscoverData } from '@/hooks/useDiscoverData';
 import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
 import { apiService } from '@/services/api';
@@ -56,6 +57,7 @@ const categories = ['all', ...CATEGORIES];
 
 export default function ExMapScreen() {
     const { state, actions, dispatch } = useApp();
+    const { trackEvent } = useAnalytics();
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
@@ -521,8 +523,14 @@ export default function ExMapScreen() {
         }
 
         actions.loadTokisWithFilters(queryParams);
+
+        // Track filter application
+        trackEvent('filter_applied', 'exMap', {
+            category: selectedFilters.category,
+            radius: selectedFilters.radius
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedFilters, profileCenter, mapRegion]);
+    }, [selectedFilters, profileCenter, mapRegion, trackEvent]);
 
     // Event handlers
     const handleEventPress = useCallback((event: TokiEvent) => {
@@ -548,7 +556,10 @@ export default function ExMapScreen() {
         calloutOpeningTimeoutRef.current = setTimeout(() => {
             calloutOpeningRef.current = false;
         }, 500);
-    }, []);
+
+        // Track map marker tap
+        trackEvent('map_tap', 'exMap', { tokiId: event.id, category: event.category });
+    }, [trackEvent]);
 
     const clearSearch = useCallback(() => {
         setSearchQuery('');
