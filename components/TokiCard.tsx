@@ -36,7 +36,7 @@ export interface TokiCardProps {
         scheduledTime?: string; // Added for actual scheduled time display
         visibility?: 'public' | 'private' | 'connections' | 'friends';
         isSaved?: boolean;
-        friendsGoing?: Array<{ id: string; name: string; avatar?: string }>; // Friends who are attending
+        friendsGoing?: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }>; // Participants who are attending
         isPaid?: boolean;
     };
     onPress: () => void;

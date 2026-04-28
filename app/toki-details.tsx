@@ -70,6 +70,7 @@ interface TokiDetails {
     id: string;
     name: string;
     avatar?: string;
+    isFriend?: boolean;
   }>;
   isPaid?: boolean;
 }
@@ -348,7 +349,7 @@ export default function TokiDetailsScreen() {
         const tokiData = data.data;
 
         // Fetch friends attending data BEFORE creating transformedToki
-        let friendsAttending: Array<{ id: string; name: string; avatar?: string }> = [];
+        let friendsAttending: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }> = [];
         try {
           friendsAttending = await actions.getFriendsAttendingToki(tokiId);
         } catch (error) {

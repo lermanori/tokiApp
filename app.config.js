@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Toki",
     slug: "toki",
-    version: "1.2.2",
+    version: "1.3.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "tokimap",
@@ -12,7 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "8",
+      buildNumber: "1",
       usesAppleSignIn: true,
       config: {},
       infoPlist: {

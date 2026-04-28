@@ -913,7 +913,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const total = parseInt(countResult.rows[0].total);
 
     // Fetch friends attending for each toki (only if user is authenticated)
-    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string }>>();
+    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }>>();
 
     if (userId) {
       // Get all toki IDs from the result
@@ -926,35 +926,40 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
             tp.toki_id,
             u.id,
             u.name,
-            u.avatar_url
+            u.avatar_url,
+            EXISTS(
+              SELECT 1 FROM user_connections uc 
+              WHERE ((uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+                     (uc.recipient_id = $1 AND uc.requester_id = tp.user_id))
+              AND uc.status = 'accepted'
+            ) as is_friend
           FROM toki_participants tp
           JOIN users u ON tp.user_id = u.id
-          INNER JOIN user_connections uc ON (
-            (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
-            (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
-          )
           WHERE tp.toki_id = ANY($2::uuid[])
             AND tp.status = 'approved'
-            AND uc.status = 'accepted'
             AND NOT EXISTS (
               SELECT 1 FROM user_blocks ub 
               WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
                 OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
             )
-          ORDER BY tp.toki_id, tp.joined_at ASC`,
+          ORDER BY tp.toki_id, is_friend DESC, tp.joined_at ASC`,
           [userId, tokiIds]
         );
 
-        // Group friends by toki_id
+        // Group participants by toki_id
         friendsResult.rows.forEach(friend => {
           if (!friendsMap.has(friend.toki_id)) {
             friendsMap.set(friend.toki_id, []);
           }
-          friendsMap.get(friend.toki_id)!.push({
-            id: friend.id,
-            name: friend.name,
-            avatar: friend.avatar_url
-          });
+          // Limit to a small sample per Toki (frontend shows up to 3 anyway)
+          if (friendsMap.get(friend.toki_id)!.length < 5) {
+            friendsMap.get(friend.toki_id)!.push({
+              id: friend.id,
+              name: friend.name,
+              avatar: friend.avatar_url,
+              isFriend: friend.is_friend
+            });
+          }
         });
       }
     }
@@ -1299,7 +1304,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
     }
 
     // Fetch friends attending for each toki (only if user is authenticated)
-    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string }>>();
+    const friendsMap = new Map<string, Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }>>();
 
     if (userId) {
       // Get all toki IDs from the result
@@ -1312,35 +1317,39 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
             tp.toki_id,
             u.id,
             u.name,
-            u.avatar_url
+            u.avatar_url,
+            EXISTS(
+              SELECT 1 FROM user_connections uc 
+              WHERE ((uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+                     (uc.recipient_id = $1 AND uc.requester_id = tp.user_id))
+              AND uc.status = 'accepted'
+            ) as is_friend
           FROM toki_participants tp
           JOIN users u ON tp.user_id = u.id
-          INNER JOIN user_connections uc ON (
-            (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
-            (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
-          )
           WHERE tp.toki_id = ANY($2::uuid[])
             AND tp.status = 'approved'
-            AND uc.status = 'accepted'
             AND NOT EXISTS (
               SELECT 1 FROM user_blocks ub 
               WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
                 OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
             )
-          ORDER BY tp.toki_id, tp.joined_at ASC`,
+          ORDER BY tp.toki_id, is_friend DESC, tp.joined_at ASC`,
           [userId, tokiIds]
         );
 
-        // Group friends by toki_id
+        // Group participants by toki_id
         friendsResult.rows.forEach(friend => {
           if (!friendsMap.has(friend.toki_id)) {
             friendsMap.set(friend.toki_id, []);
           }
-          friendsMap.get(friend.toki_id)!.push({
-            id: friend.id,
-            name: friend.name,
-            avatar: friend.avatar_url
-          });
+          if (friendsMap.get(friend.toki_id)!.length < 5) {
+            friendsMap.get(friend.toki_id)!.push({
+              id: friend.id,
+              name: friend.name,
+              avatar: friend.avatar_url,
+              isFriend: friend.is_friend
+            });
+          }
         });
       }
     }
@@ -1757,40 +1766,41 @@ router.get('/:id/friends-attending', authenticateToken, async (req: Request, res
     const { id } = req.params;
     const userId = (req as any).user.id;
 
-    // Get all participants who are also accepted connections of the current user
-    const friendsResult = await pool.query(
+    const participantsResult = await pool.query(
       `SELECT 
         u.id,
         u.name,
         u.avatar_url,
-        tp.status
+        tp.status,
+        EXISTS(
+          SELECT 1 FROM user_connections uc 
+          WHERE ((uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
+                 (uc.recipient_id = $1 AND uc.requester_id = tp.user_id))
+          AND uc.status = 'accepted'
+        ) as is_friend
       FROM toki_participants tp
       JOIN users u ON tp.user_id = u.id
-      INNER JOIN user_connections uc ON (
-        (uc.requester_id = $1 AND uc.recipient_id = tp.user_id) OR
-        (uc.recipient_id = $1 AND uc.requester_id = tp.user_id)
-      )
       WHERE tp.toki_id = $2 
         AND tp.status = 'approved'
-        AND uc.status = 'accepted'
         AND NOT EXISTS (
           SELECT 1 FROM user_blocks ub 
           WHERE (ub.blocker_id = $1 AND ub.blocked_user_id = tp.user_id)
             OR (ub.blocker_id = tp.user_id AND ub.blocked_user_id = $1)
         )
-      ORDER BY tp.joined_at ASC`,
+      ORDER BY is_friend DESC, tp.joined_at ASC`,
       [userId, id]
     );
 
-    const friends = friendsResult.rows.map(friend => ({
-      id: friend.id,
-      name: friend.name,
-      avatar: friend.avatar_url
+    const participants = participantsResult.rows.map(p => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar_url,
+      isFriend: p.is_friend
     }));
 
     return res.status(200).json({
       success: true,
-      data: friends
+      data: participants
     });
 
   } catch (error) {

@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Heart, Share } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { getActivityPhoto } from '@/utils/activityPhotos';
-import FriendsGoingOverlay, { Friend } from './FriendsGoingOverlay';
+import FriendsGoingOverlay, { Participant } from './FriendsGoingOverlay';
 
 interface TokiHeaderProps {
   toki: {
@@ -18,7 +18,7 @@ interface TokiHeaderProps {
   onSaveToggle: () => void;
   onShare: () => void;
   onBack: () => void;
-  friendsAttending?: Friend[];
+  friendsAttending?: Participant[];
   onFriendsPress?: () => void;
 }
 

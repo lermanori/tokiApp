@@ -1,14 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
-export interface Friend {
+export interface Participant {
   id: string;
   name: string;
   avatar?: string;
+  isFriend?: boolean;
 }
 
 interface FriendsGoingOverlayProps {
-  friends: Friend[];
+  friends: Participant[];
   onPress?: () => void;
 }
 
@@ -25,8 +26,12 @@ const FriendsGoingOverlay: React.FC<FriendsGoingOverlayProps> = ({ friends, onPr
     return null;
   }
 
-  const displayFriends = friends.slice(0, 3);
-  const remainingCount = friends.length - displayFriends.length;
+  const displayParticipants = friends.slice(0, 3);
+  const remainingCount = friends.length - displayParticipants.length;
+  
+  // Check if we should show "friends" or "joined" label
+  // If there's at least one friend in the list, we treat it as a "friends going" overlay
+  const hasFriends = friends.some(p => p.isFriend);
 
   const Container = onPress ? TouchableOpacity : View;
 
@@ -37,24 +42,24 @@ const FriendsGoingOverlay: React.FC<FriendsGoingOverlayProps> = ({ friends, onPr
       activeOpacity={onPress ? 0.7 : 1}
     >
       <View style={styles.avatarsContainer}>
-        {displayFriends.map((friend, index) => (
+        {displayParticipants.map((participant, index) => (
           <View
-            key={friend.id}
+            key={participant.id}
             style={[
               styles.avatarWrapper,
-              { zIndex: displayFriends.length - index },
+              { zIndex: displayParticipants.length - index },
               index > 0 && styles.overlappingAvatar
             ]}
           >
-            {friend.avatar ? (
+            {participant.avatar ? (
               <Image
-                source={{ uri: friend.avatar }}
+                source={{ uri: participant.avatar }}
                 style={styles.avatar}
               />
             ) : (
               <View style={[styles.avatar, styles.fallbackAvatar]}>
                 <Text style={styles.fallbackInitials}>
-                  {getInitials(friend.name)}
+                  {getInitials(participant.name)}
                 </Text>
               </View>
             )}
@@ -62,11 +67,19 @@ const FriendsGoingOverlay: React.FC<FriendsGoingOverlayProps> = ({ friends, onPr
         ))}
       </View>
       <Text style={styles.text}>
-        {remainingCount > 0
-          ? `+${remainingCount} friend${remainingCount !== 1 ? 's are' : ' is'} going`
-          : friends.length === 1
-          ? '1 friend is going'
-          : `${friends.length} friends are going`}
+        {hasFriends ? (
+          remainingCount > 0
+            ? `+${remainingCount} friend${remainingCount !== 1 ? 's are' : ' is'} going`
+            : friends.length === 1
+            ? '1 friend is going'
+            : `${friends.length} friends are going`
+        ) : (
+          remainingCount > 0
+            ? `+${remainingCount} people are going`
+            : friends.length === 1
+            ? '1 person is going'
+            : `${friends.length} people are going`
+        )}
       </Text>
     </Container>
   );

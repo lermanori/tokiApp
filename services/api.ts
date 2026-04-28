@@ -1157,8 +1157,8 @@ class ApiService {
     return response.data;
   }
 
-  async getFriendsAttendingToki(tokiId: string): Promise<Array<{ id: string; name: string; avatar?: string }>> {
-    const response = await this.makeRequest<{ success: boolean; data: Array<{ id: string; name: string; avatar?: string }> }>(
+  async getFriendsAttendingToki(tokiId: string): Promise<Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }>> {
+    const response = await this.makeRequest<{ success: boolean; data: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }> }>(
       `/tokis/${tokiId}/friends-attending`
     );
     return response.data;
