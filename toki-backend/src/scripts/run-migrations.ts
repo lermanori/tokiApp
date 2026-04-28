@@ -348,6 +348,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 20: Boost monetization tables
+    try {
+      console.log('📝 Migration 20: Creating boost monetization tables...');
+      const boostTablesSql = readFileSync(
+        join(sqlDir, 'create-boost-tables.sql'),
+        'utf-8'
+      );
+      await pool.query(boostTablesSql);
+      console.log('✅ Boost monetization tables migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Boost monetization tables already exist, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

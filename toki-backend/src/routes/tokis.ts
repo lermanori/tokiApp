@@ -797,6 +797,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
             ? parseFloat(row.distance_km)
             : row.distance_km ?? undefined,
         host_id: row.host_id,
+        is_boosted: row.is_boosted || false,
       }));
 
       const algorithm = AlgorithmFactory.getAlgorithm('weighted-recommendation');
@@ -996,7 +997,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
       algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null,
-      friendsAttending: friendsMap.get(row.id) || []
+      friendsAttending: friendsMap.get(row.id) || [],
+      isBoosted: row.is_boosted || false,
+      boostId: row.active_boost_id || null,
     }));
 
     return res.status(200).json({
@@ -1283,6 +1286,7 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
             ? parseFloat(row.distance_km)
             : row.distance_km ?? undefined,
         host_id: row.host_id,
+        is_boosted: row.is_boosted || false,
       }));
 
       const algorithm = AlgorithmFactory.getAlgorithm('weighted-recommendation');
@@ -1386,7 +1390,9 @@ router.get('/nearby', optionalAuth, async (req: Request, res: Response) => {
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
       algorithmScore: scoreMap.size > 0 ? scoreMap.get(row.id) ?? null : null,
-      friendsAttending: friendsMap.get(row.id) || []
+      friendsAttending: friendsMap.get(row.id) || [],
+      isBoosted: row.is_boosted || false,
+      boostId: row.active_boost_id || null,
     }));
 
     const totalPages = Math.ceil(totalCount / limitNum);
@@ -1545,6 +1551,8 @@ router.get('/my-tokis', authenticateToken, async (req: Request, res: Response) =
       joinStatus: row.join_status || 'not_joined',
       is_saved: row.is_saved || false,
       isPaid: row.is_paid || false,
+      isBoosted: row.is_boosted || false,
+      boostId: row.active_boost_id || null,
       externalLink: row.external_link || null,
     }));
 
@@ -1737,6 +1745,8 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
       joinStatus: joinStatus,
       is_saved: toki.is_saved || false,
       isPaid: toki.is_paid || false,
+      isBoosted: toki.is_boosted || false,
+      boostId: toki.active_boost_id || null,
       participants: participantsResult.rows.map(p => ({
         id: p.id,
         name: p.name,

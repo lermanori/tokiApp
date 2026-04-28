@@ -1727,6 +1727,97 @@ class ApiService {
     const response = await this.makeRequest('/reports/my-reports');
     return response;
   }
+
+  // ─── Boost Methods ─────────────────────────────────────────────────────────
+
+  async getBoostTiers(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/boosts/tiers');
+    return response.data;
+  }
+
+  async purchaseBoost(params: {
+    tierId: string;
+    tokiId?: string;
+    paymentReference?: string;
+    paymentAmount?: number;
+    paymentCurrency?: string;
+  }): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>('/boosts/purchase', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return response.data;
+  }
+
+  async activateBoost(boostId: string, params?: { tokiId?: string; hours?: number }): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/activate`, {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    });
+    return response.data;
+  }
+
+  async deactivateBoost(boostId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/deactivate`, {
+      method: 'POST',
+    });
+    return response.data;
+  }
+
+  async getBoostStatus(boostId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/status`);
+    return response.data;
+  }
+
+  async getMyBoosts(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/boosts/my-boosts');
+    return response.data;
+  }
+
+  // ─── Insights Methods ──────────────────────────────────────────────────────
+
+  async getRealtimeInsights(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/realtime`);
+    return response.data;
+  }
+
+  async getConversionReport(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/conversion`);
+    return response.data;
+  }
+
+  async getFullInsights(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/full`);
+    return response.data;
+  }
+
+  async trackEngagement(tokiId: string, eventType: 'view' | 'open' | 'save' | 'join_request' | 'chat_join'): Promise<void> {
+    await this.makeRequest(`/insights/${tokiId}/track`, {
+      method: 'POST',
+      body: JSON.stringify({ eventType }),
+    });
+  }
+
+  // ─── Did You Go Methods ────────────────────────────────────────────────────
+
+  async getPendingDidYouGo(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/did-you-go/pending');
+    return response.data;
+  }
+
+  async respondDidYouGo(tokiId: string, response: boolean): Promise<any> {
+    const result = await this.makeRequest<{ success: boolean; message: string }>(`/did-you-go/${tokiId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ response }),
+    });
+    return result;
+  }
+
+  async markDidYouGoShown(tokiId: string): Promise<void> {
+    await this.makeRequest(`/did-you-go/${tokiId}/mark-shown`, {
+      method: 'POST',
+    });
+  }
 }
 
 // Export singleton instance

@@ -101,6 +101,11 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
     const newEventScore = this.calculateNewEventScore(event);
     score += weights.w_new * newEventScore;
 
+    // Boost priority: boosted Tokis get a large bonus to guarantee top placement
+    if (event.is_boosted) {
+      score += 10;
+    }
+
     return score;
   }
 

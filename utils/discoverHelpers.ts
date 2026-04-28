@@ -51,6 +51,8 @@ export const transformTokiToEvent = (toki: any): TokiEvent => {
     createdAt: toki.createdAt,
     friendsGoing: toki.friendsGoing || [],
     isPaid: toki.isPaid || false,
+    isBoosted: toki.isBoosted || false,
+    boostId: toki.boostId || undefined,
   };
 };
 
