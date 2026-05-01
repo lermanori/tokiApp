@@ -7,7 +7,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import TokiForm from '@/components/TokiForm';
 import { apiService } from '@/services/api';
-import { getBackendUrl } from '@/services/config';
 import ErrorModal from '@/components/ErrorModal';
 import { parseApiError } from '@/utils/parseApiError';
 
@@ -33,16 +32,7 @@ export default function EditTokiScreen() {
 
   const loadTokiData = async () => {
     try {
-      const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
-        headers: {
-          'Authorization': `Bearer ${apiService.getAccessToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const toki = data.data;
+      const toki: any = await apiService.getToki(tokiId as string);
         
         console.log('Loaded Toki data:', toki);
         
@@ -81,13 +71,10 @@ export default function EditTokiScreen() {
         console.log('🖼️ [EDIT TOKI] Setting initial data:', initialDataObj);
         console.log('🖼️ [EDIT TOKI] Images data:', initialDataObj.images);
         setInitialData(initialDataObj);
-      } else {
-        Alert.alert('Error', 'Failed to load Toki data');
-        router.back();
-      }
     } catch (error) {
       console.error('Error loading Toki data:', error);
-      Alert.alert('Error', 'Failed to load Toki data');
+      const message = error instanceof Error ? error.message : 'Failed to load Toki data';
+      Alert.alert('Error', message);
       router.back();
     }
   };

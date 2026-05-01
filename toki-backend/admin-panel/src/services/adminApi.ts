@@ -449,10 +449,18 @@ export const adminApi = {
   getTokenDebug: async (userId: string) => {
     return makeRequest(`/token-debug/${userId}`);
   },
+  issueTokenDebugSession: async (data: { accessExpiresIn: string; refreshExpiresIn: string }) => {
+    return makeRequest('/token-debug/issue', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+  probeTokenDebug: async () => {
+    return makeRequest('/token-debug-probe');
+  },
 
   // Auth check
   me: async () => {
     return makeRequest('/me');
   }
 };
-

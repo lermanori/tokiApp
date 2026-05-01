@@ -15,7 +15,6 @@ import FriendsGoingOverlay from '@/components/FriendsGoingOverlay';
 import ReportModal from '@/components/ReportModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import { apiService } from '@/services/api';
-import { getBackendUrl } from '@/services/config';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions, generateInviteLinkUrl } from '@/utils/tokiUrls';
 import { formatDistanceDisplay, calculateDistance } from '@/utils/distance';
@@ -192,6 +191,7 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
 export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams();
+  const hasTrackedView = useRef(false);
 
   // Fallback to read URL parameters directly (for web deep linking)
   const getUrlParams = () => {
@@ -337,16 +337,7 @@ export default function TokiDetailsScreen() {
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Loading toki data for:', tokiId, `(attempt ${retryCount + 1})`);
     setIsLoading(true);
     try {
-      const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
-        headers: {
-          'Authorization': `Bearer ${apiService.getAccessToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const tokiData = data.data;
+      const tokiData: any = await apiService.getToki(tokiId);
 
         // Fetch friends attending data BEFORE creating transformedToki
         let friendsAttending: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }> = [];
@@ -444,16 +435,6 @@ export default function TokiDetailsScreen() {
             loadTokiData(tokiId, retryCount + 1);
           }, 2000);
         }
-      } else {
-        console.error('❌ [FLOW DEBUG] [TOKI DETAILS] Failed to load Toki data, status:', response.status);
-        // Fallback to predefined data
-        const fallbackData = tokiDetailsMap[tokiId];
-        if (fallbackData) {
-          setToki(fallbackData);
-          // Check saved status for fallback data too
-          checkSavedStatus();
-        }
-      }
     } catch (error) {
       console.error('Error loading Toki data:', error);
       // Fallback to predefined data
@@ -515,6 +496,16 @@ export default function TokiDetailsScreen() {
       console.log('🚨 [FLOW DEBUG] [TOKI DETAILS] This is why we might be seeing explore page instead');
     }
   }, [effectiveParams.tokiId, state.currentUser?.id]);
+
+  // Track view once per mount/tokiId
+  useEffect(() => {
+    const tokiId = effectiveParams.tokiId as string;
+    if (tokiId && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      console.log('📊 [TOKI DETAILS] Recording view for analytics:', tokiId);
+      actions.viewToki(tokiId);
+    }
+  }, [effectiveParams.tokiId]);
 
   // Force reload when coming from create (works on all platforms)
   useEffect(() => {
@@ -939,15 +930,9 @@ export default function TokiDetailsScreen() {
 
     setIsRemovingParticipant(true);
     try {
-      const response = await fetch(`${getBackendUrl()}/api/tokis/${toki.id}/participants/${participantId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${await apiService.getAccessToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await apiService.removeParticipant(toki.id, participantId);
 
-      if (response.ok) {
+      if (response.success) {
         // Remove participant from local state
         setToki(prev => {
           if (!prev) return prev;
@@ -964,11 +949,10 @@ export default function TokiDetailsScreen() {
           text2: 'The participant has been removed from the event'
         });
       } else {
-        const errorData = await response.json();
         Toast.show({
           type: 'error',
           text1: 'Error',
-          text2: errorData.message || 'Failed to remove participant'
+          text2: response.message || 'Failed to remove participant'
         });
       }
     } catch (error) {

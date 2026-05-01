@@ -1,6 +1,12 @@
 // API Configuration
 import { Platform } from 'react-native';
 import { getBackendUrl } from './config';
+import {
+  getAuthSessionMaxAgeMs,
+  parseStoredAuthSession,
+  serializeAuthSession,
+} from './authSession';
+import { performRequestWithRefresh } from './authRequest';
 
 const API_BASE_URL = `${getBackendUrl()}/api`;
 
@@ -231,6 +237,8 @@ export interface OAuthResponse {
 class ApiService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private initializePromise: Promise<void> | null = null;
+  private isInitialized = false;
   private authCache: { isValid: boolean; timestamp: number } | null = null;
   private readonly AUTH_CACHE_DURATION = 30000; // 30 seconds
   private userCache: {
@@ -246,24 +254,49 @@ class ApiService {
 
   // Initialize the service - call this after the service is created
   async initialize() {
-    await this.loadTokens();
+    if (this.isInitialized) {
+      return;
+    }
+
+    if (!this.initializePromise) {
+      this.initializePromise = this.loadTokens()
+        .finally(() => {
+          this.isInitialized = true;
+        });
+    }
+
+    await this.initializePromise;
   }
 
   private async loadTokens() {
     try {
       console.debug('🔍 [API] Attempting to load stored tokens...');
-      const tokens = await AsyncStorage.getItem('auth_tokens');
-      console.debug('🔍 [API] Raw tokens from storage:', tokens);
+      const rawSession = await AsyncStorage.getItem('auth_tokens');
+      console.debug('🔍 [API] Raw tokens from storage:', rawSession);
 
-      if (tokens) {
-        const { accessToken, refreshToken } = JSON.parse(tokens);
+      const maxAgeMs = getAuthSessionMaxAgeMs(process?.env?.EXPO_PUBLIC_AUTH_SESSION_MAX_AGE_MS);
+      const parsedSession = parseStoredAuthSession(rawSession, { maxAgeMs });
+
+      if (parsedSession.status === 'valid') {
+        const { accessToken, refreshToken } = parsedSession.session;
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
         console.debug('✅ [API] Tokens loaded successfully:', {
           hasAccessToken: !!accessToken,
           hasRefreshToken: !!refreshToken,
-          accessTokenLength: accessToken?.length || 0
+          accessTokenLength: accessToken?.length || 0,
+          sessionMaxAgeMs: maxAgeMs,
         });
+      } else if (parsedSession.status === 'expired') {
+        console.info('⌛ [API] Stored session expired, clearing persisted tokens');
+        await AsyncStorage.removeItem('auth_tokens');
+        this.accessToken = null;
+        this.refreshToken = null;
+      } else if (parsedSession.status === 'invalid') {
+        console.warn('⚠️ [API] Stored session was invalid, clearing persisted tokens');
+        await AsyncStorage.removeItem('auth_tokens');
+        this.accessToken = null;
+        this.refreshToken = null;
       } else {
         console.info('⚠️ [API] No tokens found in storage');
       }
@@ -278,7 +311,7 @@ class ApiService {
       this.refreshToken = refreshToken;
       this.authCache = null; // Clear auth cache when tokens change
       this.userCache = null; // Clear user cache when tokens change (new login = new user data)
-      await AsyncStorage.setItem('auth_tokens', JSON.stringify({ accessToken, refreshToken }));
+      await AsyncStorage.setItem('auth_tokens', serializeAuthSession({ accessToken, refreshToken }));
       console.log('💾 Tokens saved successfully');
     } catch (error) {
       console.error('Error saving tokens:', error);
@@ -336,44 +369,22 @@ class ApiService {
     };
 
     try {
-      const response = await fetch(url, config);
-      const data = await response.json();
+      const result = await performRequestWithRefresh<T>({
+        url,
+        requestInit: config,
+        refreshToken: this.refreshToken,
+        refreshUrl: `${API_BASE_URL}/auth/refresh`,
+        fetchImpl: fetch,
+        getHeaders: () => this.getHeaders(),
+        saveTokens: (accessToken, refreshToken) => this.saveTokens(accessToken, refreshToken),
+        clearTokens: () => this.clearTokens(),
+      });
 
-      if (!response.ok) {
-        console.error(`❌ [API] Request failed: ${response.status} ${response.statusText}`);
-
-        if (response.status === 401 && this.refreshToken) {
-          console.info('🔄 [API] Attempting token refresh...');
-          // Try to refresh token
-          const refreshed = await this.refreshAccessToken();
-          if (refreshed) {
-            console.info('✅ [API] Token refresh successful, retrying request...');
-            // Retry the original request
-            config.headers = this.getHeaders();
-            const retryResponse = await fetch(url, config);
-            const retryData = await retryResponse.json();
-
-            if (!retryResponse.ok) {
-              console.error(`❌ [API] Retry request failed: ${retryResponse.status}`);
-              throw new Error(retryData.message || 'Request failed after token refresh');
-            }
-            return retryData;
-          } else {
-            console.error('❌ [API] Token refresh failed or skipped');
-            // refreshAccessToken already handles clearing tokens on explicit 401/403
-            throw new Error('Authentication failed. Please log in again.');
-          }
-        }
-
-        // Create a more descriptive error message
-        const errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`;
-        const error = new Error(errorMessage);
-        (error as any).status = response.status;
-        (error as any).isAuthError = response.status === 401 || response.status === 403;
-        throw error;
+      if (result.didRefresh) {
+        console.info('✅ [API] Token refresh successful, retried request completed');
       }
 
-      return data;
+      return result.data;
     } catch (error) {
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);
       console.error(`❌ [API] Full URL attempted: ${url}`);
@@ -395,60 +406,6 @@ class ApiService {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
-  }
-
-  private async refreshAccessToken(): Promise<boolean> {
-    if (!this.refreshToken) return false;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: this.refreshToken }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        await this.saveTokens(data.data.tokens.accessToken, data.data.tokens.refreshToken);
-        return true;
-      }
-
-      // Only clear tokens if refresh token is actually invalid/expired (401)
-      // This means the refresh token itself is expired or invalid
-      if (response.status === 401) {
-        console.log('🗑️ [API] Refresh token expired or invalid, clearing tokens');
-        await this.clearTokens();
-        return false;
-      }
-
-      // For other HTTP errors, don't clear tokens - might be server issue
-      console.error('⚠️ [API] Token refresh failed with status:', response.status);
-      return false;
-    } catch (error) {
-      // Check if this is a network error (TypeError from fetch, or network-related message)
-      const isNetworkError = error instanceof TypeError ||
-        (error instanceof Error && (
-          error.message.includes('Network request failed') ||
-          error.message.includes('Failed to fetch') ||
-          error.message.includes('timeout') ||
-          error.message.includes('network') ||
-          error.message.includes('NetworkError')
-        ));
-
-      if (isNetworkError) {
-        console.error('⚠️ [API] Token refresh failed due to network error, keeping tokens:', error);
-        // Don't clear tokens on network errors - they might still be valid
-        // The user might just have poor connectivity
-        return false;
-      } else {
-        // For other errors (parsing, etc.), also don't clear tokens
-        // Only clear on confirmed auth failures
-        console.error('⚠️ [API] Token refresh failed with unexpected error, keeping tokens:', error);
-        return false;
-      }
-    }
   }
 
   // Authentication Methods
@@ -1164,6 +1121,14 @@ class ApiService {
     return response.data;
   }
 
+  async viewToki(tokiId: string): Promise<void> {
+    try {
+      await this.makeRequest(`/tokis/${tokiId}/view`, { method: 'POST' });
+    } catch (error) {
+      console.warn('Failed to record toki view:', error);
+    }
+  }
+
   async getPendingConnections(): Promise<PendingConnection[]> {
     const response = await this.makeRequest<{ success: boolean; data: PendingConnection[] }>('/connections/pending');
     return response.data;
@@ -1508,6 +1473,8 @@ class ApiService {
 
   // Utility Methods
   async isAuthenticated(): Promise<boolean> {
+    await this.initialize();
+
     if (!this.accessToken) {
       return false;
     }

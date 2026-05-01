@@ -9,6 +9,28 @@ interface TokenInfo {
     isExpired: boolean;
 }
 
+interface TokenConfig {
+    accessExpiresIn: string;
+    refreshExpiresIn: string;
+}
+
+interface UserInfo {
+    id: string;
+    name: string;
+    email: string;
+}
+
+interface ProbeStatus {
+    type: 'idle' | 'success' | 'refresh' | 'error';
+    message: string;
+    timestamp: Date | null;
+}
+
+const SHORT_DEMO_PRESET: TokenConfig = {
+    accessExpiresIn: '15s',
+    refreshExpiresIn: '2m',
+};
+
 function decodeJwtPayload(token: string): any | null {
     try {
         const parts = token.split('.');
@@ -180,25 +202,39 @@ function TokenCard({ label, info, color }: { label: string; info: TokenInfo; col
 export default function TokenDebugTab() {
     const [accessTokenInfo, setAccessTokenInfo] = useState<TokenInfo | null>(null);
     const [refreshTokenInfo, setRefreshTokenInfo] = useState<TokenInfo | null>(null);
-    const [tokenConfig, setTokenConfig] = useState<{ accessExpiresIn: string; refreshExpiresIn: string } | null>(null);
-    const [userInfo, setUserInfo] = useState<{ id: string; name: string; email: string } | null>(null);
+    const [serverTokenConfig, setServerTokenConfig] = useState<TokenConfig | null>(null);
+    const [activeTokenConfig, setActiveTokenConfig] = useState<TokenConfig | null>(null);
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [draftAccessExpiresIn, setDraftAccessExpiresIn] = useState(SHORT_DEMO_PRESET.accessExpiresIn);
+    const [draftRefreshExpiresIn, setDraftRefreshExpiresIn] = useState(SHORT_DEMO_PRESET.refreshExpiresIn);
+    const [isIssuingSession, setIsIssuingSession] = useState(false);
+    const [isRunningProbe, setIsRunningProbe] = useState(false);
+    const [probeStatus, setProbeStatus] = useState<ProbeStatus>({
+        type: 'idle',
+        message: 'Issue a short-lived access token, wait for it to expire, then run a protected request.',
+        timestamp: null,
+    });
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const decodeAndSetTokens = () => {
         const token = localStorage.getItem('admin_token');
         if (!token) {
             setError('No admin token found in localStorage');
+            setAccessTokenInfo(null);
+            setRefreshTokenInfo(null);
             return;
         }
 
         const payload = decodeJwtPayload(token);
         if (!payload || !payload.iat || !payload.exp) {
             setError('Failed to decode admin token');
+            setAccessTokenInfo(null);
             return;
         }
 
+        setError(null);
         setAccessTokenInfo(getTokenInfo(payload.iat, payload.exp));
         setUserInfo({ id: payload.id, name: payload.name, email: payload.email });
 
@@ -210,6 +246,8 @@ export default function TokenDebugTab() {
             if (refreshPayload && refreshPayload.iat && refreshPayload.exp) {
                 setRefreshTokenInfo(getTokenInfo(refreshPayload.iat, refreshPayload.exp));
             }
+        } else {
+            setRefreshTokenInfo(null);
         }
 
         setLastRefresh(new Date());
@@ -225,10 +263,97 @@ export default function TokenDebugTab() {
 
             const response = await adminApi.getTokenDebug(payload.id) as any;
             if (response.success && response.data) {
-                setTokenConfig(response.data.tokenConfig);
+                setServerTokenConfig(response.data.tokenConfig);
+                setActiveTokenConfig((current) => current || response.data.tokenConfig);
+                setUserInfo(response.data.user);
             }
         } catch (e: any) {
             console.error('Failed to load token config:', e);
+        }
+    };
+
+    const applyServerPreset = () => {
+        setDraftAccessExpiresIn(serverTokenConfig?.accessExpiresIn || '24h');
+        setDraftRefreshExpiresIn(serverTokenConfig?.refreshExpiresIn || '7d');
+    };
+
+    const applyShortPreset = () => {
+        setDraftAccessExpiresIn(SHORT_DEMO_PRESET.accessExpiresIn);
+        setDraftRefreshExpiresIn(SHORT_DEMO_PRESET.refreshExpiresIn);
+    };
+
+    const issueDebugSession = async () => {
+        setIsIssuingSession(true);
+        setError(null);
+        try {
+            const response = await adminApi.issueTokenDebugSession({
+                accessExpiresIn: draftAccessExpiresIn,
+                refreshExpiresIn: draftRefreshExpiresIn,
+            }) as any;
+
+            if (!response.success || !response.data?.tokens) {
+                throw new Error(response.message || 'Failed to issue debug tokens');
+            }
+
+            localStorage.setItem('admin_token', response.data.tokens.accessToken);
+            localStorage.setItem('admin_refresh_token', response.data.tokens.refreshToken);
+            setActiveTokenConfig(response.data.tokenConfig);
+            setUserInfo(response.data.user);
+            decodeAndSetTokens();
+            setProbeStatus({
+                type: 'success',
+                message: `Issued debug session with access ${response.data.tokenConfig.accessExpiresIn} and refresh ${response.data.tokenConfig.refreshExpiresIn}.`,
+                timestamp: new Date(),
+            });
+        } catch (e: any) {
+            const message = e?.message || 'Failed to issue debug tokens';
+            setError(message);
+            setProbeStatus({
+                type: 'error',
+                message,
+                timestamp: new Date(),
+            });
+        } finally {
+            setIsIssuingSession(false);
+        }
+    };
+
+    const runProtectedProbe = async () => {
+        setIsRunningProbe(true);
+        setError(null);
+        const previousAccessToken = localStorage.getItem('admin_token');
+
+        try {
+            const response = await adminApi.probeTokenDebug() as any;
+            const nextAccessToken = localStorage.getItem('admin_token');
+            const didRefresh = !!previousAccessToken && !!nextAccessToken && previousAccessToken !== nextAccessToken;
+
+            if (didRefresh && serverTokenConfig) {
+                setActiveTokenConfig(serverTokenConfig);
+            }
+
+            decodeAndSetTokens();
+
+            setProbeStatus({
+                type: didRefresh ? 'refresh' : 'success',
+                message: didRefresh
+                    ? 'Protected request succeeded and the access token was refreshed automatically.'
+                    : (accessTokenInfo?.isExpired
+                        ? 'Protected request succeeded, but the access token did not rotate as expected.'
+                        : (response.message || 'Protected request succeeded with the current access token.')),
+                timestamp: new Date(),
+            });
+        } catch (e: any) {
+            const message = e?.message || 'Protected request failed';
+            setError(message);
+            decodeAndSetTokens();
+            setProbeStatus({
+                type: 'error',
+                message,
+                timestamp: new Date(),
+            });
+        } finally {
+            setIsRunningProbe(false);
         }
     };
 
@@ -323,18 +448,94 @@ export default function TokenDebugTab() {
                             {userInfo.email} · <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#999' }}>{userInfo.id}</span>
                         </div>
                     </div>
-                    {tokenConfig && (
+                    {serverTokenConfig && (
                         <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px', fontFamily: 'var(--font-medium)' }}>
                                 Server Config
                             </div>
                             <div style={{ fontSize: '13px', color: '#666' }}>
-                                Access: <strong>{tokenConfig.accessExpiresIn}</strong> · Refresh: <strong>{tokenConfig.refreshExpiresIn}</strong>
+                                Access: <strong>{serverTokenConfig.accessExpiresIn}</strong> · Refresh: <strong>{serverTokenConfig.refreshExpiresIn}</strong>
                             </div>
                         </div>
                     )}
                 </div>
             )}
+
+            <div className="glass-card" style={{ padding: '20px 24px', marginBottom: '24px' }}>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '16px',
+                    marginBottom: '16px',
+                    flexWrap: 'wrap',
+                }}>
+                    <div>
+                        <div style={{ fontSize: '16px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '4px' }}>
+                            Refresh Demo Controls
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#666', maxWidth: '720px' }}>
+                            Pick either the real server config or a short demo pair, issue the tokens into this admin session, let the access token expire, then run a protected request to watch refresh take over.
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <ActionButton label="Use Server Config" onClick={applyServerPreset} tone="secondary" />
+                        <ActionButton label="Use Short Demo" onClick={applyShortPreset} tone="secondary" />
+                    </div>
+                </div>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '16px',
+                }}>
+                    <LabeledInput
+                        label="Access Token Duration"
+                        value={draftAccessExpiresIn}
+                        onChange={setDraftAccessExpiresIn}
+                        placeholder="15s"
+                    />
+                    <LabeledInput
+                        label="Refresh Token Duration"
+                        value={draftRefreshExpiresIn}
+                        onChange={setDraftRefreshExpiresIn}
+                        placeholder="2m"
+                    />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                    <ActionButton
+                        label={isIssuingSession ? 'Issuing…' : 'Issue Debug Tokens'}
+                        onClick={issueDebugSession}
+                        disabled={isIssuingSession || !draftAccessExpiresIn || !draftRefreshExpiresIn}
+                    />
+                    <ActionButton
+                        label={isRunningProbe ? 'Running Request…' : 'Run Protected Request'}
+                        onClick={runProtectedProbe}
+                        disabled={isRunningProbe}
+                        tone="secondary"
+                    />
+                </div>
+
+                <div style={{
+                    padding: '14px 16px',
+                    borderRadius: '14px',
+                    border: `1px solid ${getStatusTone(probeStatus.type).border}`,
+                    background: getStatusTone(probeStatus.type).background,
+                    color: getStatusTone(probeStatus.type).text,
+                }}>
+                    <div style={{ fontSize: '13px', fontFamily: 'var(--font-semi)', marginBottom: '4px' }}>
+                        Last protected-request result
+                    </div>
+                    <div style={{ fontSize: '14px' }}>{probeStatus.message}</div>
+                    {probeStatus.timestamp && (
+                        <div style={{ fontSize: '12px', color: '#777', marginTop: '6px' }}>
+                            {probeStatus.timestamp.toLocaleTimeString()}
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* Token Cards */}
             <div style={{
@@ -372,20 +573,128 @@ export default function TokenDebugTab() {
                     />
                     <StatMini
                         label="Access Expiry Duration"
-                        value={tokenConfig?.accessExpiresIn || '24h'}
+                        value={activeTokenConfig?.accessExpiresIn || '24h'}
                     />
                     <StatMini
                         label="Refresh Expiry Duration"
-                        value={tokenConfig?.refreshExpiresIn || '7d'}
+                        value={activeTokenConfig?.refreshExpiresIn || '7d'}
                     />
                     <StatMini
-                        label="Token Age"
-                        value={formatDuration(accessTokenInfo.timeAliveMs)}
+                        label="Refresh Demo Preset"
+                        value={`${SHORT_DEMO_PRESET.accessExpiresIn} / ${SHORT_DEMO_PRESET.refreshExpiresIn}`}
                     />
                 </div>
             )}
         </div>
     );
+}
+
+function ActionButton({
+    label,
+    onClick,
+    disabled,
+    tone = 'primary',
+}: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    tone?: 'primary' | 'secondary';
+}) {
+    const isPrimary = tone === 'primary';
+
+    return (
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            style={{
+                border: 'none',
+                borderRadius: '999px',
+                padding: '10px 16px',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                fontFamily: 'var(--font-semi)',
+                fontSize: '13px',
+                background: disabled
+                    ? 'rgba(156, 163, 175, 0.25)'
+                    : isPrimary
+                        ? 'linear-gradient(135deg, #8B5CF6, #7C3AED)'
+                        : 'rgba(139, 92, 246, 0.08)',
+                color: disabled
+                    ? '#999'
+                    : isPrimary
+                        ? '#FFF'
+                        : '#6D28D9',
+                boxShadow: isPrimary && !disabled ? '0 12px 24px rgba(139, 92, 246, 0.22)' : 'none',
+            }}
+        >
+            {label}
+        </button>
+    );
+}
+
+function LabeledInput({
+    label,
+    value,
+    onChange,
+    placeholder,
+}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+}) {
+    return (
+        <label style={{ display: 'block' }}>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px', fontFamily: 'var(--font-medium)' }}>
+                {label}
+            </div>
+            <input
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                style={{
+                    width: '100%',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(139, 92, 246, 0.15)',
+                    padding: '12px 14px',
+                    fontSize: '14px',
+                    fontFamily: 'var(--font-semi)',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    color: '#1C1C1C',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                }}
+            />
+        </label>
+    );
+}
+
+function getStatusTone(type: ProbeStatus['type']) {
+    switch (type) {
+        case 'refresh':
+            return {
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: 'rgba(16, 185, 129, 0.25)',
+                text: '#047857',
+            };
+        case 'error':
+            return {
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: 'rgba(239, 68, 68, 0.22)',
+                text: '#B91C1C',
+            };
+        case 'success':
+            return {
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: 'rgba(59, 130, 246, 0.2)',
+                text: '#1D4ED8',
+            };
+        default:
+            return {
+                background: 'rgba(139, 92, 246, 0.08)',
+                border: 'rgba(139, 92, 246, 0.2)',
+                text: '#6D28D9',
+            };
+    }
 }
 
 function StatMini({ label, value }: { label: string; value: string }) {

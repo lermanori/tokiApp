@@ -5,8 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Search, MessageCircle, UserPlus, Calendar, RefreshCw, AlertTriangle, UserX, UserCheck, MapPin, Users } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
-import { apiService } from '@/services/api';
-import { getBackendUrl } from '@/services/config';
 
 // Helper function to get user initials from name
 const getUserInitials = (name: string): string => {
@@ -403,31 +401,11 @@ export default function ConnectionsScreen() {
     
     try {
       console.log('🚫 [BLOCK] Proceeding with block...');
-      
-      const backendUrl = getBackendUrl();
-      const accessToken = apiService.getAccessToken();
-      
-      console.log('🚫 [BLOCK] Backend URL:', backendUrl);
-      console.log('🚫 [BLOCK] Access Token exists:', !!accessToken);
-      console.log('🚫 [BLOCK] Making request to:', `${backendUrl}/api/blocks/users/${selectedUser.id}`);
-      
-      const response = await fetch(`${backendUrl}/api/blocks/users/${selectedUser.id}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          reason: 'User requested block'
-        })
-      });
-      
-      console.log('🚫 [BLOCK] Response status:', response.status);
-      console.log('🚫 [BLOCK] Response ok:', response.ok);
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('🚫 [BLOCK] Success response:', responseData);
+
+      const success = await actions.blockUser(selectedUser.id, 'User requested block');
+      console.log('🚫 [BLOCK] Success result:', success);
+
+      if (success) {
         
         // Show success message with instant content removal confirmation
         Alert.alert(
@@ -447,9 +425,7 @@ export default function ConnectionsScreen() {
         
         console.log('🚫 [BLOCK] All data refreshed successfully');
       } else {
-        const errorData = await response.text();
-        console.log('🚫 [BLOCK] Error response:', errorData);
-        console.log('🚫 [BLOCK] Block failed with status:', response.status);
+        console.log('🚫 [BLOCK] Block failed with unsuccessful result');
         Alert.alert('Error', 'Failed to block user. Please try again.');
       }
     } catch (error) {
@@ -473,27 +449,10 @@ export default function ConnectionsScreen() {
     console.log('🔓 [UNBLOCK] Starting unblock process for:', selectedUser.name, 'ID:', selectedUser.id);
     
     try {
-      const backendUrl = getBackendUrl();
-      const accessToken = apiService.getAccessToken();
-      
-      console.log('🔓 [UNBLOCK] Backend URL:', backendUrl);
-      console.log('🔓 [UNBLOCK] Access Token exists:', !!accessToken);
-      console.log('🔓 [UNBLOCK] Making request to:', `${backendUrl}/api/blocks/users/${selectedUser.id}`);
-      
-      const response = await fetch(`${backendUrl}/api/blocks/users/${selectedUser.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('🔓 [UNBLOCK] Response status:', response.status);
-      console.log('🔓 [UNBLOCK] Response ok:', response.ok);
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log('🔓 [UNBLOCK] Success response:', responseData);
+      const success = await actions.unblockUser(selectedUser.id);
+      console.log('🔓 [UNBLOCK] Success result:', success);
+
+      if (success) {
         console.log('🔓 [UNBLOCK] Unblock successful! Reloading data...');
         
         await loadConnections();
@@ -501,9 +460,7 @@ export default function ConnectionsScreen() {
         
         console.log('🔓 [UNBLOCK] Data reloaded successfully');
       } else {
-        const errorData = await response.text();
-        console.log('🔓 [UNBLOCK] Error response:', errorData);
-        console.log('🔓 [UNBLOCK] Unblock failed with status:', response.status);
+        console.log('🔓 [UNBLOCK] Unblock failed with unsuccessful result');
       }
     } catch (error) {
       console.error('🔓 [UNBLOCK] Exception error:', error);

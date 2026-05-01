@@ -772,35 +772,6 @@ router.get('/waitlist', authenticateToken, requireAdmin, async (req: Request, re
 });
 
 // Get single waitlist entry
-router.get('/waitlist/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      'SELECT id, email, phone, location, reason, platform, created_at FROM waitlist_signups WHERE id = $1',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Waitlist entry not found'
-      });
-    }
-
-    return res.json({
-      success: true,
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error fetching waitlist entry:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch waitlist entry'
-    });
-  }
-});
-
 // Get waitlist statistics
 router.get('/waitlist/stats', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -849,6 +820,35 @@ router.get('/waitlist/stats', authenticateToken, requireAdmin, async (req: Reque
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch waitlist statistics'
+    });
+  }
+});
+
+router.get('/waitlist/:id', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT id, email, phone, location, reason, platform, created_at FROM waitlist_signups WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Waitlist entry not found'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error fetching waitlist entry:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch waitlist entry'
     });
   }
 });
@@ -2027,8 +2027,8 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // Determine grouping granularity: use hour for <= 72 hours (3 days), day for longer
     const groupByHour = hoursNum <= 72;
     // Use created_at from activity logs (not updated_at from users)
-    const dateGroupExpr = groupByHour ? "DATE_TRUNC('hour', created_at)" : "DATE(created_at)";
-    const dateGroupExprCreated = groupByHour ? "DATE_TRUNC('hour', created_at)" : "DATE(created_at)";
+    // Granville expression helper
+    const getDateGroupExpr = (col: string) => groupByHour ? `DATE_TRUNC('hour', ${col})` : `DATE(${col})`;
 
     // Generate start time
     const startTime = new Date();
@@ -2038,12 +2038,12 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // 1. Active Users (users who connected via WebSocket per hour or day)
     const activeUsersResult = await pool.query(
       `SELECT 
-        ${dateGroupExpr} as date, 
+        ${getDateGroupExpr('created_at')} as date, 
         COUNT(DISTINCT user_id) as count
       FROM user_activity_logs 
       WHERE event_type = 'connect' 
         AND created_at >= $1
-      GROUP BY ${dateGroupExpr}
+      GROUP BY ${getDateGroupExpr('created_at')}
       ORDER BY date ASC`,
       [startTimeStr]
     );
@@ -2059,10 +2059,10 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // Then get counts per period and calculate cumulative
     const totalAccountsResult = await pool.query(
       `WITH period_counts AS (
-        SELECT ${dateGroupExprCreated} as date, COUNT(*) as count
+        SELECT ${getDateGroupExpr('created_at')} as date, COUNT(*) as count
         FROM users
         WHERE created_at >= $1
-        GROUP BY ${dateGroupExprCreated}
+        GROUP BY ${getDateGroupExpr('created_at')}
       )
       SELECT 
         date,
@@ -2075,12 +2075,12 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // 3. Unique Logins (actual login events per hour or day)
     const uniqueLoginsResult = await pool.query(
       `SELECT 
-        ${dateGroupExpr} as date,
+        ${getDateGroupExpr('created_at')} as date,
         COUNT(DISTINCT user_id) as count
       FROM user_activity_logs
       WHERE event_type = 'login'
         AND created_at >= $1
-      GROUP BY ${dateGroupExpr}
+      GROUP BY ${getDateGroupExpr('created_at')}
       ORDER BY date ASC`,
       [startTimeStr]
     );
@@ -2088,13 +2088,51 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     // 4. Tokis Created (per hour or day)
     const tokisCreatedResult = await pool.query(
       `SELECT 
-        ${dateGroupExprCreated} as date,
+        ${getDateGroupExpr('created_at')} as date,
         COUNT(*) as count
       FROM tokis
       WHERE created_at >= $1
-      GROUP BY ${dateGroupExprCreated}
+      GROUP BY ${getDateGroupExpr('created_at')}
       ORDER BY date ASC`,
       [startTimeStr]
+    );
+
+    // 5. Join Requests (per hour or day)
+    const joinRequestsResult = await pool.query(
+      `SELECT 
+        ${getDateGroupExpr('joined_at')} as date,
+        COUNT(*) as count
+      FROM toki_participants
+      WHERE joined_at >= $1
+      GROUP BY ${getDateGroupExpr('joined_at')}
+      ORDER BY date ASC`,
+      [startTimeStr]
+    );
+
+    // 6. Total Views (per hour or day)
+    const totalViewsResult = await pool.query(
+      `SELECT 
+        ${getDateGroupExpr('viewed_at')} as date,
+        COUNT(*) as count
+      FROM toki_views
+      WHERE viewed_at >= $1
+      GROUP BY ${getDateGroupExpr('viewed_at')}
+      ORDER BY date ASC`,
+      [startTimeStr]
+    );
+
+    // 7. Top 30 Viewed Tokis
+    const topViewedTokisResult = await pool.query(
+      `SELECT 
+        t.id,
+        t.title,
+        COUNT(v.id) as view_count
+      FROM tokis t
+      LEFT JOIN toki_views v ON t.id = v.toki_id
+      WHERE t.status = 'active'
+      GROUP BY t.id, t.title
+      ORDER BY view_count DESC
+      LIMIT 30`
     );
 
     // Get current summary stats
@@ -2183,10 +2221,18 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
       return [dateKey, parseInt(r.count)];
     }));
+    const joinRequestsMap = new Map(joinRequestsResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.count)];
+    }));
+    const totalViewsMap = new Map(totalViewsResult.rows.map((r: any) => {
+      const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
+      return [dateKey, parseInt(r.count)];
+    }));
 
     // Get all unique dates/times
     const allDates = new Set<string>();
-    [activeUsersResult.rows, totalAccountsResult.rows, uniqueLoginsResult.rows, tokisCreatedResult.rows].forEach(rows => {
+    [activeUsersResult.rows, totalAccountsResult.rows, uniqueLoginsResult.rows, tokisCreatedResult.rows, joinRequestsResult.rows, totalViewsResult.rows].forEach(rows => {
       rows.forEach((r: any) => {
         const dateKey = r.date instanceof Date ? r.date.toISOString() : String(r.date);
         allDates.add(dateKey);
@@ -2213,7 +2259,9 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
           activeUsers: 0,
           totalAccounts: totalBefore,
           uniqueLoginsToday: 0,
-          tokisCreatedToday: 0
+          tokisCreatedToday: 0,
+          joinRequestsToday: 0,
+          totalViewsToday: 0
         });
       }
     } else {
@@ -2225,13 +2273,17 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
         lastTotalAccounts = totalAccounts; // Track cumulative
         const uniqueLoginsToday = uniqueLoginsMap.get(dateStr) || 0;
         const tokisCreatedToday = tokisCreatedMap.get(dateStr) || 0;
+        const joinRequestsToday = joinRequestsMap.get(dateStr) || 0;
+        const totalViewsToday = totalViewsMap.get(dateStr) || 0;
 
         timeSeries.push({
           date: dateStr,
           activeUsers,
           totalAccounts,
           uniqueLoginsToday,
-          tokisCreatedToday
+          tokisCreatedToday,
+          joinRequestsToday,
+          totalViewsToday
         });
       }
     }
@@ -2250,7 +2302,8 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       data: {
         timeSeries,
         summary,
-        platformStats: platformStatsResult.rows
+        platformStats: platformStatsResult.rows,
+        topViewedTokis: topViewedTokisResult.rows
       }
     });
     return;
@@ -3357,6 +3410,84 @@ router.get('/token-debug/:userId', authenticateToken, requireAdmin, async (req: 
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch token debug info'
+    });
+  }
+});
+
+router.post('/token-debug/issue', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const accessExpiresIn = typeof req.body?.accessExpiresIn === 'string' && req.body.accessExpiresIn.trim()
+      ? req.body.accessExpiresIn.trim()
+      : (process.env.JWT_EXPIRES_IN || '24h');
+    const refreshExpiresIn = typeof req.body?.refreshExpiresIn === 'string' && req.body.refreshExpiresIn.trim()
+      ? req.body.refreshExpiresIn.trim()
+      : (process.env.JWT_REFRESH_EXPIRES_IN || '7d');
+
+    const userId = req.user!.id;
+    const userResult = await pool.query(
+      'SELECT id, email, name, role FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+    const tokens = generateTokenPair(
+      { id: user.id, email: user.email, name: user.name },
+      { accessExpiresIn, refreshExpiresIn }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Debug token pair issued',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role
+        },
+        tokenConfig: {
+          accessExpiresIn,
+          refreshExpiresIn
+        },
+        tokens,
+        serverTime: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error issuing debug tokens:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to issue debug tokens'
+    });
+  }
+});
+
+router.get('/token-debug-probe', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    return res.json({
+      success: true,
+      message: 'Protected request succeeded',
+      data: {
+        user: {
+          id: req.user!.id,
+          email: req.user!.email,
+          name: req.user!.name
+        },
+        serverTime: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error probing token debug route:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to probe protected route'
     });
   }
 });

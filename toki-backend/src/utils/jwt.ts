@@ -13,7 +13,7 @@ export interface UserTokenData {
 }
 
 // Generate access token
-export const generateAccessToken = (user: UserTokenData): string => {
+export const generateAccessToken = (user: UserTokenData, expiresInOverride?: string): string => {
   const payload = {
     id: user.id,
     email: user.email,
@@ -22,12 +22,12 @@ export const generateAccessToken = (user: UserTokenData): string => {
   if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET environment variable is required');
   }
-  const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+  const expiresIn = expiresInOverride || process.env.JWT_EXPIRES_IN || '24h';
   return jwt.sign(payload, process.env.JWT_SECRET as jwt.Secret, { expiresIn } as any);
 };
 
 // Generate refresh token
-export const generateRefreshToken = (user: UserTokenData): string => {
+export const generateRefreshToken = (user: UserTokenData, expiresInOverride?: string): string => {
   const payload = {
     id: user.id,
     type: 'refresh'
@@ -35,15 +35,18 @@ export const generateRefreshToken = (user: UserTokenData): string => {
   if (!process.env.JWT_SECRET) {
     throw new Error('JWT_SECRET environment variable is required');
   }
-  const expiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  const expiresIn = expiresInOverride || process.env.JWT_REFRESH_EXPIRES_IN || '7d';
   return jwt.sign(payload, process.env.JWT_SECRET as jwt.Secret, { expiresIn } as any);
 };
 
 // Generate both access and refresh tokens
-export const generateTokenPair = (user: UserTokenData): TokenPair => {
+export const generateTokenPair = (
+  user: UserTokenData,
+  options?: { accessExpiresIn?: string; refreshExpiresIn?: string }
+): TokenPair => {
   return {
-    accessToken: generateAccessToken(user),
-    refreshToken: generateRefreshToken(user)
+    accessToken: generateAccessToken(user, options?.accessExpiresIn),
+    refreshToken: generateRefreshToken(user, options?.refreshExpiresIn)
   };
 };
 

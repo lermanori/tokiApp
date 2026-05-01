@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "node16",
+    "moduleResolution": "node16",
+    "target": "es2022",
+    "outDir": "./.tmp-tests",
+    "rootDir": ".",
+    "types": ["node"],
+    "noEmit": false
+  },
+  "include": [
+    "services/authSession.ts",
+    "services/authRequest.ts",
+    "tests/authSession.test.ts",
+    "tests/authRefresh.test.ts"
+  ]
+}

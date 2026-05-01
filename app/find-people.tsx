@@ -6,7 +6,6 @@ import { ArrowLeft, Search, UserPlus, MapPin, Calendar, Users } from 'lucide-rea
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getBackendUrl } from '@/services/config';
 import { apiService } from '@/services/api';
 
 interface User {
@@ -67,17 +66,8 @@ export default function FindPeopleScreen() {
   // Get real-time connection status for a user
   const getConnectionStatus = async (userId: string): Promise<ConnectionStatus> => {
     try {
-      const response = await fetch(`${getBackendUrl()}/api/connections/status/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${apiService.getAccessToken()}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.data;
-      }
+      const response = await apiService.getConnectionStatus(userId);
+      return response.data;
     } catch (error) {
       console.error('❌ Failed to get connection status:', error);
     }
@@ -248,16 +238,9 @@ export default function FindPeopleScreen() {
 
   const handleAcceptRequest = async (userId: string) => {
     try {
-      const response = await fetch(`${getBackendUrl()}/api/connections/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${apiService.getAccessToken()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action: 'accept' })
-      });
+      const success = await actions.acceptConnectionRequest(userId);
 
-      if (response.ok) {
+      if (success) {
         // Update connection status
         setConnectionStatuses(prev => new Map(prev).set(userId, {
           status: 'accepted'

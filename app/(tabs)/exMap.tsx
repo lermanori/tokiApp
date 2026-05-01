@@ -17,7 +17,6 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
 import { apiService } from '@/services/api';
-import { getBackendUrl } from '@/services/config';
 import { sortEvents } from '@/utils/sortTokis';
 
 // Platform-specific map imports
@@ -454,16 +453,7 @@ export default function ExMapScreen() {
     // Fetch toki from API when not found in current events
     const fetchTokiForHighlight = async (tokiId: string) => {
         try {
-            const response = await fetch(`${getBackendUrl()}/api/tokis/${tokiId}`, {
-                headers: {
-                    'Authorization': `Bearer ${apiService.getAccessToken()}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                const tokiData = data.data;
+            const tokiData: any = await apiService.getToki(tokiId);
 
                 const lat = typeof tokiData.latitude === 'number' ? tokiData.latitude : parseFloat(tokiData.latitude);
                 const lng = typeof tokiData.longitude === 'number' ? tokiData.longitude : parseFloat(tokiData.longitude);
@@ -492,10 +482,6 @@ export default function ExMapScreen() {
                     console.warn('📍 [EXMAP] Toki has no valid coordinates:', tokiId, { lat, lng });
                     router.setParams({ highlightTokiId: undefined });
                 }
-            } else {
-                console.warn('⚠️ [EXMAP] Failed to fetch toki, response not ok:', response.status);
-                router.setParams({ highlightTokiId: undefined });
-            }
         } catch (error) {
             console.error('❌ [EXMAP] Failed to fetch toki for highlight:', error);
             router.setParams({ highlightTokiId: undefined });
@@ -1248,4 +1234,3 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
     },
 });
-
