@@ -331,6 +331,22 @@ async function runMigrations() {
         throw error;
       }
     }
+    // Migration 20: Toki Views
+    try {
+      console.log('📝 Migration 20: Creating toki_views table...');
+      const tokiViewsSql = readFileSync(
+        join(sqlDir, 'create-toki-views-table.sql'),
+        'utf-8'
+      );
+      await pool.query(tokiViewsSql);
+      console.log('✅ Toki views migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  toki_views table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
 
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {

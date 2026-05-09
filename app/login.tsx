@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../contexts/AppContext';
 import { apiService, OAuthResponse } from '../services/api';
+import { useAnalytics } from '../hooks/useAnalytics';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TermsAgreementModal from '../components/TermsAgreementModal';
 import SocialLoginButtons from '../components/SocialLoginButtons';
@@ -39,6 +40,7 @@ export default function LoginScreen() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
   const { dispatch, actions } = useApp();
+  const { trackEvent } = useAnalytics();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const { returnTo, code, ...returnParams } = searchParams;
@@ -104,6 +106,8 @@ export default function LoginScreen() {
       {
         const response = await apiService.login({ email, password });
         if (response.success) {
+          const pendingLoginContext = apiService.getPendingLoginAnalyticsContext();
+
           // Check if terms acceptance is required
           if (response.requiresTermsAcceptance) {
             // Show terms modal instead of proceeding
@@ -114,6 +118,13 @@ export default function LoginScreen() {
           
           // Save credentials for dev environment
           saveCredentials(email, password, name);
+
+          trackEvent('login_success', 'login', {
+            source: pendingLoginContext?.source || 'manual_login',
+            had_stored_tokens: pendingLoginContext?.hadStoredTokens || false,
+            reason: pendingLoginContext?.reason,
+          });
+          apiService.clearPendingLoginAnalyticsContext();
           
           // Clear auth cache to force fresh authentication check
           apiService.clearAuthCache();
@@ -288,6 +299,7 @@ export default function LoginScreen() {
   // Handle social login success
   const handleSocialLoginSuccess = async (response: OAuthResponse) => {
     console.log('🔐 [SOCIAL LOGIN] Success:', { isNewUser: response.isNewUser, requiresProfileCompletion: response.requiresProfileCompletion });
+    const pendingLoginContext = apiService.getPendingLoginAnalyticsContext();
 
     // IMPORTANT: Store tokens FIRST before any redirect
     // The OAuth response contains tokens that need to be saved for authenticated API calls
@@ -305,6 +317,13 @@ export default function LoginScreen() {
       });
       return;
     }
+
+    trackEvent('login_success', 'login', {
+      source: pendingLoginContext?.source || 'manual_login',
+      had_stored_tokens: pendingLoginContext?.hadStoredTokens || false,
+      reason: pendingLoginContext?.reason,
+    });
+    apiService.clearPendingLoginAnalyticsContext();
 
     // Clear auth cache to force fresh authentication check
     apiService.clearAuthCache();
@@ -402,7 +421,8 @@ export default function LoginScreen() {
                   textContentType="emailAddress"
                   autoCorrect={false}
                   returnKeyType="next"
-                  {...(Platform.OS === 'web' ? { nativeID: 'email', 'data-testid': 'email-input' } : { 'data-testid': 'email-input' })}
+                  testID="email-input"
+                  {...(Platform.OS === 'web' ? { nativeID: 'email', 'data-testid': 'email-input' } : {})}
                   onSubmitEditing={() => {
                     // Focus on password field when email is submitted
                     // This will be handled by the password input's ref
@@ -422,7 +442,8 @@ export default function LoginScreen() {
                     autoCorrect={false}
                     onSubmitEditing={handleAuth}
                     returnKeyType="done"
-                    {...(Platform.OS === 'web' ? { nativeID: 'password', 'data-testid': 'password-input' } : { 'data-testid': 'password-input' })}
+                    testID="password-input"
+                    {...(Platform.OS === 'web' ? { nativeID: 'password', 'data-testid': 'password-input' } : {})}
                   />
                   <TouchableOpacity
                     style={styles.passwordToggle}
@@ -451,6 +472,7 @@ export default function LoginScreen() {
                   style={[styles.button, (loading || loadingData) && styles.buttonDisabled]}
                   onPress={handleAuth}
                   disabled={loading || loadingData}
+                  testID="login-button"
                   data-testid="login-button"
                 >
                   <Text style={styles.buttonText}>{loading ? 'Logging in...' : loadingData ? 'Loading your data...' : 'Login'}</Text>

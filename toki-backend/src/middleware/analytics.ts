@@ -28,15 +28,18 @@ export const analyticsMiddleware = async (req: Request, res: Response, next: Nex
 
 async function logRequest(req: Request, res: Response, duration: number) {
     const userId = req.user?.id;
-    if (!userId) return; // Only log authenticated user requests for now (as requested: "which user is doing that")
 
     const method = req.method;
     const path = req.path;
     const statusCode = res.statusCode;
+    const shouldLogAnonymousNearbyRequest = path === '/tokis/nearby';
+
+    if (!userId && !shouldLogAnonymousNearbyRequest) return;
 
     // Platform detection
     const userAgent = req.headers['user-agent'] || '';
     const xPlatform = req.headers['x-platform'] || req.headers['expo-platform'] || '';
+    const xAppVersion = req.headers['x-app-version'] || '';
 
     let platform = 'web';
     if (xPlatform) {
@@ -62,6 +65,7 @@ async function logRequest(req: Request, res: Response, duration: number) {
     const metadata = {
         query: req.query,
         resourceId: resourceId,
+        clientVersion: xAppVersion ? String(xAppVersion) : null,
     };
 
     try {

@@ -1,14 +1,36 @@
 // API Configuration
 import { Platform } from 'react-native';
 import { getBackendUrl } from './config';
+import { getDeviceVersionInfo, getVersionHeaders } from './version/deviceInfo';
+import { notifyUnsupportedVersion } from './version/versionGateBridge';
+import { fetchVersionPolicy } from './version/versionPolicyApi';
+import type { UnsupportedVersionPayload, VersionPolicy } from './version/types';
 import {
   getAuthSessionMaxAgeMs,
   parseStoredAuthSession,
   serializeAuthSession,
 } from './authSession';
 import { performRequestWithRefresh } from './authRequest';
+import { restoreStartupSession } from './authStartup';
 
 const API_BASE_URL = `${getBackendUrl()}/api`;
+
+export type LoginAnalyticsSource = 'startup_reauth' | 'manual_login';
+export type LoginAnalyticsReason = 'access_expired' | 'refresh_failed' | 'no_session';
+
+export interface StartupAuthTelemetry {
+  hadStoredTokens: boolean;
+  refreshAttempted: boolean;
+  refreshSucceeded: boolean;
+  refreshFailureReason: LoginAnalyticsReason | null;
+  loginRequired: boolean;
+}
+
+interface PendingLoginAnalyticsContext {
+  source: LoginAnalyticsSource;
+  hadStoredTokens: boolean;
+  reason: LoginAnalyticsReason;
+}
 
 // Types
 export interface Toki {
@@ -247,6 +269,8 @@ class ApiService {
   } | null = null;
   private readonly USER_CACHE_DURATION = 60000; // 60 seconds - user data changes less frequently
   private pendingGetCurrentUser: Promise<{ user: User; socialLinks: any; stats: any; verified: boolean }> | null = null;
+  private lastStartupAuthTelemetry: StartupAuthTelemetry | null = null;
+  private pendingLoginAnalyticsContext: PendingLoginAnalyticsContext | null = null;
 
   constructor() {
     // Initialize tokens synchronously - they will be loaded when needed
@@ -325,6 +349,7 @@ class ApiService {
       this.refreshToken = null;
       this.authCache = null; // Clear auth cache
       this.userCache = null; // Clear user cache
+      this.pendingLoginAnalyticsContext = null;
       await AsyncStorage.removeItem('auth_tokens');
 
       // Verify tokens are cleared
@@ -348,7 +373,7 @@ class ApiService {
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-platform': Platform.OS,
+      ...getVersionHeaders(getDeviceVersionInfo()),
     };
 
     if (this.accessToken) {
@@ -386,6 +411,11 @@ class ApiService {
 
       return result.data;
     } catch (error) {
+      const unsupportedVersionPayload = this.getUnsupportedVersionPayload(error);
+      if (unsupportedVersionPayload) {
+        notifyUnsupportedVersion(unsupportedVersionPayload);
+      }
+
       console.error(`❌ [API] Request failed for ${endpoint}:`, error);
       console.error(`❌ [API] Full URL attempted: ${url}`);
       console.error(`❌ [API] Base URL: ${API_BASE_URL}`);
@@ -398,6 +428,47 @@ class ApiService {
 
       throw error;
     }
+  }
+
+  private getUnsupportedVersionPayload(error: unknown): UnsupportedVersionPayload | null {
+    if (!(error instanceof Error)) {
+      return null;
+    }
+
+    const metadata = error as Error & {
+      code?: string | null;
+      supportState?: UnsupportedVersionPayload['state'] | null;
+      title?: string | null;
+      storeUrl?: UnsupportedVersionPayload['storeUrl'] | null;
+    };
+
+    if (metadata.code !== 'APP_VERSION_UNSUPPORTED' || !metadata.supportState) {
+      return null;
+    }
+
+    if (
+      metadata.supportState !== 'requires_ota'
+      && metadata.supportState !== 'requires_store'
+      && metadata.supportState !== 'maintenance'
+    ) {
+      return null;
+    }
+
+    return {
+      state: metadata.supportState,
+      title: metadata.title || 'Update required',
+      message: metadata.message || 'This version of Toki is no longer supported.',
+      delivery: metadata.supportState === 'requires_ota'
+        ? 'ota'
+        : metadata.supportState === 'requires_store'
+          ? 'store'
+          : 'none',
+      storeUrl: metadata.storeUrl ?? null,
+    };
+  }
+
+  async getBootstrapPolicy(): Promise<VersionPolicy> {
+    return fetchVersionPolicy(getDeviceVersionInfo());
   }
 
   // Generic POST method
@@ -1476,12 +1547,42 @@ class ApiService {
     await this.initialize();
 
     if (!this.accessToken) {
+      const rawStoredSession = await AsyncStorage.getItem('auth_tokens');
+      const hadStoredTokens = Boolean(rawStoredSession);
+      this.lastStartupAuthTelemetry = {
+        hadStoredTokens,
+        refreshAttempted: false,
+        refreshSucceeded: false,
+        refreshFailureReason: hadStoredTokens ? 'no_session' : null,
+        loginRequired: true,
+      };
+      this.pendingLoginAnalyticsContext = hadStoredTokens
+        ? {
+            source: 'startup_reauth',
+            hadStoredTokens: true,
+            reason: 'no_session',
+          }
+        : null;
       return false;
     }
 
     // Check cache first
     if (this.authCache && Date.now() - this.authCache.timestamp < this.AUTH_CACHE_DURATION) {
       console.log('🔐 [API] Using cached authentication status.');
+      this.lastStartupAuthTelemetry = {
+        hadStoredTokens: Boolean(this.accessToken),
+        refreshAttempted: false,
+        refreshSucceeded: false,
+        refreshFailureReason: this.authCache.isValid ? null : 'access_expired',
+        loginRequired: !this.authCache.isValid,
+      };
+      if (!this.authCache.isValid && this.accessToken) {
+        this.pendingLoginAnalyticsContext = {
+          source: 'startup_reauth',
+          hadStoredTokens: true,
+          reason: 'access_expired',
+        };
+      }
       return this.authCache.isValid;
     }
 
@@ -1489,50 +1590,83 @@ class ApiService {
     if (this.userCache && Date.now() - this.userCache.timestamp < this.USER_CACHE_DURATION) {
       console.log('🔐 [API] Using user cache to determine authentication status.');
       this.authCache = { isValid: true, timestamp: Date.now() };
+      this.lastStartupAuthTelemetry = {
+        hadStoredTokens: true,
+        refreshAttempted: false,
+        refreshSucceeded: false,
+        refreshFailureReason: null,
+        loginRequired: false,
+      };
+      this.pendingLoginAnalyticsContext = null;
       return true;
     }
 
-    // Try to validate the token by making a test request with retry logic
-    // We'll use getCurrentUser which has caching, so if auth succeeds we also cache user data
-    const maxRetries = 2;
-    let lastError: any;
+    try {
+      console.log('🔐 [API] Validating startup session via startup auth helper');
+      const rawSession = await AsyncStorage.getItem('auth_tokens');
+      const result = await restoreStartupSession({
+        rawStoredSession: rawSession,
+        validateUrl: `${API_BASE_URL}/auth/me`,
+        refreshUrl: `${API_BASE_URL}/auth/refresh`,
+        fetchImpl: fetch,
+        requestHeaders: this.getHeaders(),
+        maxAgeMs: getAuthSessionMaxAgeMs(process?.env?.EXPO_PUBLIC_AUTH_SESSION_MAX_AGE_MS),
+      });
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🔐 [API] Authentication check attempt ${attempt}/${maxRetries}`);
-        // Use getCurrentUser instead of a bare /auth/me call - this way we cache user data too
-        await this.getCurrentUser(true); // Force refresh to validate token
-        console.log('✅ [API] Authentication check successful');
+      if (result.status === 'authenticated') {
+        if (
+          result.accessToken !== this.accessToken ||
+          result.refreshToken !== this.refreshToken
+        ) {
+          await this.saveTokens(result.accessToken, result.refreshToken);
+        }
+
+        this.lastStartupAuthTelemetry = {
+          hadStoredTokens: true,
+          refreshAttempted: result.refreshAttempted,
+          refreshSucceeded: result.refreshed,
+          refreshFailureReason: null,
+          loginRequired: false,
+        };
+        this.pendingLoginAnalyticsContext = null;
         this.authCache = { isValid: true, timestamp: Date.now() };
         return true;
-      } catch (error) {
-        lastError = error;
-        console.log(`❌ [API] Authentication check attempt ${attempt} failed:`, error);
-
-        // If this is not the last attempt, wait a bit before retrying
-        if (attempt < maxRetries) {
-          console.log(`⏳ [API] Waiting before retry...`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-        }
       }
-    }
 
-    // All attempts failed - only clear tokens if it's a clear authentication error
-    console.log('❌ [API] All authentication attempts failed');
-
-    // Only clear tokens if the last error was an explicit authentication failure (401/403)
-    // We check for these markers in the error object if they were added by makeRequest
-    if (lastError && typeof lastError === 'object') {
-      if (lastError.isAuthError || lastError.status === 401 || lastError.status === 403) {
-        console.log('🗑️ [API] Clearing tokens due to explicit authentication failure');
+      if (result.cleared) {
         await this.clearTokens();
-        this.authCache = { isValid: false, timestamp: Date.now() }; // Invalidate cache on clear
-      } else {
-        console.log('⚠️ [API] Keeping tokens - error appears to be network-related or transient');
       }
-    }
 
-    return false;
+      this.lastStartupAuthTelemetry = {
+        hadStoredTokens: true,
+        refreshAttempted: result.refreshAttempted,
+        refreshSucceeded: false,
+        refreshFailureReason: result.failureReason === 'validation_failed' ? 'access_expired' : result.failureReason,
+        loginRequired: true,
+      };
+      this.pendingLoginAnalyticsContext = {
+        source: 'startup_reauth',
+        hadStoredTokens: true,
+        reason: result.failureReason === 'validation_failed' ? 'access_expired' : result.failureReason,
+      };
+      this.authCache = { isValid: false, timestamp: Date.now() };
+      return false;
+    } catch (error) {
+      console.log('⚠️ [API] Startup session validation failed unexpectedly, keeping tokens:', error);
+      this.lastStartupAuthTelemetry = {
+        hadStoredTokens: true,
+        refreshAttempted: false,
+        refreshSucceeded: false,
+        refreshFailureReason: 'access_expired',
+        loginRequired: true,
+      };
+      this.pendingLoginAnalyticsContext = {
+        source: 'startup_reauth',
+        hadStoredTokens: true,
+        reason: 'access_expired',
+      };
+      return false;
+    }
   }
 
   // Synchronous check for token existence (for backward compatibility)
@@ -1548,6 +1682,18 @@ class ApiService {
   clearAuthCache(): void {
     console.log('🗑️ [API] Clearing authentication cache');
     this.authCache = null;
+  }
+
+  getLastStartupAuthTelemetry(): StartupAuthTelemetry | null {
+    return this.lastStartupAuthTelemetry;
+  }
+
+  getPendingLoginAnalyticsContext(): PendingLoginAnalyticsContext | null {
+    return this.pendingLoginAnalyticsContext;
+  }
+
+  clearPendingLoginAnalyticsContext(): void {
+    this.pendingLoginAnalyticsContext = null;
   }
 
   // Report a Toki

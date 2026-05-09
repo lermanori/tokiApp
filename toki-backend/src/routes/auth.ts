@@ -16,6 +16,21 @@ const router = Router();
 // Current Terms of Use version - update this when terms are updated
 const CURRENT_TERMS_VERSION = '2025-12-27';
 
+const logAuthActivity = async (
+  userId: string,
+  eventType: 'login' | 'refresh_success' | 'refresh_failure',
+  metadata?: Record<string, any>,
+) => {
+  try {
+    await pool.query(
+      'INSERT INTO user_activity_logs (user_id, event_type, metadata) VALUES ($1, $2, $3)',
+      [userId, eventType, metadata ? JSON.stringify(metadata) : null],
+    );
+  } catch (error) {
+    logger.error(`Error logging ${eventType} event:`, error);
+  }
+};
+
 // User registration
 router.post('/register', async (req: Request, res: Response) => {
   try {
@@ -401,17 +416,8 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
     
-    // Log login event
-    try {
-      await pool.query(
-        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
-        [user.id, 'login']
-      );
-      logger.debug(`📊 [ACTIVITY] Logged login event for user ${user.id}`);
-    } catch (error) {
-      logger.error('Error logging login event:', error);
-      // Don't fail login if logging fails
-    }
+    await logAuthActivity(user.id, 'login', { provider: 'password' });
+    logger.debug(`📊 [ACTIVITY] Logged login event for user ${user.id}`);
     
     return res.json({
       success: true,
@@ -564,15 +570,7 @@ router.post('/oauth/apple', async (req: Request, res: Response) => {
     // Generate tokens
     const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
 
-    // Log login event
-    try {
-      await pool.query(
-        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
-        [user.id, isNewUser ? 'oauth_register_apple' : 'oauth_login_apple']
-      );
-    } catch (logError) {
-      logger.error('Error logging Apple auth event:', logError);
-    }
+    await logAuthActivity(user.id, 'login', { provider: 'apple', isNewUser });
 
     return res.json({
       success: true,
@@ -703,15 +701,7 @@ router.post('/oauth/google', async (req: Request, res: Response) => {
     // Generate tokens
     const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
 
-    // Log login event
-    try {
-      await pool.query(
-        'INSERT INTO user_activity_logs (user_id, event_type) VALUES ($1, $2)',
-        [user.id, isNewUser ? 'oauth_register_google' : 'oauth_login_google']
-      );
-    } catch (logError) {
-      logger.error('Error logging Google auth event:', logError);
-    }
+    await logAuthActivity(user.id, 'login', { provider: 'google', isNewUser });
 
     return res.json({
       success: true,
@@ -1299,8 +1289,10 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
 
 // Refresh token
 router.post('/refresh', async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+  const decodedHint = refreshToken ? (jwt.decode(refreshToken) as any) : null;
+  const hintedUserId = typeof decodedHint?.id === 'string' ? decodedHint.id : null;
   try {
-    const { refreshToken } = req.body;
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
@@ -1321,6 +1313,9 @@ router.post('/refresh', async (req: Request, res: Response) => {
       [decoded.id]
     );
     if (result.rows.length === 0) {
+      if (hintedUserId) {
+        await logAuthActivity(hintedUserId, 'refresh_failure', { reason: 'user_not_found' });
+      }
       return res.status(401).json({
         success: false,
         error: 'User not found',
@@ -1329,6 +1324,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
     const user = result.rows[0];
     const tokens = generateTokenPair({ id: user.id, email: user.email, name: user.name });
+    await logAuthActivity(user.id, 'refresh_success');
     return res.json({
       success: true,
       message: 'Tokens refreshed successfully',
@@ -1336,6 +1332,9 @@ router.post('/refresh', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Refresh token error:', error);
+    if (hintedUserId) {
+      await logAuthActivity(hintedUserId, 'refresh_failure', { reason: 'invalid_or_expired_refresh_token' });
+    }
     return res.status(401).json({
       success: false,
       error: 'Invalid refresh token',

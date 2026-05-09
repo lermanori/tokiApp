@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Toki",
     slug: "toki",
-    version: "1.3.0",
+    version: "1.3.2",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "tokimap",
@@ -83,4 +83,3 @@ module.exports = {
     }
   }
 };
-

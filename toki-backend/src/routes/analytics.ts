@@ -13,8 +13,38 @@ const ALLOWED_EVENTS = [
     'event_viewed',
     'filter_applied',
     'push_opened',
-    'profile_viewed'
+    'profile_viewed',
+    'login_screen_viewed',
+    'login_success',
+    'startup_refresh_attempted',
+    'startup_refresh_succeeded',
+    'startup_refresh_failed'
 ];
+
+router.get('/nearby-request-count', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.id;
+
+        const result = await pool.query(
+            `SELECT COUNT(*)::int AS count
+             FROM user_activity_logs
+             WHERE user_id = $1
+               AND event_type = 'request'
+               AND path = '/nearby'`,
+            [userId]
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                count: result.rows[0]?.count ?? 0,
+            },
+        });
+    } catch (error) {
+        logger.error('Error fetching nearby request count:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch nearby request count' });
+    }
+});
 
 router.post('/track', authenticateToken, async (req: Request, res: Response) => {
     try {

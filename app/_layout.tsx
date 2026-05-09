@@ -10,9 +10,12 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/contexts/AppContext';
+import { VersionGateProvider } from '@/contexts/VersionGateContext';
 import { apiService } from '@/services/api';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import RedirectionGuard from '@/components/RedirectionGuard';
 import { UserPhotoViewerProvider } from '@/components/UserPhotoViewer/UserPhotoViewerContext';
+import { VersionGateCoordinator } from '@/components/version/VersionGateCoordinator';
 
 // IMPORTANT: Must be called at the top level BEFORE any component renders.
 // This allows the Google OAuth popup to detect it's a redirect and close itself
@@ -23,6 +26,7 @@ SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { state, actions } = useApp();
+  const { trackEvent } = useAnalytics();
   const segments = useSegments();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -135,6 +139,7 @@ function RootLayoutNav() {
   // Store parsed initial URL params to use as fallback in auth check
   const [initialUrlParams, setInitialUrlParams] = useState<Record<string, string> | null>(null);
   const lastProcessedSegmentsRef = useRef<string>('');
+  const hasTrackedStartupLoginViewRef = useRef(false);
 
   // Create a stable string representation of segments for dependency comparison
   // Use JSON.stringify to create a stable key that only changes when segments actually change
@@ -685,6 +690,15 @@ function RootLayoutNav() {
         const inCompleteProfileScreen = segments[0] === 'complete-profile' || path.startsWith('/complete-profile');
 
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen && !inCompleteProfileScreen) {
+          const pendingLoginContext = apiService.getPendingLoginAnalyticsContext();
+          if (pendingLoginContext && !hasTrackedStartupLoginViewRef.current) {
+            hasTrackedStartupLoginViewRef.current = true;
+            trackEvent('login_screen_viewed', 'login', {
+              source: pendingLoginContext.source,
+              had_stored_tokens: pendingLoginContext.hadStoredTokens,
+              reason: pendingLoginContext.reason,
+            });
+          }
           // Check if we're on toki-details page - preserve the tokiId parameter
           // Cross-platform: check both path (web) and segments (native)
           // Also check initialUrlParams - if it has tokiId, we're doing a deep link to toki-details
@@ -768,6 +782,7 @@ function RootLayoutNav() {
             }
           }
         } else if (isAuthenticated && inLoginScreen) {
+          hasTrackedStartupLoginViewRef.current = false;
           // Redirect to main app if authenticated
           // Respect returnTo params (e.g., invite flow)
           const returnToPath = Array.isArray(effectiveReturnTo) ? effectiveReturnTo[0] : effectiveReturnTo;
@@ -1167,7 +1182,7 @@ export default function RootLayout() {
     ),
   };
 
-  return (
+  const appShell = (
     <AppProvider>
       <UserPhotoViewerProvider>
         <RootLayoutNav />
@@ -1175,6 +1190,14 @@ export default function RootLayout() {
         <Toast config={toastConfig} topOffset={60} />
       </UserPhotoViewerProvider>
     </AppProvider>
+  );
+
+  return (
+    <VersionGateProvider>
+      <VersionGateCoordinator>
+        {appShell}
+      </VersionGateCoordinator>
+    </VersionGateProvider>
   );
 }
 

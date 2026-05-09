@@ -2164,6 +2164,156 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
        GROUP BY platform`
     );
 
+    const appVersionStatsResult = await pool.query(
+      `SELECT
+         COALESCE(NULLIF(metadata->>'clientVersion', ''), 'unknown') as version,
+         COUNT(*) as count
+       FROM user_activity_logs
+       WHERE event_type = 'request'
+         AND path = '/nearby'
+         AND created_at >= $1
+       GROUP BY version
+       ORDER BY count DESC, version ASC`,
+      [startTimeStr]
+    );
+
+    const loginAfterOpenResult = await pool.query(
+      `WITH app_opens AS (
+         SELECT
+           user_id,
+           created_at,
+           CASE
+             WHEN device_platform IS NULL OR device_platform = '' THEN COALESCE(metadata->>'platform', 'unknown')
+             ELSE LOWER(device_platform)
+           END AS platform
+         FROM user_activity_logs
+         WHERE event_type = 'frontend_action'
+           AND metadata->>'action' = 'app_open'
+           AND created_at >= $1
+       )
+       SELECT
+         COUNT(*) AS app_open_count,
+         COUNT(*) FILTER (
+           WHERE EXISTS (
+             SELECT 1
+             FROM user_activity_logs login_logs
+             WHERE login_logs.user_id = app_opens.user_id
+               AND login_logs.event_type = 'login'
+               AND login_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+           )
+         ) AS login_after_open_count
+       FROM app_opens`,
+      [startTimeStr]
+    );
+
+    const loginAfterOpenByPlatformResult = await pool.query(
+      `WITH app_opens AS (
+         SELECT
+           user_id,
+           created_at,
+           CASE
+             WHEN device_platform IS NULL OR device_platform = '' THEN COALESCE(metadata->>'platform', 'unknown')
+             ELSE LOWER(device_platform)
+           END AS platform
+         FROM user_activity_logs
+         WHERE event_type = 'frontend_action'
+           AND metadata->>'action' = 'app_open'
+           AND created_at >= $1
+       )
+       SELECT
+         platform,
+         COUNT(*) AS app_open_count,
+         COUNT(*) FILTER (
+           WHERE EXISTS (
+             SELECT 1
+             FROM user_activity_logs login_logs
+             WHERE login_logs.user_id = app_opens.user_id
+               AND login_logs.event_type = 'login'
+               AND login_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+           )
+         ) AS login_after_open_count
+       FROM app_opens
+       GROUP BY platform
+       ORDER BY platform`,
+      [startTimeStr]
+    );
+
+    const startupRefreshResult = await pool.query(
+      `WITH app_opens AS (
+         SELECT user_id, created_at
+         FROM user_activity_logs
+         WHERE event_type = 'frontend_action'
+           AND metadata->>'action' = 'app_open'
+           AND created_at >= $1
+       ),
+       startup_windows AS (
+         SELECT
+           user_id,
+           created_at,
+           EXISTS (
+             SELECT 1
+             FROM user_activity_logs refresh_logs
+             WHERE refresh_logs.user_id = app_opens.user_id
+               AND refresh_logs.event_type IN ('refresh_success', 'refresh_failure')
+               AND refresh_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+           ) AS attempted,
+           EXISTS (
+             SELECT 1
+             FROM user_activity_logs refresh_logs
+             WHERE refresh_logs.user_id = app_opens.user_id
+               AND refresh_logs.event_type = 'refresh_success'
+               AND refresh_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+           ) AS succeeded,
+           EXISTS (
+             SELECT 1
+             FROM user_activity_logs refresh_logs
+             WHERE refresh_logs.user_id = app_opens.user_id
+               AND refresh_logs.event_type = 'refresh_failure'
+               AND refresh_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+           ) AS failed
+         FROM app_opens
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE attempted) AS refresh_attempt_count,
+         COUNT(*) FILTER (WHERE succeeded) AS refresh_success_count,
+         COUNT(*) FILTER (WHERE failed) AS refresh_failure_count
+       FROM startup_windows`,
+      [startTimeStr]
+    );
+
+    const forcedReauthAfterFailureResult = await pool.query(
+      `WITH app_opens AS (
+         SELECT user_id, created_at
+         FROM user_activity_logs
+         WHERE event_type = 'frontend_action'
+           AND metadata->>'action' = 'app_open'
+           AND created_at >= $1
+       ),
+       refresh_failures AS (
+         SELECT refresh_logs.user_id, refresh_logs.created_at
+         FROM user_activity_logs refresh_logs
+         JOIN app_opens
+           ON app_opens.user_id = refresh_logs.user_id
+          AND refresh_logs.created_at BETWEEN app_opens.created_at AND app_opens.created_at + INTERVAL '2 minutes'
+         WHERE refresh_logs.event_type = 'refresh_failure'
+       )
+       SELECT
+         COUNT(*) AS refresh_failure_count,
+         COUNT(*) FILTER (
+           WHERE EXISTS (
+             SELECT 1
+             FROM user_activity_logs login_events
+             WHERE login_events.user_id = refresh_failures.user_id
+               AND login_events.event_type = 'frontend_action'
+               AND login_events.metadata->>'action' = 'login_success'
+               AND COALESCE(login_events.metadata->>'source', 'manual_login') = 'startup_reauth'
+               AND login_events.created_at BETWEEN refresh_failures.created_at AND refresh_failures.created_at + INTERVAL '2 minutes'
+           )
+         ) AS forced_reauth_count
+       FROM refresh_failures`,
+      [startTimeStr]
+    );
+
     // Global Average Session Length (Last 30 days)
     const globalSessionResult = await pool.query(
       `WITH daily_activity AS (
@@ -2202,6 +2352,17 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       `SELECT COUNT(*) as count
        FROM tokis
        WHERE DATE(created_at) = CURRENT_DATE`
+    );
+
+    const appOpenCount = parseInt(loginAfterOpenResult.rows[0]?.app_open_count || '0');
+    const loginAfterOpenCount = parseInt(loginAfterOpenResult.rows[0]?.login_after_open_count || '0');
+    const refreshAttemptCount = parseInt(startupRefreshResult.rows[0]?.refresh_attempt_count || '0');
+    const refreshSuccessCount = parseInt(startupRefreshResult.rows[0]?.refresh_success_count || '0');
+    const refreshFailureCount = parseInt(startupRefreshResult.rows[0]?.refresh_failure_count || '0');
+    const forcedReauthCount = parseInt(forcedReauthAfterFailureResult.rows[0]?.forced_reauth_count || '0');
+
+    const asRate = (numerator: number, denominator: number) => (
+      denominator > 0 ? Number(((numerator / denominator) * 100).toFixed(1)) : 0
     );
 
     // Build time series data
@@ -2294,7 +2455,11 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       totalAccounts: parseInt(totalAccountsResult2.rows[0].count),
       uniqueLoginsToday: parseInt(uniqueLoginsTodayResult.rows[0].count),
       tokisCreatedToday: parseInt(tokisCreatedTodayResult.rows[0].count),
-      averageSessionLength: avgSessionSeconds
+      averageSessionLength: avgSessionSeconds,
+      loginAfterOpenRate: asRate(loginAfterOpenCount, appOpenCount),
+      startupRefreshAttemptRate: asRate(refreshAttemptCount, appOpenCount),
+      startupRefreshSuccessRate: asRate(refreshSuccessCount, refreshAttemptCount),
+      forcedReauthAfterRefreshFailureRate: asRate(forcedReauthCount, refreshFailureCount),
     };
 
     res.json({
@@ -2303,7 +2468,18 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
         timeSeries,
         summary,
         platformStats: platformStatsResult.rows,
-        topViewedTokis: topViewedTokisResult.rows
+        appVersionStats: appVersionStatsResult.rows,
+        topViewedTokis: topViewedTokisResult.rows,
+        loginFrictionByPlatform: loginAfterOpenByPlatformResult.rows.map((row: any) => {
+          const rowAppOpenCount = parseInt(row.app_open_count || '0');
+          const rowLoginAfterOpenCount = parseInt(row.login_after_open_count || '0');
+          return {
+            platform: row.platform,
+            appOpenCount: rowAppOpenCount,
+            loginAfterOpenCount: rowLoginAfterOpenCount,
+            loginAfterOpenRate: asRate(rowLoginAfterOpenCount, rowAppOpenCount),
+          };
+        }),
       }
     });
     return;

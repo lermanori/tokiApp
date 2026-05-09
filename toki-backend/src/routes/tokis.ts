@@ -1759,6 +1759,25 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
     });
   }
 });
+// Record a Toki view (publicly accessible)
+router.post('/:id/view', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id || null;
+
+    await pool.query(
+      'INSERT INTO toki_views (toki_id, user_id) VALUES ($1, $2)',
+      [id, userId]
+    );
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error('Record toki view error:', error);
+    // Don't fail the request if view tracking fails, just return 200
+    return res.status(200).json({ success: true });
+  }
+});
+
 
 // Get friends (accepted connections) who are attending a toki
 router.get('/:id/friends-attending', authenticateToken, async (req: Request, res: Response) => {

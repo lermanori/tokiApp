@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, UserRatingStats, BlockedUser, BlockStatus } from '../services/api';
 import { socketService } from '../services/socket';
 import { getBackendUrl } from '../services/config';
+import { isRealtimeDisabledForE2E } from '../services/launchArgs';
 import { registerForPushNotificationsAsync, configureForegroundNotificationHandler } from '../utils/notifications';
 import { useAnalytics } from '../hooks/useAnalytics';
 
@@ -645,6 +646,7 @@ interface AppContextType {
 
     // Tokis
     getTokiById: (tokiId: string) => Promise<any>;
+    viewToki: (tokiId: string) => Promise<void>;
 
     // Remove Participant
     removeParticipant: (tokiId: string, userId: string) => Promise<boolean>;
@@ -692,6 +694,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await apiService.initialize();
         console.log('✅ API service initialized');
 
+        const rawStoredSession = await AsyncStorage.getItem('auth_tokens');
+        const hadStoredTokens = Boolean(rawStoredSession);
+
         // Debug: Check if tokens were loaded
         const hasToken = apiService.hasToken();
         console.log('🔍 [APP] Token check after API init:', hasToken);
@@ -706,7 +711,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // Track app open
         trackEvent('app_open', 'app_start', {
-          hasValidUser: !!(currentUser && currentUser.id && currentUser.id !== '')
+          hasValidUser: !!(currentUser && currentUser.id && currentUser.id !== ''),
+          had_stored_tokens: hadStoredTokens,
         });
 
         // Check connection status
@@ -715,7 +721,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         // If authenticated, load current user and Tokis from backend
         const isAuthenticated = await apiService.isAuthenticated();
+        const startupAuthTelemetry = apiService.getLastStartupAuthTelemetry();
         console.log('🔐 Authentication check result:', isAuthenticated);
+
+        if (startupAuthTelemetry?.refreshAttempted) {
+          trackEvent('startup_refresh_attempted', 'app_start', {
+            had_stored_tokens: startupAuthTelemetry.hadStoredTokens,
+          });
+        }
+
+        if (startupAuthTelemetry?.refreshSucceeded) {
+          trackEvent('startup_refresh_succeeded', 'app_start', {
+            had_stored_tokens: startupAuthTelemetry.hadStoredTokens,
+          });
+        } else if (startupAuthTelemetry?.refreshAttempted && startupAuthTelemetry.refreshFailureReason) {
+          trackEvent('startup_refresh_failed', 'app_start', {
+            had_stored_tokens: startupAuthTelemetry.hadStoredTokens,
+            reason: startupAuthTelemetry.refreshFailureReason,
+          });
+        }
 
         if (isAuthenticated) {
           try {
@@ -730,12 +754,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Note: Tokis are loaded by individual screens (Explore/Discover use loadNearbyTokis)
             // This prevents unnecessary /tokis API calls when screens will use /tokis/nearby
 
-            // Connect to WebSocket
-            await socketService.connect();
-            if (currentUser.id) {
-              await socketService.joinUser(currentUser.id);
+            if (!isRealtimeDisabledForE2E()) {
+              // Connect to WebSocket
+              await socketService.connect();
+              if (currentUser.id) {
+                await socketService.joinUser(currentUser.id);
 
-              // Note: Global message listeners will be set up after actions are defined
+                // Note: Global message listeners will be set up after actions are defined
+              }
             }
 
             // Configure foreground notifications to show alert banners while app is open
@@ -757,7 +783,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Use stored data if not authenticated
           console.log('📱 Using stored data (not authenticated)');
           dispatch({ type: 'SET_TOKIS', payload: tokis });
-          dispatch({ type: 'UPDATE_CURRENT_USER', payload: currentUser });
+          // Keep offline content if desired, but clear identity so auth guards can
+          // reliably send the user back to login when the session is gone.
+          dispatch({ type: 'UPDATE_CURRENT_USER', payload: emptyUser });
           dispatch({ type: 'SET_MESSAGES', payload: messages });
           dispatch({ type: 'SET_LAST_SYNC_TIME', payload: lastSyncTime });
           console.log(`📱 Loaded ${tokis.length} Tokis from AsyncStorage (offline mode)`);
@@ -1941,6 +1969,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
   };
+  const viewToki = async (tokiId: string): Promise<void> => {
+    try {
+      await apiService.viewToki(tokiId);
+    } catch (e) {
+      console.warn('❌ Failed to record toki view in context:', e);
+    }
+  };
+
 
   const removeParticipant = async (tokiId: string, userId: string): Promise<boolean> => {
     try {
@@ -3177,6 +3213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeParticipant,
     // Tokis
     getTokiById,
+    viewToki,
     // Authentication actions
     checkAuthStatus,
     logout,

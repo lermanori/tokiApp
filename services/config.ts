@@ -1,4 +1,5 @@
 import { getCurrentDeploymentConfig } from './deployment-config';
+import { getLaunchArg } from './launchArgs';
 
 // Configuration for the Toki app
 
@@ -43,13 +44,44 @@ export const config = {
   // App configuration
   app: {
     name: 'Toki',
-    version: '1.0.0',
+    version: '1.3.1',
     debug: __DEV__
   }
 };
 
+const getRuntimeBackendOverride = () => {
+  return getLaunchArg('TOKI_E2E_API_URL');
+};
+
+const getRuntimeWebSocketOverride = () => {
+  const explicitOverride = getLaunchArg('TOKI_E2E_WS_URL');
+  if (explicitOverride) {
+    return explicitOverride;
+  }
+
+  const backendOverride = getRuntimeBackendOverride();
+  if (!backendOverride) {
+    return undefined;
+  }
+
+  if (backendOverride.startsWith('https://')) {
+    return backendOverride.replace('https://', 'wss://');
+  }
+
+  if (backendOverride.startsWith('http://')) {
+    return backendOverride.replace('http://', 'ws://');
+  }
+
+  return undefined;
+};
+
 // Helper function to get the correct backend URL
 export const getBackendUrl = () => {
+  const runtimeOverride = getRuntimeBackendOverride();
+  if (runtimeOverride) {
+    return runtimeOverride;
+  }
+
   if (__DEV__) {
     // In development, try to detect the correct IP
     // You can override this by setting the IP manually
@@ -60,6 +92,11 @@ export const getBackendUrl = () => {
 
 // Helper function to get the correct WebSocket URL
 export const getWebSocketUrl = () => {
+  const runtimeOverride = getRuntimeWebSocketOverride();
+  if (runtimeOverride) {
+    return runtimeOverride;
+  }
+
   if (__DEV__) {
     // In development, try to detect the correct IP
     // You can override this by setting the IP manually

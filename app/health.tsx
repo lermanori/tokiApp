@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, RefreshCw, Server, Smartphone, Cpu, HardDrive } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { getBackendUrl } from '@/services/config';
-import packageJson from '../package.json';
+import { getAppVersion } from '@/services/appVersion';
 
 interface HealthData {
   status: string;
@@ -34,8 +34,7 @@ interface HealthData {
   };
 }
 
-// Frontend version from local package.json
-const FRONTEND_VERSION = packageJson.version;
+const FRONTEND_VERSION = getAppVersion();
 
 export default function HealthScreen() {
   const [healthData, setHealthData] = useState<HealthData | null>(null);

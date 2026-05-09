@@ -42,7 +42,9 @@ import bugReportRoutes from './routes/bug-report';
 import ogPreviewRoutes from './routes/og-preview';
 import tokiNotificationMuteRoutes from './routes/toki-notification-mutes';
 import analyticsRoutes from './routes/analytics';
+import mobileRoutes from './routes/mobile';
 import { startNotificationScheduler } from './services/notificationScheduler';
+import { versionEnforcementMiddleware } from './middleware/versionEnforcement';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcp/server';
 
@@ -123,7 +125,7 @@ const corsMiddleware = cors({
   origin: originFunction,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Add OPTIONS
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'User-Agent', 'x-platform'], // Add common headers
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Cache-Control', 'User-Agent', 'x-platform', 'x-app-version', 'x-app-build', 'x-runtime-version', 'x-update-id', 'x-update-channel'], // Add common headers
   exposedHeaders: ['Content-Type', 'Content-Length'],
   preflightContinue: false,
   optionsSuccessStatus: 200,
@@ -292,8 +294,11 @@ app.get('/health', (req, res) => {
 // Make io available to routes
 app.set('io', io);
 
+app.use('/api', corsMiddleware, versionEnforcementMiddleware);
+
 // API routes
 app.use('/api/auth', corsMiddleware, authRoutes);
+app.use('/api/mobile', corsMiddleware, mobileRoutes);
 app.use('/api/tokis', corsMiddleware, tokiRoutes);
 app.use('/api/messages', corsMiddleware, messageRoutes);
 app.use('/api/connections', corsMiddleware, connectionRoutes);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { adminApi } from '../../services/adminApi';
-import { Smartphone, Globe, Terminal, Activity, Users, Clock, LogIn, Plus } from 'lucide-react';
+import { Smartphone, Globe, Terminal, Activity, Users, Clock, LogIn, Plus, Info } from 'lucide-react';
 import UserActionsTimeline from './UserActionsTimeline';
 
 interface TimeSeriesData {
@@ -10,6 +10,14 @@ interface TimeSeriesData {
   totalAccounts: number;
   uniqueLoginsToday: number;
   tokisCreatedToday: number;
+  joinRequestsToday: number;
+  totalViewsToday: number;
+}
+
+interface TopViewedToki {
+  id: string;
+  title: string;
+  view_count: string | number;
 }
 
 interface PushPerformance {
@@ -25,6 +33,23 @@ interface Interaction {
   count: number;
 }
 
+interface LoginFrictionByPlatform {
+  platform: string;
+  appOpenCount: number;
+  loginAfterOpenCount: number;
+  loginAfterOpenRate: number;
+}
+
+interface AppVersionStat {
+  version: string;
+  count: string | number;
+}
+
+interface NormalizedAppVersionStat {
+  version: string;
+  count: number;
+}
+
 const INTERACTION_COLORS = ['#8B5CF6', '#EC4899', '#3B82F6', '#F59E0B', '#10B981', '#6366F1'];
 const PLATFORM_COLORS: { [key: string]: string } = {
   ios: '#8B5CF6',
@@ -32,6 +57,7 @@ const PLATFORM_COLORS: { [key: string]: string } = {
   web: '#3B82F6',
   unknown: '#9CA3AF'
 };
+const VERSION_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#0EA5E9', '#10B981', '#F59E0B', '#F97316', '#9CA3AF'];
 
 interface AnalyticsResponse {
   success: boolean;
@@ -44,8 +70,15 @@ interface AnalyticsResponse {
       uniqueLoginsToday: number;
       tokisCreatedToday: number;
       averageSessionLength: number;
+      loginAfterOpenRate: number;
+      startupRefreshAttemptRate: number;
+      startupRefreshSuccessRate: number;
+      forcedReauthAfterRefreshFailureRate: number;
     };
     platformStats: { platform: string; count: string }[];
+    appVersionStats: AppVersionStat[];
+    topViewedTokis: TopViewedToki[];
+    loginFrictionByPlatform: LoginFrictionByPlatform[];
   };
 }
 
@@ -67,7 +100,11 @@ export default function AnalyticsTab() {
     totalAccounts: 0,
     uniqueLoginsToday: 0,
     tokisCreatedToday: 0,
-    averageSessionLength: 0
+    averageSessionLength: 0,
+    loginAfterOpenRate: 0,
+    startupRefreshAttemptRate: 0,
+    startupRefreshSuccessRate: 0,
+    forcedReauthAfterRefreshFailureRate: 0
   });
   const [platformStats, setPlatformStats] = useState<any[]>([]);
   const [hours, setHours] = useState(720); // default 30 days
@@ -78,6 +115,9 @@ export default function AnalyticsTab() {
   const [selectedUserName, setSelectedUserName] = useState<string | undefined>(undefined);
   const [pushPerformance, setPushPerformance] = useState<PushPerformance[]>([]);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [topViewedTokis, setTopViewedTokis] = useState<TopViewedToki[]>([]);
+  const [loginFrictionByPlatform, setLoginFrictionByPlatform] = useState<LoginFrictionByPlatform[]>([]);
+  const [appVersionStats, setAppVersionStats] = useState<NormalizedAppVersionStat[]>([]);
 
   // Determine if we're grouping by hour (<= 72 hours)
   const groupByHour = hours <= 72;
@@ -110,6 +150,16 @@ export default function AnalyticsTab() {
         setTimeSeries(resp.data.timeSeries);
         setSummary(resp.data.summary);
         setPlatformStats(resp.data.platformStats || []);
+        setAppVersionStats(
+          (resp.data.appVersionStats || [])
+            .map((entry) => ({
+              version: entry.version || 'unknown',
+              count: typeof entry.count === 'number' ? entry.count : parseInt(entry.count, 10) || 0,
+            }))
+            .filter((entry) => entry.count > 0)
+        );
+        setTopViewedTokis(resp.data.topViewedTokis || []);
+        setLoginFrictionByPlatform(resp.data.loginFrictionByPlatform || []);
       }
     } catch (e: any) {
       setError(e.message || 'Failed to load analytics');
@@ -120,9 +170,16 @@ export default function AnalyticsTab() {
         totalAccounts: 0,
         uniqueLoginsToday: 0,
         tokisCreatedToday: 0,
-        averageSessionLength: 0
+        averageSessionLength: 0,
+        loginAfterOpenRate: 0,
+        startupRefreshAttemptRate: 0,
+        startupRefreshSuccessRate: 0,
+        forcedReauthAfterRefreshFailureRate: 0
       });
       setPlatformStats([]);
+      setAppVersionStats([]);
+      setTopViewedTokis([]);
+      setLoginFrictionByPlatform([]);
     } finally {
       setLoading(false);
     }
@@ -234,6 +291,42 @@ export default function AnalyticsTab() {
         />
       </div>
 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gap: '16px',
+        marginBottom: '32px'
+      }}>
+        <StatCard
+          title="Login After Open"
+          value={loading ? '…' : `${summary.loginAfterOpenRate.toFixed(1)}%`}
+          gradient="linear-gradient(135deg, #6366F1, #4F46E5)"
+          icon={<LogIn size={20} />}
+          infoTooltip="Percent of app_open events followed by a successful login within 2 minutes."
+        />
+        <StatCard
+          title="Startup Refresh Attempt"
+          value={loading ? '…' : `${summary.startupRefreshAttemptRate.toFixed(1)}%`}
+          gradient="linear-gradient(135deg, #0EA5E9, #0284C7)"
+          icon={<Activity size={20} />}
+          infoTooltip="Percent of app opens where the session restore flow had to try refresh because the access token was no longer enough."
+        />
+        <StatCard
+          title="Startup Refresh Success"
+          value={loading ? '…' : `${summary.startupRefreshSuccessRate.toFixed(1)}%`}
+          gradient="linear-gradient(135deg, #22C55E, #16A34A)"
+          icon={<Activity size={20} />}
+          infoTooltip="Percent of startup refresh attempts that successfully restored the session without forcing a login."
+        />
+        <StatCard
+          title="Forced Reauth After Failure"
+          value={loading ? '…' : `${summary.forcedReauthAfterRefreshFailureRate.toFixed(1)}%`}
+          gradient="linear-gradient(135deg, #F97316, #EA580C)"
+          icon={<LogIn size={20} />}
+          infoTooltip="Percent of startup refresh failures that were followed by a login_success tagged as startup_reauth within 2 minutes."
+        />
+      </div>
+
       {/* Individual Charts in 2x2 Grid */}
       {error ? (
         <div style={{
@@ -281,6 +374,22 @@ export default function AnalyticsTab() {
             title="Tokis Created"
             dataKey="tokisCreatedToday"
             color="#F59E0B"
+            timeSeries={timeSeries}
+            loading={loading}
+            groupByHour={groupByHour}
+          />
+          <ChartCard
+            title="Join Requests"
+            dataKey="joinRequestsToday"
+            color="#10B981"
+            timeSeries={timeSeries}
+            loading={loading}
+            groupByHour={groupByHour}
+          />
+          <ChartCard
+            title="Total Toki Views"
+            dataKey="totalViewsToday"
+            color="#6366F1"
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
@@ -399,6 +508,61 @@ export default function AnalyticsTab() {
           </div>
         </div>
       </div>
+      {/* Top Viewed Tokis Table */}
+      <div className="glass-card" style={{ padding: '24px', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{
+            fontSize: '18px',
+            fontFamily: 'var(--font-semi)',
+            margin: 0,
+            color: '#1C1C1C'
+          }}>
+            Top Viewed Tokis (All Time)
+          </h3>
+        </div>
+        <div style={{
+          maxHeight: '450px',
+          overflowY: 'auto',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '12px',
+          background: 'rgba(255, 255, 255, 0.3)'
+        }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 1, boxShadow: '0 1px 0 var(--glass-border)' }}>
+                <tr style={{ borderBottom: '2px solid var(--glass-border)' }}>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>RANK</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>TOKI TITLE</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>TOTAL VIEWS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topViewedTokis.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '24px', textAlign: 'center', color: '#666' }}>
+                      No view data available yet
+                    </td>
+                  </tr>
+                ) : (
+                  topViewedTokis.map((toki, index) => (
+                    <tr key={toki.id} style={{ borderBottom: '1px solid var(--glass-border)', transition: 'background 0.2s' }}>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#666', fontWeight: index < 3 ? 'bold' : 'normal' }}>
+                        #{index + 1}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', fontFamily: 'var(--font-medium)', color: '#1C1C1C' }}>
+                        {toki.title}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', fontFamily: 'var(--font-semi)', color: '#6366F1' }}>
+                        {Number(toki.view_count).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
         {/* Push Notification Performance */}
@@ -485,6 +649,80 @@ export default function AnalyticsTab() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '20px' }}>
+            Nearby Request Versions ({groupByHour ? `${hours}h` : `${Math.round(hours / 24)}d`})
+          </h3>
+          <div style={{ height: '300px', display: 'flex', alignItems: 'center' }}>
+            {appVersionStats.length === 0 ? (
+              <div style={{
+                width: '100%',
+                textAlign: 'center',
+                color: '#8F8F95',
+                fontSize: '14px',
+                fontFamily: 'var(--font-medium)'
+              }}>
+                No version analytics in this timeframe yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={appVersionStats}
+                    dataKey="count"
+                    nameKey="version"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={(entry) => `${entry.version} (${entry.count})`}
+                  >
+                    {appVersionStats.map((entry, index) => (
+                      <Cell key={`version-cell-${entry.version}`} fill={VERSION_COLORS[index % VERSION_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number | string, _name, entry: any) => [value, entry?.payload?.version || 'Version']} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ fontSize: '18px', fontFamily: 'var(--font-semi)', color: '#1C1C1C', marginBottom: '20px' }}>
+            Login Friction by Platform
+          </h3>
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>PLATFORM</th>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>APP OPENS</th>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>LOGIN AFTER OPEN</th>
+                  <th style={{ padding: '8px', color: '#666', fontSize: '12px' }}>RATE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loginFrictionByPlatform.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#666' }}>
+                      No login friction data yet
+                    </td>
+                  </tr>
+                ) : (
+                  loginFrictionByPlatform.map((row) => (
+                    <tr key={row.platform} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                      <td style={{ padding: '8px', fontSize: '13px', textTransform: 'capitalize' }}>{row.platform}</td>
+                      <td style={{ padding: '8px', fontSize: '13px' }}>{row.appOpenCount}</td>
+                      <td style={{ padding: '8px', fontSize: '13px' }}>{row.loginAfterOpenCount}</td>
+                      <td style={{ padding: '8px', fontSize: '13px', fontWeight: 'bold' }}>{row.loginAfterOpenRate.toFixed(1)}%</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -574,9 +812,25 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
   );
 }
 
-function StatCard({ title, value, gradient, isLive, icon }: { title: string; value: string; gradient: string; isLive?: boolean, icon: React.ReactNode }) {
+function StatCard({
+  title,
+  value,
+  gradient,
+  isLive,
+  icon,
+  infoTooltip,
+}: {
+  title: string;
+  value: string;
+  gradient: string;
+  isLive?: boolean;
+  icon: React.ReactNode;
+  infoTooltip?: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   return (
-    <div className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+    <div className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'visible' }}>
       {isLive && (
         <div style={{
           position: 'absolute',
@@ -598,8 +852,49 @@ function StatCard({ title, value, gradient, isLive, icon }: { title: string; val
       )}
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <div style={{ color: '#666', fontSize: '13px', fontFamily: 'var(--font-medium)' }}>
-          {title}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666', fontSize: '13px', fontFamily: 'var(--font-medium)' }}>
+          <span>{title}</span>
+          {infoTooltip && (
+            <span
+              style={{
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#9CA3AF',
+                cursor: 'help',
+              }}
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+            >
+              <Info size={14} />
+              {showTooltip && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '22px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '220px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(28, 28, 28, 0.92)',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    lineHeight: 1.4,
+                    fontFamily: 'var(--font-regular)',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+                    zIndex: 200,
+                    textAlign: 'left',
+                    pointerEvents: 'none',
+                    whiteSpace: 'normal',
+                  }}
+                >
+                  {infoTooltip}
+                </span>
+              )}
+            </span>
+          )}
         </div>
         <div style={{ color: '#9CA3AF' }}>{icon}</div>
       </div>
@@ -617,4 +912,3 @@ function StatCard({ title, value, gradient, isLive, icon }: { title: string; val
     </div>
   );
 }
-
