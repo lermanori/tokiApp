@@ -129,6 +129,8 @@ export default function LoginScreen() {
           // Clear auth cache to force fresh authentication check
           apiService.clearAuthCache();
           console.log('🔐 [LOGIN] Cleared auth cache after successful login');
+          actions.clearAnonymousLanding();
+          actions.consumePendingIntent();
           
           // Convert API user to frontend user format
           const user = {
@@ -602,6 +604,8 @@ export default function LoginScreen() {
               // Update the app state with the authenticated user
               dispatch({ type: 'UPDATE_CURRENT_USER', payload: user });
               console.log('🔐 [LOGIN] Updated current user in state after terms acceptance:', user.id);
+              actions.clearAnonymousLanding();
+              actions.consumePendingIntent();
               
               // Now redirect
               if (returnTo) {

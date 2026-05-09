@@ -763,6 +763,11 @@ class ApiService {
     return response.data;
   }
 
+  async getPublicToki(id: string): Promise<Toki> {
+    const response = await this.makeRequest<{ success: boolean; data: Toki }>(`/tokis/${id}/public`);
+    return response.data;
+  }
+
   async createToki(tokiData: {
     title: string;
     description: string;

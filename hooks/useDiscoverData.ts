@@ -12,7 +12,8 @@ const DEFAULT_REGION: MapRegion = {
   longitudeDelta: 0.0421,
 };
 
-export const useDiscoverData = () => {
+export const useDiscoverData = (options?: { guestMode?: boolean }) => {
+  const guestMode = options?.guestMode === true;
   const { state, actions } = useApp();
   const [events, setEvents] = useState<TokiEvent[]>([]);
   const [mapEvents, setMapEvents] = useState<TokiEvent[]>([]);
@@ -68,6 +69,13 @@ export const useDiscoverData = () => {
   // Initialize map region from user location - wait for user location before setting
   useEffect(() => {
     if (mapRegionInitializedRef.current) return;
+
+    if (guestMode) {
+      setMapRegion(DEFAULT_REGION);
+      setIsWaitingForUserLocation(false);
+      mapRegionInitializedRef.current = true;
+      return;
+    }
     
     // Wait for user location (latitude/longitude) - don't use default Tel Aviv
     if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
@@ -113,7 +121,7 @@ export const useDiscoverData = () => {
     };
     setFromUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.currentUser?.latitude, state.currentUser?.longitude, state.currentUser?.location]);
+  }, [guestMode, state.currentUser?.latitude, state.currentUser?.longitude, state.currentUser?.location]);
 
   // Load nearby tokis
   const loadNearbyTokis = useCallback(async (
@@ -175,6 +183,27 @@ export const useDiscoverData = () => {
   // Initial load - only run once when connected (using ref to prevent strict mode double calls)
   // Wait for user location before loading (don't use default Tel Aviv)
   useEffect(() => {
+    if (guestMode) {
+      if (hasInitiallyLoadedRef.current) {
+        setIsWaitingForUserLocation(false);
+        return;
+      }
+
+      setIsWaitingForUserLocation(false);
+      hasInitiallyLoadedRef.current = true;
+
+      loadNearbyTokis(
+        1,
+        false,
+        DEFAULT_REGION.latitude,
+        DEFAULT_REGION.longitude,
+        '500'
+      ).catch(() => {
+        hasInitiallyLoadedRef.current = false;
+      });
+      return;
+    }
+
     if (hasInitiallyLoadedRef.current) {
       setIsWaitingForUserLocation(false);
       return;
@@ -217,7 +246,7 @@ export const useDiscoverData = () => {
       setIsWaitingForUserLocation(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude]);
+  }, [guestMode, state.isConnected, state.currentUser?.latitude, state.currentUser?.longitude, loadNearbyTokis]);
 
   // Cleanup
   useEffect(() => {
@@ -307,4 +336,3 @@ export const useDiscoverData = () => {
     updateMapRegion,
   };
 };
-

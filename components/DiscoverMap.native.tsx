@@ -25,6 +25,8 @@ interface Props {
   onToggleList?: () => void;
   highlightedTokiId?: string | null;
   highlightedCoordinates?: { latitude: number; longitude: number } | null;
+  profileCenter?: { latitude: number; longitude: number } | null;
+  maxRadiusMeters?: number;
 }
 
 const getCategoryColorForMap = (category: string) => CATEGORY_COLORS[category] || '#666666';
@@ -506,4 +508,3 @@ export default memo(DiscoverMap, (prev, next) => {
   const skipRender = !shouldSkip.eventsChanged && !shouldSkip.callbacksChanged;
   return skipRender;
 });
-

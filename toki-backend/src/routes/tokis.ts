@@ -1759,6 +1759,142 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
     });
   }
 });
+
+router.get('/:id/public', optionalAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id || null;
+
+    const result = await pool.query(
+      `SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.location,
+        t.latitude,
+        t.longitude,
+        t.time_slot,
+        t.scheduled_time,
+        t.max_attendees,
+        t.current_attendees,
+        t.category,
+        t.visibility,
+        t.auto_approve,
+        t.image_url,
+        t.image_urls,
+        t.image_public_ids,
+        t.status,
+        t.created_at,
+        t.updated_at,
+        t.external_link,
+        t.is_paid,
+        t.host_id,
+        u.name as host_name,
+        u.avatar_url as host_avatar,
+        u.bio as host_bio,
+        u.location as host_location,
+        ARRAY_AGG(tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL) as tags
+      FROM tokis t
+      LEFT JOIN users u ON t.host_id = u.id
+      LEFT JOIN toki_tags tt ON t.id = tt.toki_id
+      WHERE t.id = $1
+        AND t.status = 'active'
+        AND t.visibility <> 'private'
+      GROUP BY
+        t.id,
+        u.name,
+        u.avatar_url,
+        u.bio,
+        u.location`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Toki not found',
+        message: 'The specified Toki does not exist'
+      });
+    }
+
+    const toki = result.rows[0];
+
+    const participantResult = await pool.query(
+      `SELECT 
+        u.id,
+        u.name,
+        u.avatar_url
+      FROM toki_participants tp
+      JOIN users u ON tp.user_id = u.id
+      WHERE tp.toki_id = $1 AND tp.status = $2
+      ORDER BY tp.joined_at ASC`,
+      [id, 'approved']
+    );
+
+    let joinStatus = 'not_joined';
+    if (userId && toki.host_id !== userId) {
+      const joinResult = await pool.query(
+        'SELECT status FROM toki_participants WHERE toki_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      if (joinResult.rows.length > 0) {
+        joinStatus = joinResult.rows[0].status;
+      }
+    }
+
+    const responseData = {
+      id: toki.id,
+      title: toki.title,
+      description: toki.description,
+      location: toki.location,
+      latitude: toki.latitude,
+      longitude: toki.longitude,
+      timeSlot: toki.time_slot,
+      scheduledTime: toki.scheduled_time ? new Date(toki.scheduled_time).toISOString().replace('T', ' ').slice(0, 16) : null,
+      maxAttendees: toki.max_attendees,
+      currentAttendees: toki.current_attendees,
+      category: toki.category,
+      visibility: toki.visibility,
+      autoApprove: toki.auto_approve || false,
+      imageUrl: toki.image_urls && toki.image_urls.length > 0 ? toki.image_urls[0] : toki.image_url,
+      image_urls: toki.image_urls || [],
+      image_public_ids: toki.image_public_ids || [],
+      status: toki.status,
+      createdAt: toki.created_at,
+      updatedAt: toki.updated_at,
+      externalLink: toki.external_link || null,
+      host: {
+        id: toki.host_id,
+        name: toki.host_name,
+        avatar: toki.host_avatar,
+        bio: toki.host_bio,
+        location: toki.host_location
+      },
+      tags: toki.tags || [],
+      joinStatus,
+      is_saved: false,
+      isPaid: toki.is_paid || false,
+      participants: participantResult.rows.map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar_url,
+      }))
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: responseData
+    });
+  } catch (error) {
+    logger.error('Get public Toki error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error',
+      message: 'Failed to retrieve public Toki'
+    });
+  }
+});
+
 // Record a Toki view (publicly accessible)
 router.post('/:id/view', optionalAuth, async (req: Request, res: Response) => {
   try {

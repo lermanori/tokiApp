@@ -1,11 +1,12 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 import { StyleSheet, View, useWindowDimensions, Text } from 'react-native';
 import React, { useMemo } from 'react';
 import { Map, Plus, MessageCircle, User, Compass, Bell } from 'lucide-react-native';
 import { useApp } from '../../contexts/AppContext';
 
 export default function TabLayout() {
-  const { state } = useApp();
+  const { state, actions } = useApp();
+  const segments = useSegments();
   const { width } = useWindowDimensions(); // More responsive than Dimensions.get()
   
   // Memoize responsive calculations to prevent re-renders
@@ -43,6 +44,22 @@ export default function TabLayout() {
     return Math.min(99, state.unreadNotificationsCount || 0);
   }, [state.unreadNotificationsCount]);
 
+  const protectTabPress = (route: string) => ({
+    tabPress: (event: any) => {
+      const currentLeafSegment = segments[segments.length - 1];
+      if ((route === '/exMap' && currentLeafSegment === 'exMap') ||
+          (route === '/create' && currentLeafSegment === 'create') ||
+          (route === '/messages' && currentLeafSegment === 'messages') ||
+          (route === '/notifications' && currentLeafSegment === 'notifications') ||
+          (route === '/profile' && currentLeafSegment === 'profile')) {
+        return;
+      }
+      if (!actions.requireAuthForIntent({ route })) {
+        event.preventDefault();
+      }
+    },
+  });
+
   return (
     <Tabs
       screenOptions={{
@@ -76,6 +93,7 @@ export default function TabLayout() {
       /> */}
       <Tabs.Screen
         name="exMap"
+        listeners={protectTabPress('/exMap')}
         options={{
           title: 'Explore',
           tabBarIcon: ({ color }) => (
@@ -85,6 +103,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="create"
+        listeners={protectTabPress('/create')}
         options={{
           title: 'Create',
           tabBarIcon: ({ color }) => (
@@ -94,6 +113,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="messages"
+        listeners={protectTabPress('/messages')}
         options={{
           title: 'Messages',
           tabBarIcon: ({ color }) => (
@@ -111,6 +131,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="notifications"
+        listeners={protectTabPress('/notifications')}
         options={{
           title: 'Notifications',
           tabBarIcon: ({ color }) => (
@@ -129,6 +150,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="profile"
+        listeners={protectTabPress('/profile')}
         options={{
           title: 'Profile',
           tabBarIcon: ({ color }) => (

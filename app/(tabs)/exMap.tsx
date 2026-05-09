@@ -18,6 +18,7 @@ import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
 import { apiService } from '@/services/api';
 import { sortEvents } from '@/utils/sortTokis';
+import { stripResumeParams } from '@/utils/anonymousLanding';
 
 // Platform-specific map imports
 const isWeb = Platform.OS === 'web';
@@ -53,6 +54,12 @@ if (isWeb) {
 }
 
 const categories = ['all', ...CATEGORIES];
+const GUEST_MAP_DEFAULT_REGION = {
+    latitude: 32.0853,
+    longitude: 34.7818,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+};
 
 export default function ExMapScreen() {
     const { state, actions, dispatch } = useApp();
@@ -83,8 +90,10 @@ export default function ExMapScreen() {
     const initialBatchSize = CARD_PAGE_SIZE;
     const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
     const [isLocalLoadingMore, setIsLocalLoadingMore] = useState(false);
+    const resumeActionHandledRef = useRef<string | null>(null);
 
     renderCountRef.current += 1;
+    const isGuestMapPreview = state.anonymousLanding.isAnonymousLanding && !apiService.hasToken();
 
     // Custom hooks for data and filtering
     const {
@@ -97,9 +106,12 @@ export default function ExMapScreen() {
         isWaitingForUserLocation,
         handleRefresh,
         updateMapRegion,
-    } = useDiscoverData();
+    } = useDiscoverData({ guestMode: isGuestMapPreview });
 
-    const baseEvents = useMemo(() => (mapEvents && mapEvents.length > 0 ? mapEvents : events), [mapEvents, events]);
+    const baseEvents = useMemo(
+        () => (mapEvents && mapEvents.length > 0 ? mapEvents : events),
+        [mapEvents, events]
+    );
 
     const {
         selectedCategories,
@@ -306,6 +318,9 @@ export default function ExMapScreen() {
     // Load user location early on focus (before initial load)
     useFocusEffect(
         React.useCallback(() => {
+            if (isGuestMapPreview) {
+                return;
+            }
             if (state.isConnected && !state.currentUser?.latitude) {
                 console.log('🏄 [MAP-FLOW] Loading user location early...');
                 actions.loadCurrentUser().catch(err => {
@@ -313,13 +328,14 @@ export default function ExMapScreen() {
                 });
             }
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [state.isConnected, state.currentUser?.latitude])
+        }, [isGuestMapPreview, state.isConnected, state.currentUser?.latitude])
     );
 
     // Refresh on focus if no data (only after user location is available)
     // NOTE: Initial nearby load is owned by useDiscoverData; this effect only syncs mapRegion.
     useFocusEffect(
         React.useCallback(() => {
+            if (isGuestMapPreview) return;
             if (hasRefreshedOnFocusRef.current) return;
             // Wait for user location - don't use default Tel Aviv
             if (!state.currentUser?.latitude || !state.currentUser?.longitude) {
@@ -357,11 +373,13 @@ export default function ExMapScreen() {
             state.currentUser?.latitude,
             state.currentUser?.longitude,
             updateMapRegion,
+            isGuestMapPreview,
         ])
     );
 
     // Simple: When profile location changes, reload everything
     useEffect(() => {
+        if (isGuestMapPreview) return;
         if (!profileCenter || !profileCenter.latitude || !profileCenter.longitude) return;
         if (!state.isConnected) return;
 
@@ -398,7 +416,7 @@ export default function ExMapScreen() {
             console.error('❌ [MAP-FLOW] Failed to reload tokis after location change:', error);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [profileCenter?.latitude, profileCenter?.longitude, state.isConnected, selectedFilters.radius]);
+    }, [profileCenter?.latitude, profileCenter?.longitude, state.isConnected, selectedFilters.radius, isGuestMapPreview]);
 
     // Handle highlightTokiId from navigation params
     useEffect(() => {
@@ -452,6 +470,9 @@ export default function ExMapScreen() {
 
     // Fetch toki from API when not found in current events
     const fetchTokiForHighlight = async (tokiId: string) => {
+        if (isGuestMapPreview) {
+            return;
+        }
         try {
             const tokiData: any = await apiService.getToki(tokiId);
 
@@ -490,6 +511,9 @@ export default function ExMapScreen() {
 
     // Apply filters
     const applyFilters = useCallback(() => {
+        if (isGuestMapPreview) {
+            return;
+        }
         setShowFilterModal(false);
 
         const queryParams: any = {};
@@ -516,10 +540,19 @@ export default function ExMapScreen() {
             radius: selectedFilters.radius
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedFilters, profileCenter, mapRegion, trackEvent]);
+    }, [selectedFilters, profileCenter, mapRegion, trackEvent, isGuestMapPreview]);
 
     // Event handlers
     const handleEventPress = useCallback((event: TokiEvent) => {
+        if (!actions.requireAuthForIntent({
+            route: '/toki-details',
+            params: {
+                tokiId: event.id,
+            },
+        })) {
+            return;
+        }
+
         router.push({
             pathname: '/toki-details',
             params: {
@@ -527,9 +560,18 @@ export default function ExMapScreen() {
                 tokiData: JSON.stringify(event)
             }
         });
-    }, []);
+    }, [actions]);
 
     const handleMapMarkerPress = useCallback((event: TokiEvent) => {
+        if (!actions.requireAuthForIntent({
+            route: '/toki-details',
+            params: {
+                tokiId: event.id,
+            },
+        })) {
+            return;
+        }
+
         if (calloutOpeningTimeoutRef.current) {
             clearTimeout(calloutOpeningTimeoutRef.current);
         }
@@ -545,12 +587,45 @@ export default function ExMapScreen() {
 
         // Track map marker tap
         trackEvent('map_tap', 'exMap', { tokiId: event.id, category: event.category });
-    }, [trackEvent]);
+    }, [actions, trackEvent]);
 
     const clearSearch = useCallback(() => {
         setSearchQuery('');
         setShowSearch(false);
     }, [setSearchQuery]);
+
+    useEffect(() => {
+        const resumeAction = typeof params.resumeAction === 'string' ? params.resumeAction : undefined;
+        const resumeTokiId = typeof params.resumeTokiId === 'string' ? params.resumeTokiId : undefined;
+        const nextSavedState = typeof params.nextSavedState === 'string' ? params.nextSavedState : undefined;
+
+        if (!resumeAction || !state.currentUser?.id) {
+            return;
+        }
+
+        const resumeKey = `${resumeAction}:${resumeTokiId || ''}:${nextSavedState || ''}`;
+        if (resumeActionHandledRef.current === resumeKey) {
+            return;
+        }
+        resumeActionHandledRef.current = resumeKey;
+
+        const executeResumeAction = async () => {
+            if (resumeAction === 'save' && resumeTokiId) {
+                if (nextSavedState === 'unsave') {
+                    await actions.unsaveToki(resumeTokiId);
+                } else {
+                    await actions.saveToki(resumeTokiId);
+                }
+            }
+
+            router.replace({
+                pathname: '/exMap',
+                params: stripResumeParams(params),
+            });
+        };
+
+        executeResumeAction();
+    }, [params, router, state.currentUser?.id, actions]);
 
     // Use ref to store current mapRegion
     const mapRegionRef = useRef(mapRegion);
@@ -564,6 +639,10 @@ export default function ExMapScreen() {
         }
 
         const currentMapRegion = mapRegionRef.current;
+        if (!currentMapRegion) {
+            updateMapRegion(r, true);
+            return;
+        }
 
         const eps = 0.00005;
         const same =
@@ -588,6 +667,49 @@ export default function ExMapScreen() {
 
     const renderInteractiveMap = useCallback(() => {
         try {
+            if (isGuestMapPreview) {
+                const validEvents = sortedEvents.filter(e => {
+                    const hasValidCoords = e.coordinate &&
+                        Number.isFinite(e.coordinate.latitude) &&
+                        Number.isFinite(e.coordinate.longitude);
+                    if (!hasValidCoords) {
+                        console.warn('⚠️ [EXMAP] Guest preview event missing valid coordinates:', e.id);
+                    }
+                    return hasValidCoords;
+                });
+
+                return (
+                    <View style={styles.mapContainer} key="map-container">
+                        <DiscoverMap
+                            key="guest-map"
+                            region={mapRegion || GUEST_MAP_DEFAULT_REGION}
+                            onRegionChange={handleRegionChange}
+                            events={validEvents as any}
+                            onEventPress={handleEventPress as any}
+                            onMarkerPress={handleMapMarkerPress as any}
+                            profileCenter={null}
+                            maxRadiusMeters={undefined}
+                        />
+                        <View style={styles.guestMapOverlay} pointerEvents="box-none">
+                            <View style={styles.guestMapCard}>
+                                <Text style={styles.guestMapTitle}>Login to watch Tokis map</Text>
+                                <Text style={styles.guestMapText}>
+                                    Previewing Tokis around Tel Aviv. Login to explore the full live map.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.guestMapButton}
+                                    onPress={() => {
+                                        actions.requireAuthForIntent({ route: '/exMap' });
+                                    }}
+                                >
+                                    <Text style={styles.guestMapButtonText}>Login</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                );
+            }
+
             // Don't render map until mapRegion is available (user location loaded)
             if (!mapRegion || isWaitingForUserLocation) {
                 return (
@@ -643,7 +765,7 @@ export default function ExMapScreen() {
                 </View>
             );
         }
-    }, [mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, highlightedTokiId, highlightedTokiCoordinates, profileCenter, maxRadiusMeters, mapKey]);
+    }, [isGuestMapPreview, mapRegion, sortedEvents, handleRegionChange, handleEventPress, handleMapMarkerPress, highlightedTokiId, highlightedTokiCoordinates, profileCenter, maxRadiusMeters, mapKey]);
 
     const getSectionTitle = () => {
         if (state.loading && state.tokis.length === 0) {
@@ -703,7 +825,7 @@ export default function ExMapScreen() {
                         )}
                     </View>
 
-                    <View style={styles.searchContainer}>
+                        <View style={styles.searchContainer}>
                         {showSearch ? (
                             <View style={styles.searchInputContainer}>
                                 <Search size={20} color="#666666" />
@@ -714,13 +836,20 @@ export default function ExMapScreen() {
                                     onChangeText={setSearchQuery}
                                     placeholderTextColor="#999999"
                                     autoFocus
+                                    editable={!isGuestMapPreview}
                                 />
                                 <TouchableOpacity onPress={clearSearch}>
                                     <X size={20} color="#666666" />
                                 </TouchableOpacity>
                             </View>
                         ) : (
-                            <TouchableOpacity style={styles.searchButton} onPress={() => setShowSearch(true)}>
+                            <TouchableOpacity style={styles.searchButton} onPress={() => {
+                                if (isGuestMapPreview) {
+                                    actions.requireAuthForIntent({ route: '/exMap' });
+                                    return;
+                                }
+                                setShowSearch(true);
+                            }}>
                                 <Search size={20} color="#666666" />
                                 <Text style={styles.searchPlaceholder}>Search activities, people...</Text>
                             </TouchableOpacity>
@@ -728,10 +857,22 @@ export default function ExMapScreen() {
 
                         {/* Extended controls from Map */}
                         <View style={styles.extendedControls}>
-                            <TouchableOpacity style={styles.controlButton} onPress={() => setShowSortModal(true)}>
+                            <TouchableOpacity style={styles.controlButton} onPress={() => {
+                                if (isGuestMapPreview) {
+                                    actions.requireAuthForIntent({ route: '/exMap' });
+                                    return;
+                                }
+                                setShowSortModal(true);
+                            }}>
                                 <ArrowUpDown size={20} color="#666666" />
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.controlButton} onPress={() => setShowFilterModal(true)}>
+                            <TouchableOpacity style={styles.controlButton} onPress={() => {
+                                if (isGuestMapPreview) {
+                                    actions.requireAuthForIntent({ route: '/exMap' });
+                                    return;
+                                }
+                                setShowFilterModal(true);
+                            }}>
                                 <Filter size={20} color="#B49AFF" />
                             </TouchableOpacity>
                         </View>
@@ -789,7 +930,12 @@ export default function ExMapScreen() {
                                             {userSearchResults.length > 0 && (
                                                 <TouchableOpacity
                                                     style={styles.seeAllButton}
-                                                    onPress={() => router.push({ pathname: '/find-people', params: { q: searchQuery.trim() } })}
+                                                    onPress={() => {
+                                                        if (!actions.requireAuthForIntent({ route: '/find-people', params: { q: searchQuery.trim() } })) {
+                                                            return;
+                                                        }
+                                                        router.push({ pathname: '/find-people', params: { q: searchQuery.trim() } });
+                                                    }}
                                                 >
                                                     <Text style={styles.seeAllText}>See all</Text>
                                                     <ChevronRight size={14} color="#B49AFF" />
@@ -803,7 +949,22 @@ export default function ExMapScreen() {
                                                 contentContainerStyle={styles.peopleScrollContent}
                                             >
                                                 {userSearchResults.map((user) => (
-                                                    <UserSearchCard key={user.id} user={user} />
+                                                    <UserSearchCard
+                                                        key={user.id}
+                                                        user={user}
+                                                        onPress={(selectedUser) => {
+                                                            if (!actions.requireAuthForIntent({
+                                                                route: `/user-profile/${selectedUser.id}`,
+                                                                params: { userId: selectedUser.id },
+                                                            })) {
+                                                                return;
+                                                            }
+                                                            router.push({
+                                                                pathname: '/user-profile/[userId]',
+                                                                params: { userId: selectedUser.id },
+                                                            });
+                                                        }}
+                                                    />
                                                 ))}
                                             </ScrollView>
                                         )}
@@ -855,6 +1016,14 @@ export default function ExMapScreen() {
                                         });
                                     }
                                 }}
+                                onSaveToggle={({ tokiId, isSaved }) => actions.requireAuthForIntent({
+                                    route: '/exMap',
+                                    params: {
+                                        resumeAction: 'save',
+                                        resumeTokiId: tokiId,
+                                        nextSavedState: isSaved ? 'unsave' : 'save',
+                                    },
+                                })}
                                 onImageLoad={() => {
                                     if (item.id) {
                                         const idx = sortedEvents.findIndex(e => e?.id === item.id);
@@ -907,7 +1076,9 @@ export default function ExMapScreen() {
                 contentInsetAdjustmentBehavior="automatic"
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={handleRefreshWithRadius} />
+                    isGuestMapPreview
+                        ? undefined
+                        : <RefreshControl refreshing={refreshing} onRefresh={handleRefreshWithRadius} />
                 }
                 onEndReached={handleLoadMoreLocal}
                 onEndReachedThreshold={0.2}
@@ -976,6 +1147,55 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5,
+    },
+    guestMapOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(249, 250, 251, 0.16)',
+        padding: 24,
+    },
+    guestMapCard: {
+        width: '100%',
+        maxWidth: 340,
+        backgroundColor: 'rgba(255,255,255,0.88)',
+        borderRadius: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 22,
+        alignItems: 'center',
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.16,
+        shadowRadius: 20,
+        elevation: 8,
+        borderWidth: 1,
+        borderColor: '#E9DDFC',
+    },
+    guestMapTitle: {
+        fontSize: 22,
+        fontFamily: 'Inter-Bold',
+        color: '#1F172A',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    guestMapText: {
+        fontSize: 15,
+        fontFamily: 'Inter-Regular',
+        color: '#6B7280',
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 16,
+    },
+    guestMapButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 999,
+        backgroundColor: '#8B5CF6',
+    },
+    guestMapButtonText: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontFamily: 'Inter-SemiBold',
     },
     headerWrapper: {
         overflow: 'hidden',

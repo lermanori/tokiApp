@@ -6,12 +6,17 @@ import { SearchUser } from '@/hooks/useDiscoverFilters';
 
 interface UserSearchCardProps {
     user: SearchUser;
+    onPress?: (user: SearchUser) => void;
 }
 
 const DEFAULT_AVATAR = 'https://res.cloudinary.com/dsq1ocdl1/image/upload/v1770670984/wanderercreative-blank-profile-picture-973460_1920_smqcnp.jpg';
 
-export default function UserSearchCard({ user }: UserSearchCardProps) {
+export default function UserSearchCard({ user, onPress }: UserSearchCardProps) {
     const handlePress = () => {
+        if (onPress) {
+            onPress(user);
+            return;
+        }
         router.push({
             pathname: '/user-profile/[userId]',
             params: { userId: user.id },

@@ -16,6 +16,7 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import RedirectionGuard from '@/components/RedirectionGuard';
 import { UserPhotoViewerProvider } from '@/components/UserPhotoViewer/UserPhotoViewerContext';
 import { VersionGateCoordinator } from '@/components/version/VersionGateCoordinator';
+import { isAnonymousLandingEligibleRoute, isLandingRouteMatch, normalizeAnonymousRoute } from '@/utils/anonymousLanding';
 
 // IMPORTANT: Must be called at the top level BEFORE any component renders.
 // This allows the Google OAuth popup to detect it's a redirect and close itself
@@ -596,7 +597,16 @@ function RootLayoutNav() {
       const segmentsPath = segments.length > 0 ? `/${segments.join('/')}` : '';
       const pathIsJoin = path.startsWith('/join');
       const pathIsLogin = path.startsWith('/login');
+      const normalizedPath = normalizeAnonymousRoute(path);
       const isOnNotFound = segments[0] === '+not-found';
+      const currentRouteParams: Record<string, string> = {};
+
+      const currentTokiId = (typeof searchParams.tokiId === 'string' ? searchParams.tokiId : Array.isArray(searchParams.tokiId) ? searchParams.tokiId[0] : undefined)
+        || initialUrlParams?.tokiId
+        || urlParams.tokiId;
+      if (currentTokiId) {
+        currentRouteParams.tokiId = currentTokiId;
+      }
 
       // Skip auth check if we're still waiting for initial URL to be captured on native
       // This prevents the auth check from running before we know the deep link target
@@ -636,10 +646,27 @@ function RootLayoutNav() {
       lastProcessedSegmentsRef.current = segmentsKey;
       console.log('📝 [AUTH CHECK] Marked segments as processed:', segmentsKey);
 
-      // If we are navigating directly to a join link, do not block initial render
-      // Let the join page fetch public invite info and handle login flow
-      if (pathIsJoin) {
-        console.log('🔗 Direct join link detected. Skipping initial auth check to avoid blocking navigation.');
+      // If we are navigating directly to an anonymous landing route, do not block initial render.
+      // The page itself will render, and protected clicks from there will trigger login.
+      if (!apiService.hasToken() && isAnonymousLandingEligibleRoute(normalizedPath)) {
+        if (!state.anonymousLanding.isAnonymousLanding) {
+          console.log('👋 [ANON LANDING] Starting anonymous landing session for route:', normalizedPath, currentRouteParams);
+          actions.startAnonymousLanding(normalizedPath, currentRouteParams);
+        } else if (isLandingRouteMatch(
+          state.anonymousLanding.landingRoute,
+          normalizedPath,
+          state.anonymousLanding.landingParams,
+          currentRouteParams
+        )) {
+          console.log('👋 [ANON LANDING] Staying on allowed anonymous landing route:', normalizedPath);
+        }
+        setLastAuthCheck(now);
+        setIsReady(true);
+        return;
+      }
+
+      if (!apiService.hasToken() && normalizedPath === '/landing') {
+        console.log('👋 Public landing route detected. Skipping auth redirect.');
         setLastAuthCheck(now);
         setIsReady(true);
         return;
@@ -675,7 +702,8 @@ function RootLayoutNav() {
           currentUserId: state.currentUser?.id,
           hasToken: apiService.hasToken(),
           inLoginScreen,
-          redirectionState: state.redirection
+          redirectionState: state.redirection,
+          anonymousLanding: state.anonymousLanding,
         });
         // Treat the URL path as join during the very first render before segments are populated
         const inJoinScreen = segments[0] === 'join' || pathIsJoin;
@@ -688,6 +716,26 @@ function RootLayoutNav() {
         const inPrivacyPolicyScreen = segments[0] === 'privacy-policy' || path.startsWith('/privacy-policy');
         const inSupportScreen = segments[0] === 'support' || path.startsWith('/support');
         const inCompleteProfileScreen = segments[0] === 'complete-profile' || path.startsWith('/complete-profile');
+
+        if (isAuthenticated && state.anonymousLanding.isAnonymousLanding) {
+          actions.clearAnonymousLanding();
+        }
+
+        if (
+          !isAuthenticated &&
+          state.anonymousLanding.isAnonymousLanding &&
+          !inLoginScreen &&
+          !isLandingRouteMatch(
+            state.anonymousLanding.landingRoute,
+            normalizedPath,
+            state.anonymousLanding.landingParams,
+            currentRouteParams
+          )
+        ) {
+          console.log('🔒 [ANON LANDING] Guest tried to leave the landing route without authentication, redirecting to login.');
+          router.replace('/login');
+          return;
+        }
 
         if (!isAuthenticated && !inLoginScreen && !inJoinScreen && !inHealthScreen && !inWaitlistScreen && !inSetPasswordScreen && !inResetPasswordScreen && !inRegisterScreen && !inTermsOfUseScreen && !inPrivacyPolicyScreen && !inSupportScreen && !inCompleteProfileScreen) {
           const pendingLoginContext = apiService.getPendingLoginAnalyticsContext();
@@ -874,6 +922,7 @@ function RootLayoutNav() {
             'connections',
             'chat',
             'edit-profile',
+            'find-people',
             'my-tokis',
             'saved-tokis',
             'complete-profile',
@@ -889,6 +938,7 @@ function RootLayoutNav() {
             path.startsWith('/connections') ||
             path.startsWith('/chat') ||
             path.startsWith('/edit-profile') ||
+            path.startsWith('/find-people') ||
             path.startsWith('/my-tokis') ||
             path.startsWith('/saved-tokis');
 
@@ -1018,7 +1068,7 @@ function RootLayoutNav() {
         console.error('❌ Error checking authentication:', error);
         // If there's an error, don't immediately redirect - this might be a network issue
         // Only redirect if we're not on the login, join, health, waitlist, set-password, reset-password, terms-of-use, or complete-profile screen and have no current user
-        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (segments[0] as string) !== 'terms-of-use' && (segments[0] as string) !== 'privacy-policy' && (segments[0] as string) !== 'support' && (segments[0] as string) !== 'complete-profile' && (!state.currentUser || !state.currentUser.id)) {
+        if ((segments[0] as string) !== 'login' && (segments[0] as string) !== 'join' && (segments[0] as string) !== 'health' && (segments[0] as string) !== 'waitlist' && (segments[0] as string) !== 'set-password' && (segments[0] as string) !== 'reset-password' && (segments[0] as string) !== 'terms-of-use' && (segments[0] as string) !== 'privacy-policy' && (segments[0] as string) !== 'support' && (segments[0] as string) !== 'complete-profile' && !path.startsWith('/landing') && (segments[0] as string) !== 'landing' && (!state.currentUser || !state.currentUser.id)) {
           console.log('🔄 Redirecting to login - auth error and no current user');
           router.replace('/login');
         }
@@ -1029,7 +1079,16 @@ function RootLayoutNav() {
     };
 
     checkAuth();
-  }, [segmentsKey, isWaitingForInitialUrl, initialUrl, hasHandledInitialUrl]); // Re-run when segments change or when initial URL is captured/handled
+  }, [
+    segmentsKey,
+    isWaitingForInitialUrl,
+    initialUrl,
+    hasHandledInitialUrl,
+    state.currentUser?.id,
+    state.anonymousLanding.isAnonymousLanding,
+    state.anonymousLanding.landingRoute,
+    state.anonymousLanding.landingParams?.tokiId,
+  ]); // Re-run when segments change or when initial URL/auth landing state changes
 
   // Handle redirection when user data becomes available
   useEffect(() => {
@@ -1134,6 +1193,7 @@ function RootLayoutNav() {
         <Stack.Screen name="terms-of-use" options={{ headerShown: false }} />
         <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
         <Stack.Screen name="support" options={{ headerShown: false }} />
+        <Stack.Screen name="landing" options={{ headerShown: false }} />
         <Stack.Screen name="report-bug" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>

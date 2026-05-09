@@ -23,6 +23,7 @@ import MetaTags from '@/components/MetaTags';
 import AppInstallPrompt from '@/components/AppInstallPrompt';
 import TokiHeader from '@/components/TokiHeader';
 import { Share as RNShare } from 'react-native';
+import { stripResumeParams } from '@/utils/anonymousLanding';
 
 const { width } = Dimensions.get('window');
 
@@ -192,6 +193,7 @@ export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
   const params = useLocalSearchParams();
   const hasTrackedView = useRef(false);
+  const resumeActionHandledRef = useRef<string | null>(null);
 
   // Fallback to read URL parameters directly (for web deep linking)
   const getUrlParams = () => {
@@ -227,6 +229,8 @@ export default function TokiDetailsScreen() {
     time: (params.time as string) || urlParams.time,
     fromEdit: (params.fromEdit as string) || urlParams.fromEdit,
     fromCreate: (params.fromCreate as string) || urlParams.fromCreate,
+    resumeAction: (params.resumeAction as string) || urlParams.resumeAction,
+    nextSavedState: (params.nextSavedState as string) || urlParams.nextSavedState,
   };
 
   const [toki, setToki] = useState<TokiDetails | null>(null);
@@ -287,6 +291,11 @@ export default function TokiDetailsScreen() {
 
 
   const checkSavedStatus = async () => {
+    if (!apiService.hasToken()) {
+      setIsLiked(false);
+      return;
+    }
+
     try {
       console.log('🔍 Checking saved status for Toki:', effectiveParams.tokiId);
       const saved = await actions.checkIfSaved(effectiveParams.tokiId as string);
@@ -297,8 +306,70 @@ export default function TokiDetailsScreen() {
     }
   };
 
+  const navigateToExplore = () => {
+    if (!actions.requireAuthForIntent({ route: '/exMap' })) {
+      return;
+    }
+    router.push('/exMap');
+  };
+
+  const navigateToUserProfile = (userId: string) => {
+    if (!actions.requireAuthForIntent({
+      route: `/user-profile/${userId}`,
+      params: { userId },
+    })) {
+      return;
+    }
+
+    router.push({
+      pathname: '/user-profile/[userId]',
+      params: { userId }
+    });
+  };
+
+  const openHostChat = () => {
+    if (!toki) return;
+
+    const hostId = toki.host.id || toki.hostId;
+    if (!hostId) {
+      Alert.alert('Error', 'Unable to identify host for chat.');
+      return;
+    }
+
+    if (!actions.requireAuthForIntent({
+      route: '/chat',
+      params: {
+        otherUserId: hostId,
+        otherUserName: toki.host.name,
+        isGroup: 'false',
+      },
+    })) {
+      return;
+    }
+
+    router.push({
+      pathname: '/chat',
+      params: {
+        otherUserId: hostId,
+        otherUserName: toki.host.name,
+        isGroup: 'false',
+      }
+    });
+  };
+
   const handleSaveToggle = async () => {
     if (isSaving || !effectiveParams.tokiId) return;
+
+    if (!actions.requireAuthForIntent({
+      route: '/toki-details',
+      params: {
+        tokiId: effectiveParams.tokiId as string,
+        resumeAction: 'save',
+        nextSavedState: isLiked ? 'unsave' : 'save',
+      },
+    })) {
+      return;
+    }
 
     console.log('💝 Toggling save status for Toki:', effectiveParams.tokiId, 'Current state:', isLiked);
 
@@ -337,14 +408,19 @@ export default function TokiDetailsScreen() {
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Loading toki data for:', tokiId, `(attempt ${retryCount + 1})`);
     setIsLoading(true);
     try {
-      const tokiData: any = await apiService.getToki(tokiId);
+      const isAuthenticated = apiService.hasToken();
+      const tokiData: any = isAuthenticated
+        ? await apiService.getToki(tokiId)
+        : await apiService.getPublicToki(tokiId);
 
         // Fetch friends attending data BEFORE creating transformedToki
         let friendsAttending: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }> = [];
-        try {
-          friendsAttending = await actions.getFriendsAttendingToki(tokiId);
-        } catch (error) {
-          console.error('Error loading friends attending:', error);
+        if (isAuthenticated) {
+          try {
+            friendsAttending = await actions.getFriendsAttendingToki(tokiId);
+          } catch (error) {
+            console.error('Error loading friends attending:', error);
+          }
         }
 
         // Transform backend data to match our interface
@@ -414,7 +490,9 @@ export default function TokiDetailsScreen() {
         console.log('✅ [FLOW DEBUG] [TOKI DETAILS] Toki data loaded successfully:', tokiId);
 
         // Check saved status after Toki data is loaded
-        checkSavedStatus();
+        if (isAuthenticated) {
+          checkSavedStatus();
+        }
 
         // If this is a newly created Toki and distance is missing or 0, retry after a delay
         // This handles the case where the toki was just created and needs to be fully persisted
@@ -443,6 +521,8 @@ export default function TokiDetailsScreen() {
         setToki(fallbackData);
         // Check saved status for fallback data too
         checkSavedStatus();
+      } else if (!apiService.hasToken()) {
+        actions.clearAnonymousLanding();
       }
     } finally {
       setIsLoading(false);
@@ -483,7 +563,7 @@ export default function TokiDetailsScreen() {
       lastProcessedTokiId.current = tokiId;
       console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ✅ Valid tokiId found, loading data:', tokiId);
       // Ensure current user is loaded before loading Toki data
-      if (!state.currentUser?.id) {
+      if (!state.currentUser?.id && apiService.hasToken()) {
         console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] Waiting for current user to load...');
         actions.loadCurrentUser().then(() => {
           loadTokiData(tokiId);
@@ -506,6 +586,49 @@ export default function TokiDetailsScreen() {
       actions.viewToki(tokiId);
     }
   }, [effectiveParams.tokiId]);
+
+  useEffect(() => {
+    const tokiId = effectiveParams.tokiId as string;
+    const resumeAction = effectiveParams.resumeAction as string | undefined;
+
+    if (!resumeAction || !tokiId || !state.currentUser?.id) {
+      return;
+    }
+
+    const resumeKey = `${resumeAction}:${tokiId}:${effectiveParams.nextSavedState || ''}`;
+    if (resumeActionHandledRef.current === resumeKey) {
+      return;
+    }
+    resumeActionHandledRef.current = resumeKey;
+
+    const executeResumeAction = async () => {
+      if (resumeAction === 'save') {
+        if (effectiveParams.nextSavedState === 'unsave') {
+          await actions.unsaveToki(tokiId);
+          setIsLiked(false);
+        } else {
+          await actions.saveToki(tokiId);
+          setIsLiked(true);
+        }
+        router.replace({
+          pathname: '/toki-details',
+          params: stripResumeParams(params as Record<string, any>),
+        });
+        return;
+      }
+
+      if (resumeAction === 'join') {
+        handleJoinRequest();
+        return;
+      }
+
+      if (resumeAction === 'chat') {
+        handleChatPress();
+      }
+    };
+
+    executeResumeAction();
+  }, [effectiveParams.resumeAction, effectiveParams.tokiId, effectiveParams.nextSavedState, state.currentUser?.id, params]);
 
   // Force reload when coming from create (works on all platforms)
   useEffect(() => {
@@ -534,6 +657,16 @@ export default function TokiDetailsScreen() {
 
   const handleJoinRequest = async () => {
     if (!toki) return;
+
+    if (!actions.requireAuthForIntent({
+      route: '/toki-details',
+      params: {
+        tokiId: toki.id,
+        resumeAction: 'join',
+      },
+    })) {
+      return;
+    }
 
     if (toki.isHostedByUser) {
       Alert.alert('Your Event', 'This is your event! You can manage it from your profile.');
@@ -604,6 +737,16 @@ export default function TokiDetailsScreen() {
   const handleChatPress = () => {
     if (!toki) return;
 
+    if (!actions.requireAuthForIntent({
+      route: '/toki-details',
+      params: {
+        tokiId: toki.id,
+        resumeAction: 'chat',
+      },
+    })) {
+      return;
+    }
+
     // Only allow chat access if user is approved
     if (toki.joinStatus === 'approved' || toki.isHostedByUser) {
       router.push({
@@ -639,6 +782,15 @@ export default function TokiDetailsScreen() {
 
   const handleInvitePress = async () => {
     if (!toki) return;
+
+    if (!actions.requireAuthForIntent({
+      route: '/toki-details',
+      params: {
+        tokiId: toki.id,
+      },
+    })) {
+      return;
+    }
 
     // Allow hosts or attendees of public tokis to invite
     const canInvite = toki.isHostedByUser || (toki.visibility === 'public' && toki.joinStatus === 'approved');
@@ -894,6 +1046,15 @@ export default function TokiDetailsScreen() {
   // Report Toki handler
   const handleReportToki = async (reason: string) => {
     if (!toki) return;
+
+    if (!actions.requireAuthForIntent({
+      route: '/toki-details',
+      params: {
+        tokiId: toki.id,
+      },
+    })) {
+      return;
+    }
 
     try {
       const success = await actions.reportToki(toki.id, reason);
@@ -1475,6 +1636,11 @@ export default function TokiDetailsScreen() {
             friendsAttending={toki?.friendsAttending}
             onFriendsPress={() => setShowFriendsModal(true)}
             onBack={() => {
+              if (state.anonymousLanding.isAnonymousLanding) {
+                navigateToExplore();
+                return;
+              }
+
               // If coming from edit or create, go to home page instead of back to form
               if (fromEdit || fromCreate) {
                 router.push('/(tabs)');
@@ -1560,6 +1726,9 @@ export default function TokiDetailsScreen() {
                 style={styles.eventInfoItem}
                 onPress={() => {
                   if (toki.latitude && toki.longitude) {
+                    if (!actions.requireAuthForIntent({ route: '/exMap' })) {
+                      return;
+                    }
                     router.push({
                       pathname: '/(tabs)/exMap',
                       params: { highlightTokiId: toki.id }
@@ -1635,13 +1804,10 @@ export default function TokiDetailsScreen() {
                         </View>
                       )}
                       <View style={styles.participantInfo}>
-                        <TouchableOpacity
+                      <TouchableOpacity
                           onPress={() => {
                             if (participant.id !== state.currentUser?.id) {
-                              router.push({
-                                pathname: '/user-profile/[userId]',
-                                params: { userId: participant.id }
-                              });
+                              navigateToUserProfile(participant.id);
                             }
                           }}
                           disabled={participant.id === state.currentUser?.id}
@@ -1720,10 +1886,7 @@ export default function TokiDetailsScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       if (!toki.isHostedByUser) {
-                        router.push({
-                          pathname: '/user-profile/[userId]',
-                          params: { userId: toki.host.id }
-                        });
+                        navigateToUserProfile(toki.host.id);
                       }
                     }}
                     disabled={toki.isHostedByUser}
@@ -1744,27 +1907,7 @@ export default function TokiDetailsScreen() {
                 {!toki.isHostedByUser && (
                   <TouchableOpacity
                     style={styles.hostChatButton}
-                    onPress={async () => {
-                      try {
-                        // Get the host ID from the Toki data
-                        const hostId = toki.host.id || toki.hostId;
-                        if (hostId) {
-                          router.push({
-                            pathname: '/chat',
-                            params: {
-                              otherUserId: hostId,
-                              otherUserName: toki.host.name,
-                              isGroup: 'false'
-                            }
-                          });
-                        } else {
-                          Alert.alert('Error', 'Unable to identify host for chat.');
-                        }
-                      } catch (error) {
-                        console.error('Error starting conversation with host:', error);
-                        Alert.alert('Error', 'Failed to open chat with host. Please try again.');
-                      }
-                    }}
+                    onPress={openHostChat}
                   >
                     <Text style={styles.hostChatButtonText}>Chat</Text>
                   </TouchableOpacity>
@@ -1846,7 +1989,15 @@ export default function TokiDetailsScreen() {
               <View style={styles.reportSection}>
                 <TouchableOpacity
                   style={styles.reportButton}
-                  onPress={() => setShowReportModal(true)}
+                  onPress={() => {
+                    if (!actions.requireAuthForIntent({
+                      route: '/toki-details',
+                      params: { tokiId: toki.id },
+                    })) {
+                      return;
+                    }
+                    setShowReportModal(true);
+                  }}
                 >
                   <Flag size={20} color="#EF4444" />
                   <Text style={styles.reportText}>Report Toki</Text>
@@ -1964,7 +2115,7 @@ export default function TokiDetailsScreen() {
           participants={participantsForRating}
           onClose={() => setShowRatingPrompt(false)}
           onRatingsSubmitted={completeEventAfterRatings}
-          onNavigateToExplore={() => router.push('/(tabs)')}
+          onNavigateToExplore={navigateToExplore}
         />
 
         {/* Remove Participant Confirmation Modal */}

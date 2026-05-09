@@ -9,6 +9,7 @@ import { getBackendUrl } from '../services/config';
 import { isRealtimeDisabledForE2E } from '../services/launchArgs';
 import { registerForPushNotificationsAsync, configureForegroundNotificationHandler } from '../utils/notifications';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { buildIntentLoginUrl, normalizeAnonymousRoute, ProtectedIntent } from '../utils/anonymousLanding';
 
 interface Toki {
   id: string;
@@ -124,6 +125,13 @@ interface RedirectionState {
   isRedirecting: boolean;
 }
 
+interface AnonymousLandingState {
+  isAnonymousLanding: boolean;
+  landingRoute: string | null;
+  landingParams: Record<string, string> | null;
+  pendingIntent: ProtectedIntent | null;
+}
+
 interface AppState {
   tokis: Toki[];
   mapTokis: Toki[];
@@ -147,6 +155,7 @@ interface AppState {
   connections: any[];
   pendingConnections: any[];
   userConnectionsIds: string[];
+  anonymousLanding: AnonymousLandingState;
 }
 
 type AppAction =
@@ -155,6 +164,10 @@ type AppAction =
   | { type: 'SET_CONNECTION_STATUS'; payload: boolean }
   | { type: 'SET_REDIRECTION'; payload: { returnTo: string; returnParams?: Record<string, string> } }
   | { type: 'CLEAR_REDIRECTION' }
+  | { type: 'START_ANONYMOUS_LANDING'; payload: { landingRoute: string; landingParams?: Record<string, string> } }
+  | { type: 'CLEAR_ANONYMOUS_LANDING' }
+  | { type: 'SET_PENDING_INTENT'; payload: ProtectedIntent }
+  | { type: 'CLEAR_PENDING_INTENT' }
   | { type: 'SET_TOKIS'; payload: Toki[] }
   | { type: 'SET_MAP_TOKIS'; payload: Toki[] }
   | { type: 'ADD_TOKI'; payload: Toki }
@@ -312,6 +325,12 @@ const initialState: AppState = {
   connections: [],
   pendingConnections: [],
   userConnectionsIds: [],
+  anonymousLanding: {
+    isAnonymousLanding: false,
+    landingRoute: null,
+    landingParams: null,
+    pendingIntent: null,
+  },
 };
 
 const formatDistanceString = (distance?: { km: number; miles: number } | string): string => {
@@ -347,6 +366,42 @@ function appReducer(state: AppState, action: AppAction): AppState {
           returnTo: null,
           returnParams: null,
           isRedirecting: false
+        }
+      };
+    case 'START_ANONYMOUS_LANDING':
+      return {
+        ...state,
+        anonymousLanding: {
+          ...state.anonymousLanding,
+          isAnonymousLanding: true,
+          landingRoute: normalizeAnonymousRoute(action.payload.landingRoute),
+          landingParams: action.payload.landingParams || null,
+        }
+      };
+    case 'CLEAR_ANONYMOUS_LANDING':
+      return {
+        ...state,
+        anonymousLanding: {
+          isAnonymousLanding: false,
+          landingRoute: null,
+          landingParams: null,
+          pendingIntent: null,
+        }
+      };
+    case 'SET_PENDING_INTENT':
+      return {
+        ...state,
+        anonymousLanding: {
+          ...state.anonymousLanding,
+          pendingIntent: action.payload,
+        }
+      };
+    case 'CLEAR_PENDING_INTENT':
+      return {
+        ...state,
+        anonymousLanding: {
+          ...state.anonymousLanding,
+          pendingIntent: null,
         }
       };
     case 'SET_TOKIS':
@@ -658,6 +713,11 @@ interface AppContextType {
     // Redirection actions
     setRedirection: (returnTo: string, params?: Record<string, string>) => void;
     clearRedirection: () => void;
+    startAnonymousLanding: (landingRoute: string, landingParams?: Record<string, string>) => void;
+    clearAnonymousLanding: () => void;
+    setPendingIntent: (intent: ProtectedIntent) => void;
+    consumePendingIntent: () => void;
+    requireAuthForIntent: (intent: ProtectedIntent) => boolean;
   };
 
 
@@ -2166,6 +2226,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_BLOCKED_USERS', payload: [] });
     dispatch({ type: 'SET_BLOCKED_BY_USERS', payload: [] });
     dispatch({ type: 'SET_SAVED_TOKIS', payload: [] });
+    dispatch({ type: 'CLEAR_REDIRECTION' });
+    dispatch({ type: 'CLEAR_ANONYMOUS_LANDING' });
 
     console.log('🗑️ All data cleared including auth tokens');
   };
@@ -2944,6 +3006,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const startAnonymousLanding = (landingRoute: string, landingParams?: Record<string, string>) => {
+    dispatch({
+      type: 'START_ANONYMOUS_LANDING',
+      payload: {
+        landingRoute,
+        landingParams,
+      }
+    });
+  };
+
+  const clearAnonymousLanding = () => {
+    dispatch({ type: 'CLEAR_ANONYMOUS_LANDING' });
+  };
+
+  const setPendingIntent = (intent: ProtectedIntent) => {
+    dispatch({ type: 'SET_PENDING_INTENT', payload: intent });
+  };
+
+  const consumePendingIntent = () => {
+    dispatch({ type: 'CLEAR_PENDING_INTENT' });
+  };
+
+  const requireAuthForIntent = (intent: ProtectedIntent): boolean => {
+    const hasAuthenticatedSession = Boolean(state.currentUser?.id) || apiService.hasToken();
+    if (hasAuthenticatedSession) {
+      return true;
+    }
+
+    const normalizedIntent: ProtectedIntent = {
+      route: normalizeAnonymousRoute(intent.route),
+      params: intent.params,
+    };
+
+    dispatch({ type: 'SET_PENDING_INTENT', payload: normalizedIntent });
+    router.replace(buildIntentLoginUrl(normalizedIntent) as any);
+    return false;
+  };
+
   // =========================
   // Notifications (Unread)
   // =========================
@@ -3255,6 +3355,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearRedirection: () => {
       dispatch({ type: 'CLEAR_REDIRECTION' });
     },
+    startAnonymousLanding,
+    clearAnonymousLanding,
+    setPendingIntent,
+    consumePendingIntent,
+    requireAuthForIntent,
   };
 
   return (

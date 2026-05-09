@@ -41,6 +41,7 @@ export interface TokiCardProps {
     };
     onPress: () => void;
     onHostPress?: () => void;
+    onSaveToggle?: (context: { tokiId: string; isSaved: boolean }) => boolean | Promise<boolean>;
     onImageLoad?: () => void; // Callback when images finish loading
     onRecreate?: () => void; // Callback for recreate button
     showRecreateButton?: boolean; // Flag to show/hide recreate button
@@ -199,7 +200,7 @@ const formatTimeDisplay = (time: string | undefined, scheduledTime?: string): st
     return time;
 };
 
-export default function TokiCard({ toki, onPress, onHostPress, onImageLoad, onRecreate, showRecreateButton }: TokiCardProps) {
+export default function TokiCard({ toki, onPress, onHostPress, onSaveToggle, onImageLoad, onRecreate, showRecreateButton }: TokiCardProps) {
     const { actions } = useApp();
     const [isSaved, setIsSaved] = useState(toki.isSaved || false);
     const [isSaving, setIsSaving] = useState(false);
@@ -283,6 +284,13 @@ export default function TokiCard({ toki, onPress, onHostPress, onImageLoad, onRe
 
     const handleSaveToggle = async () => {
         if (isSaving) return;
+
+        if (onSaveToggle) {
+            const shouldContinue = await onSaveToggle({ tokiId: toki.id, isSaved });
+            if (!shouldContinue) {
+                return;
+            }
+        }
 
         try {
             setIsSaving(true);

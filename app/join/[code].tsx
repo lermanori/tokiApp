@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,9 +9,10 @@ import { Link, Users, MapPin, Clock } from 'lucide-react-native';
 import AppInstallPrompt from '@/components/AppInstallPrompt';
 
 export default function JoinByCode() {
-  const { code } = useLocalSearchParams<{ code: string }>();
+  const { code, resumeAction } = useLocalSearchParams<{ code: string; resumeAction?: string }>();
   const { actions, state } = useApp();
   const router = useRouter();
+  const hasResumedJoinRef = useRef(false);
   
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -64,19 +65,11 @@ export default function JoinByCode() {
       return;
     }
 
-    // Check both user state and tokens - if tokens exist but user state not loaded yet, wait a bit
     const hasTokens = apiService.hasToken();
     const hasUserData = !!state.currentUser?.id;
     
     console.log('🔗 [JOIN FLOW] Auth check:', { hasTokens, hasUserData });
-    
-    if (!hasUserData && !hasTokens) {
-      console.log('🔗 [JOIN FLOW] ⚠️ User not logged in and no tokens, redirecting to login');
-      console.log('🔗 [JOIN FLOW] Redirect URL: /login?returnTo=join&code=' + code);
-      router.replace(`/login?returnTo=join&code=${code}`);
-      return;
-    }
-    
+
     // If we have tokens but user data isn't loaded yet, wait a moment for state to sync
     if (hasTokens && !hasUserData) {
       console.log('🔗 [JOIN FLOW] ⚠️ Has tokens but user data not loaded yet, waiting for state sync...');
@@ -97,7 +90,8 @@ export default function JoinByCode() {
   };
   
   const proceedWithLoadLinkInfo = async () => {
-    console.log('🔗 [JOIN FLOW] ✅ User is authenticated (has user data or tokens), proceeding to load link info');
+    console.log('🔗 [JOIN FLOW] Loading public invite link info');
+    const hasTokens = apiService.hasToken();
     try {
       setLoading(true);
       console.log('🔗 [JOIN FLOW] Calling getInviteLinkInfo with code:', code);
@@ -121,8 +115,9 @@ export default function JoinByCode() {
         setLinkInfo(normalized);
         setError(null);
         
-        // Load full details and check participant status
-        try {
+        // Load full details and check participant status when authenticated
+        if (hasTokens) {
+          try {
           console.log('🔗 [JOIN FLOW] Loading full toki details for ID:', normalized.toki.id);
           const full = await actions.getTokiById?.(normalized.toki.id);
           console.log('🔗 [JOIN FLOW] Full toki details received:', {
@@ -159,18 +154,14 @@ export default function JoinByCode() {
           }
           
           console.log('🔗 [JOIN FLOW] ✅ User is not a participant yet, showing join UI');
-        } catch (e: any) {
+          } catch (e: any) {
           console.log('🔗 [JOIN FLOW] ⚠️ Error loading full toki details:', {
             isAuthError: e?.isAuthError,
             status: e?.status,
             message: e?.message
           });
-          if (e?.isAuthError || e?.status === 401) {
-            console.log('🔗 [JOIN FLOW] ⚠️ Auth error, redirecting to login');
-            router.replace(`/login?returnTo=join&code=${code}`);
-            return;
-          }
           console.log('🔗 [JOIN FLOW] ⚠️ Could not load full toki details for join page, continuing with basic info');
+          }
         }
       } else {
         console.log('🔗 [JOIN FLOW] ❌ Invite link is not active or missing');
@@ -187,14 +178,9 @@ export default function JoinByCode() {
       // Handle invalid invite codes without redirecting to login
       if (err?.message?.includes('Invalid') || err?.message?.includes('not found') || err?.status === 404) {
         console.log('🔗 [JOIN FLOW] ❌ Invalid invite code (404 or not found)');
+        actions.clearAnonymousLanding();
         setError('Invalid invite code. Please check the link and try again.');
         setLoading(false);
-        return;
-      }
-      
-      if (err?.isAuthError || err?.status === 401) {
-        console.log('🔗 [JOIN FLOW] ⚠️ Auth error (401), redirecting to login');
-        router.replace(`/login?returnTo=join&code=${code}`);
         return;
       }
       console.error('🔗 [JOIN FLOW] ❌ Failed to load invite link info:', err);
@@ -213,9 +199,16 @@ export default function JoinByCode() {
       tokiId: linkInfo?.toki?.id
     });
     
-    if (!code || !state.currentUser?.id) {
-      console.log('🔗 [JOIN FLOW] ❌ Missing code or user ID, redirecting to login');
-      router.replace(`/login?returnTo=join&code=${code}`);
+    if (!code) {
+      return;
+    }
+
+    if (!actions.requireAuthForIntent({
+      route: `/join/${code}`,
+      params: {
+        resumeAction: 'join',
+      },
+    })) {
       return;
     }
 
@@ -246,17 +239,21 @@ export default function JoinByCode() {
         isAuthError: err?.isAuthError,
         error: err
       });
-      if (err?.isAuthError || err?.status === 401) {
-        console.log('🔗 [JOIN FLOW] ⚠️ Auth error (401), redirecting to login');
-        router.replace(`/login?returnTo=join&code=${code}`);
-        return;
-      }
       console.error('🔗 [JOIN FLOW] ❌ Failed to join event:', err);
     } finally {
       console.log('🔗 [JOIN FLOW] handleJoin completed, setting joining to false');
       setJoining(false);
     }
   };
+
+  useEffect(() => {
+    if (resumeAction !== 'join' || !state.currentUser?.id || hasResumedJoinRef.current) {
+      return;
+    }
+
+    hasResumedJoinRef.current = true;
+    handleJoin();
+  }, [resumeAction, state.currentUser?.id, code]);
 
 
   if (loading) {
@@ -344,7 +341,12 @@ export default function JoinByCode() {
       <AppInstallPrompt currentUrl={getCurrentUrl()} />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.push('/(tabs)')}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (!actions.requireAuthForIntent({ route: '/exMap' })) {
+            return;
+          }
+          router.push('/(tabs)');
+        }}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Join Event</Text>
