@@ -48,3 +48,7 @@ app.json
 .cursor/skills/
 .gemini/
 .opencode/
+
+# local browser/debug artifacts
+.playwright-mcp/
+/landing-page*.png
