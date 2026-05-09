@@ -19,10 +19,16 @@ Toki Social Map is a location-based social networking mobile app for discovering
 npm run dev              # Start Expo dev server
 npm run ios              # Run on iOS simulator
 npm run android          # Run on Android emulator
+npm run detox:build:ios  # Build the reliable iOS Detox release app
+npm run detox:test:ios   # Run the default iOS Detox suite against release
 npm run build:web        # Build web version
 npm run lint             # Run Expo lint
 npm run start:device     # Run on physical iOS device (Release)
 ```
+
+### Detox Notes
+- Default iOS Detox commands use `ios.sim.release` because this Expo app is more reliable there than in the Metro-dependent debug path.
+- Use `npm run detox:build:ios:debug` and `npm run detox:test:ios:debug` only when you explicitly want to debug against the development build with Metro running.
 
 ### Backend (`toki-backend/`)
 ```bash

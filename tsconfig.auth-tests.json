@@ -12,7 +12,14 @@
   "include": [
     "services/authSession.ts",
     "services/authRequest.ts",
+    "services/authStartup.ts",
+    "services/version/types.ts",
+    "services/version/versionGateMachine.ts",
+    "toki-backend/src/services/versionPolicyService.ts",
     "tests/authSession.test.ts",
-    "tests/authRefresh.test.ts"
+    "tests/authRefresh.test.ts",
+    "tests/authStartup.test.ts",
+    "tests/versionGateMachine.test.ts",
+    "tests/versionPolicyService.test.ts"
   ]
 }

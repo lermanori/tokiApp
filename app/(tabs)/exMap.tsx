@@ -694,7 +694,7 @@ export default function ExMapScreen() {
                     style={styles.header}
                 >
                     <View style={styles.headerContent}>
-                        <Text style={styles.greeting}>Feeling social right now?</Text>
+                        <Text style={styles.greeting} testID="explore-greeting">Feeling social right now?</Text>
                         <Text style={styles.subtitle}>Find what's happening around you</Text>
                         {!state.isConnected && (
                             <View style={styles.connectionStatus}>
@@ -740,6 +740,7 @@ export default function ExMapScreen() {
             </View>
 
             <FlatList
+                testID="discover-feed-list"
                 key={`flatlist-${numColumns}`}
                 data={Array.isArray(paginatedEvents) ? paginatedEvents.filter(item => item && typeof item === 'object') : []}
                 keyExtractor={(item, index) => {

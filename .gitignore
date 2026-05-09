@@ -23,6 +23,8 @@ ios/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+output/
+.tmp-tests/
 
 # macos
 .DS_Store
