@@ -212,6 +212,10 @@ const LANDING_STYLES = `
     max-width: 660px;
   }
 
+  .landing-mobile-logo {
+    display: none;
+  }
+
   .landing-badge,
   .landing-cta-badge {
     display: inline-flex;
@@ -276,9 +280,9 @@ const LANDING_STYLES = `
 
   .landing-store-button,
   .landing-store-button-large {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 12px;
     padding: 13px 22px;
     border-radius: 999px;
     background: #fff;
@@ -289,6 +293,21 @@ const LANDING_STYLES = `
   .landing-store-button:hover,
   .landing-store-button-large:hover {
     transform: translateY(-2px);
+  }
+
+  .landing-store-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .landing-store-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    margin-left: 12px;
   }
 
   .landing-store-text-top {
@@ -1035,20 +1054,25 @@ const LANDING_STYLES = `
 
   @media (max-width: 600px) {
     .landing-nav {
-      justify-content: center;
-      padding: 18px 20px 0;
-    }
-
-    .landing-nav .landing-pill-button {
       display: none;
     }
 
-    .landing-logo img {
-      height: 72px;
+    .landing-hero-body {
+      padding: 32px 22px 56px;
+      align-items: center;
     }
 
-    .landing-hero-body {
-      padding: 126px 22px 56px;
+    .landing-mobile-logo {
+      display: inline-flex;
+      justify-content: center;
+      width: 100%;
+      margin-bottom: 18px;
+    }
+
+    .landing-mobile-logo img {
+      display: block;
+      height: 72px;
+      width: auto;
     }
 
     .landing-hero-title {
@@ -1072,6 +1096,29 @@ const LANDING_STYLES = `
     .landing-store-button-large,
     .landing-outline-link {
       width: 100%;
+    }
+
+    .landing-store-button,
+    .landing-store-button-large {
+      justify-content: center;
+      min-height: 56px;
+      padding-left: 64px;
+      padding-right: 24px;
+    }
+
+    .landing-store-button .landing-store-icon,
+    .landing-store-button-large .landing-store-icon {
+      position: absolute;
+      top: 50%;
+      left: 24px;
+      transform: translateY(-50%);
+    }
+
+    .landing-store-button .landing-store-copy,
+    .landing-store-button-large .landing-store-copy {
+      align-items: center;
+      margin-left: 0;
+      text-align: center;
     }
 
     .landing-section,
@@ -1216,6 +1263,10 @@ export default function LandingPage() {
         <img className="landing-hero-image" src={partyImage} alt="" aria-hidden="true" />
         <div className="landing-hero-body">
           <div className="landing-hero-content">
+            <Link href={landingHref} className="landing-mobile-logo" aria-label="Toki landing page">
+              <img src={logoHeader} alt="Toki" />
+            </Link>
+
             <div className="landing-badge">
               <span className="landing-live-dot" />
               Live in Tel Aviv
@@ -1239,8 +1290,10 @@ export default function LandingPage() {
                 rel="noreferrer"
                 className="landing-store-button"
               >
-                <AppleMark />
-                <span>
+                <span className="landing-store-icon">
+                  <AppleMark />
+                </span>
+                <span className="landing-store-copy">
                   <div className="landing-store-text-top">Download on the</div>
                   <div className="landing-store-text-bottom">App Store</div>
                 </span>
@@ -1540,8 +1593,10 @@ export default function LandingPage() {
               rel="noreferrer"
               className="landing-store-button-large"
             >
-              <AppleMark />
-              <span>
+              <span className="landing-store-icon">
+                <AppleMark />
+              </span>
+              <span className="landing-store-copy">
                 <div className="landing-store-text-top">Download on the</div>
                 <div className="landing-store-text-bottom">App Store</div>
               </span>
