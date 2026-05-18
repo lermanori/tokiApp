@@ -84,18 +84,15 @@ const BUILD_TIME_E2E_BACKEND_URL: string | undefined = process.env.EXPO_PUBLIC_E
 
 // Helper function to get the correct backend URL
 export const getBackendUrl = () => {
-  if (BUILD_TIME_E2E_BACKEND_URL) {
-    return BUILD_TIME_E2E_BACKEND_URL;
-  }
-
   const runtimeOverride = getRuntimeBackendOverride();
   if (runtimeOverride) {
     return runtimeOverride;
   }
 
-  if (__DEV__) {
-    return config.backend.baseUrl;
+  if (BUILD_TIME_E2E_BACKEND_URL) {
+    return BUILD_TIME_E2E_BACKEND_URL;
   }
+
   return config.backend.baseUrl;
 };
 

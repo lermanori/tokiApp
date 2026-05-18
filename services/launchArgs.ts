@@ -1,4 +1,5 @@
-import { NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { LaunchArguments } from 'react-native-launch-arguments';
 
 type LaunchArgsMap = Record<string, string>;
 
@@ -7,12 +8,18 @@ const readLaunchArgs = (): LaunchArgsMap => {
     return {};
   }
 
-  const launchArgs = NativeModules?.TokiLaunchArgs?.launchArgs;
-  if (!launchArgs || typeof launchArgs !== 'object') {
+  try {
+    const raw = LaunchArguments.value<Record<string, unknown>>() ?? {};
+    const result: LaunchArgsMap = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') {
+        result[key] = value;
+      }
+    }
+    return result;
+  } catch {
     return {};
   }
-
-  return launchArgs as LaunchArgsMap;
 };
 
 const launchArgs = readLaunchArgs();
