@@ -15,8 +15,7 @@ Net effect: every Detox spec using `MockAuthServer` was secretly talking to whic
 
 ### Fix
 
-- Installed [`react-native-launch-arguments`](https://github.com/iamolegga/react-native-launch-arguments) (standard community package, no custom native code needed).
-- Manually added it to `ios/Podfile` — autolinking misses this pre-config-style package. **Note:** `ios/` is gitignored (Expo prebuild output). The Podfile edit will not survive `expo prebuild --clean`. A config plugin is needed to persist this — see next-steps below.
+- Installed [`react-native-launch-arguments`](https://github.com/iamolegga/react-native-launch-arguments) (standard community package, no custom native code needed). Expo's autolinker (`expo-modules-autolinking react-native-config`, the `config_command` used by `use_native_modules!` in the Podfile) picks the package up automatically from `package.json` — no Podfile edit or config plugin needed. (Verified by running `pod install` with no manual entry; `react-native-launch-arguments` still appears in `Podfile.lock`.)
 - Rewrote [services/launchArgs.ts](../services/launchArgs.ts) to use `LaunchArguments.value()`.
 - Flipped precedence in [services/config.ts](../services/config.ts) so runtime `TOKI_E2E_API_URL` wins over the build-time `EXPO_PUBLIC_E2E_BACKEND_URL`.
 - Updated the `supported` test in [e2e/version-gate.e2e.js](../e2e/version-gate.e2e.js) to poll for either `login-button` or `guest-overlay-login-button` (cold-launch race), per the boost-center pattern.
