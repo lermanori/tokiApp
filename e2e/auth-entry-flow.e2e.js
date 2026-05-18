@@ -1,41 +1,20 @@
 const { by, device, element, expect: detoxExpect, waitFor } = require('detox');
 const { expect: jestExpect } = require('@jest/globals');
-const { MockAuthServer } = require('./support/mockAuthServer');
 
 const appConfig = require('../app.config.js');
 
-const REAL_BACKEND_URL = process.env.TOKI_E2E_REAL_BACKEND_URL || null;
-const useRealBackend = !!REAL_BACKEND_URL;
+// The app's backend URL is baked in at build time via EXPO_PUBLIC_E2E_BACKEND_URL.
+// This constant is only used by tests that hit the backend directly (revoke, nearby).
+const BACKEND_URL = process.env.TOKI_E2E_BACKEND_URL || 'http://127.0.0.1:3002';
 
-const server = new MockAuthServer({ port: 3999 });
 const APP_SCHEME = appConfig.expo.scheme || 'tokimap';
-const TEST_TOKI_ID = 'deep-link-auth-routing-toki';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const getLaunchArgs = () => {
-  if (useRealBackend) {
-    return {
-      TOKI_E2E_API_URL: REAL_BACKEND_URL,
-      TOKI_E2E_DISABLE_REALTIME: '1',
-      TOKI_E2E_DISABLE_OTA: '1',
-    };
-  }
-  return server.getLaunchArgs();
-};
 
 const launchApp = async ({ deleteApp = false, url } = {}) => {
   await device.launchApp({
     newInstance: true,
     delete: deleteApp,
     ...(url ? { url } : {}),
-    launchArgs: getLaunchArgs(),
-  });
-};
-
-const launchTokiDetails = async ({ deleteApp = false } = {}) => {
-  await launchApp({
-    deleteApp,
-    url: `${APP_SCHEME}://toki-details?tokiId=${TEST_TOKI_ID}`,
   });
 };
 
@@ -86,24 +65,6 @@ const relaunchApp = async ({ url } = {}) => {
 };
 
 describe('auth entry flow', () => {
-  beforeAll(async () => {
-    if (!useRealBackend) {
-      await server.start();
-    }
-  });
-
-  afterAll(async () => {
-    if (!useRealBackend) {
-      await server.stop();
-    }
-  });
-
-  beforeEach(async () => {
-    if (!useRealBackend) {
-      server.reset();
-    }
-  });
-
   it('allows regular login from an unauthenticated launch', async () => {
     await launchLogin({ deleteApp: true });
     await loginThroughUi();
@@ -116,7 +77,6 @@ describe('auth entry flow', () => {
     await launchLogin({ deleteApp: true });
     await loginThroughUi();
 
-    server.setScenario({ accessMode: 'valid', refreshMode: 'valid' });
     await relaunchApp();
 
     await waitFor(element(by.id('explore-greeting'))).toBeVisible().withTimeout(15000);
@@ -130,8 +90,7 @@ describe('auth entry flow', () => {
     await loginThroughUi();
 
     // Server-side revoke this user's current access token. Refresh token stays valid.
-    const backendUrl = REAL_BACKEND_URL || 'http://127.0.0.1:3002';
-    const revokeResponse = await fetch(`${backendUrl}/api/test/auth/expire-access-tokens-for-user`, {
+    const revokeResponse = await fetch(`${BACKEND_URL}/api/test/auth/expire-access-tokens-for-user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'test@example.com' }),
@@ -162,8 +121,7 @@ describe('auth entry flow', () => {
 
   it('lets a guest view toki details until the first protected click sends them to login', async () => {
     // Fetch a real public toki from the local backend.
-    const backendUrl = REAL_BACKEND_URL || 'http://127.0.0.1:3002';
-    const nearbyResponse = await fetch(`${backendUrl}/api/tokis/nearby?latitude=32.0853&longitude=34.7818&radius=50`);
+    const nearbyResponse = await fetch(`${BACKEND_URL}/api/tokis/nearby?latitude=32.0853&longitude=34.7818&radius=50`);
     const nearbyJson = await nearbyResponse.json();
     const toki = nearbyJson?.data?.tokis?.[0];
     jestExpect(toki?.id).toBeTruthy();
