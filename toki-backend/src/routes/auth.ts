@@ -8,6 +8,7 @@ import { sendEmail, generateVerificationEmail, generateWelcomeEmail, generatePas
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { issuePasswordResetToken, PasswordLinkPurpose } from '../utils/passwordReset';
+import { isRefreshTokenRevoked } from '../lib/tokenRevocation';
 import { verifyAppleToken, exchangeAppleCode } from '../utils/appleAuth';
 import { verifyGoogleToken } from '../utils/googleAuth';
 
@@ -1302,6 +1303,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET!) as any;
     if (!decoded || decoded.type !== 'refresh') {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid refresh token',
+        message: 'Invalid or expired refresh token'
+      });
+    }
+    if (decoded.id && typeof decoded.iat === 'number' && isRefreshTokenRevoked(decoded.id, decoded.iat)) {
+      await logAuthActivity(decoded.id, 'refresh_failure', { reason: 'refresh_token_revoked' });
       return res.status(401).json({
         success: false,
         error: 'Invalid refresh token',
