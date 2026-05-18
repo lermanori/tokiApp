@@ -51,7 +51,7 @@ const loginThroughUi = async () => {
   await ensureOnLoginScreen();
   await element(by.id('email-input')).replaceText('test@example.com');
   await element(by.id('password-input')).replaceText('password123');
-  await sleep(50);
+  await sleep(1000);
   await element(by.id('password-input')).tapReturnKey();
   await device.enableSynchronization();
   await waitFor(element(by.id('explore-greeting'))).toBeVisible().withTimeout(15000);

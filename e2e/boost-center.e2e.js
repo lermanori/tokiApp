@@ -233,6 +233,9 @@ const scrollBoostButtonIntoView = async () => {
       await waitFor(element(by.id('toki-details-boost-button')))
         .toBeVisible()
         .withTimeout(500);
+      // Let the scroll settle before the caller taps -- on slower runs the tap
+      // landed before the button was hittable.
+      await sleep(1000);
       return;
     } catch (_) {
       await element(by.text('About this Toki')).swipe('up', 'slow', 0.8);
