@@ -117,17 +117,13 @@ Effect: marks all access tokens issued before now() invalid for that user.
 
 ## Known limitations / next steps
 
-1. **`MockAuthServer` is dead weight.** The mock server in `e2e/support/mockAuthServer.js` does nothing useful in `auth-entry-flow.e2e.js` (the launch-args bridge that would route the app to it doesn't exist). Tests now hit the real local backend. Consider removing the mock from this spec entirely.
+1. ~~**`MockAuthServer` is dead weight.**~~ **Resolved (commit `3d7e565`)** — `auth-entry-flow.e2e.js` no longer imports `MockAuthServer`. The mock is still alive for `version-gate.e2e.js`, which uses it correctly via a native launchArgs bridge (`react-native-launch-arguments`, wired up in commit `b8cbb29`).
 
-2. **Other e2e specs are broken.** `login-session.e2e.js`, `version-gate.e2e.js`, `nearby-analytics.e2e.js`, `deep-link-auth-routing.e2e.js`, `boost-center.e2e.js` all have failures, largely from the same two underlying issues: (a) mock server doesn't actually reach the app, (b) the cold-launch race we fixed for `auth-entry-flow.e2e.js`. Apply the same pattern (real backend, flexible `loginThroughUi`, real toki IDs) if you want to fix them.
+2. ~~**Other e2e specs are broken.**~~ **Resolved.** Full Detox suite is now 5/5 green (15/15 tests). `login-session.e2e.js` was superseded by `auth-entry-flow.e2e.js`. `version-gate`, `nearby-analytics`, `boost-center` all pass. `deep-link-auth-routing` was deleted and replaced by `deep-link-auth.e2e.js` (commit `a70a16c`) covering the real WhatsApp-link user journey end-to-end.
 
 3. **Test #3 dependency**: only works when local backend is running with `ENABLE_E2E_TEST_ROUTES=1` AND the app build has `EXPO_PUBLIC_E2E_BACKEND_URL`. If the env var is omitted at build time, the app will hit Railway prod and the test will fail (revoke endpoint hits a different backend than the app uses).
 
-4. **CI integration** is not done. To integrate, CI would need to:
-   - Spin up postgres + run migrations + seed `test@example.com`
-   - Start `toki-backend` with `ENABLE_E2E_TEST_ROUTES=1`
-   - Build with `EXPO_PUBLIC_E2E_BACKEND_URL=http://localhost:3002`
-   - Run detox
+4. ~~**CI integration**~~ **Disqualified** — not pursuing for now. Suite runs locally on the dev machine only.
 
 5. **`detox.config.js` default device** was bumped from `iPhone 16` → `iPhone 17` so `npm run detox:build:ios` works without a `DETOX_DEVICE` override. If your laptop only has `iPhone 16`, set `DETOX_DEVICE=iPhone\ 16` or revert.
 
