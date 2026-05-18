@@ -1621,7 +1621,7 @@ export default function TokiDetailsScreen() {
       />
       <AppInstallPrompt currentUrl={getCurrentUrl()} />
       <SafeAreaView style={styles.container}>
-        <ScrollView style={{ ...styles.content, width: '100%', maxWidth: 1000, alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
+        <ScrollView testID="toki-details-scroll" style={{ ...styles.content, width: '100%', maxWidth: 1000, alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
           <TokiHeader
             toki={{
               id: toki.id,
@@ -1988,6 +1988,7 @@ export default function TokiDetailsScreen() {
             {!toki.isHostedByUser && (
               <View style={styles.reportSection}>
                 <TouchableOpacity
+                  testID="toki-details-report-button"
                   style={styles.reportButton}
                   onPress={() => {
                     if (!actions.requireAuthForIntent({

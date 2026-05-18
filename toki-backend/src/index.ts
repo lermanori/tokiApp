@@ -46,6 +46,7 @@ import mobileRoutes from './routes/mobile';
 import boostRoutes from './routes/boosts';
 import insightRoutes from './routes/insights';
 import didYouGoRoutes from './routes/did-you-go';
+import testRoutes from './routes/test';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { versionEnforcementMiddleware } from './middleware/versionEnforcement';
 import { startBoostScheduler } from './services/boostScheduler';
@@ -326,6 +327,13 @@ app.use('/api/analytics', corsMiddleware, analyticsRoutes);
 app.use('/api/boosts', corsMiddleware, boostRoutes);
 app.use('/api/insights', corsMiddleware, insightRoutes);
 app.use('/api/did-you-go', corsMiddleware, didYouGoRoutes);
+
+// E2E test-only routes — gated by ENABLE_E2E_TEST_ROUTES env var.
+// MUST NOT be enabled in production.
+if (process.env.ENABLE_E2E_TEST_ROUTES === '1') {
+  console.warn('⚠️  ENABLE_E2E_TEST_ROUTES=1 — mounting /api/test routes. Never enable this in production.');
+  app.use('/api/test', corsMiddleware, testRoutes);
+}
 
 // Public share route for OG meta tag previews (no auth required)
 app.use('/share', ogPreviewRoutes);

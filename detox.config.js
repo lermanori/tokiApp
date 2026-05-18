@@ -1,4 +1,4 @@
-const detoxDevice = process.env.DETOX_DEVICE || 'iPhone 16';
+const detoxDevice = process.env.DETOX_DEVICE || 'iPhone 17';
 
 /** @type {Detox.DetoxConfig} */
 module.exports = {

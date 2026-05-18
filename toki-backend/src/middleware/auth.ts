@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { pool } from '../config/database';
+import { isAccessTokenRevoked } from '../lib/tokenRevocation';
 
 // Extend Express Request interface to include user
 declare global {
@@ -42,6 +43,15 @@ export const authenticateToken = async (
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+
+    if (isAccessTokenRevoked(decoded.id, decoded.iat)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token revoked',
+        message: 'Authentication token has been revoked'
+      });
+    }
+
     // Attach from JWT immediately to avoid blocking on DB when pool is saturated
     req.user = { id: decoded.id, email: decoded.email, name: decoded.name };
 

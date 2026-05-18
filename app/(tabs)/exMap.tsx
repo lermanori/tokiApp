@@ -697,6 +697,7 @@ export default function ExMapScreen() {
                                     Previewing Tokis around Tel Aviv. Login to explore the full live map.
                                 </Text>
                                 <TouchableOpacity
+                                    testID="guest-overlay-login-button"
                                     style={styles.guestMapButton}
                                     onPress={() => {
                                         actions.requireAuthForIntent({ route: '/exMap' });

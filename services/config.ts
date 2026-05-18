@@ -75,16 +75,25 @@ const getRuntimeWebSocketOverride = () => {
   return undefined;
 };
 
+// Build-time E2E backend override. Expo inlines EXPO_PUBLIC_* env vars at build
+// time, so passing EXPO_PUBLIC_E2E_BACKEND_URL=http://localhost:3002 to the
+// detox build command bakes the override into the release bundle without
+// changing source. Safe to leave in production builds — when the env var is
+// unset, this constant is undefined and the normal config applies.
+const BUILD_TIME_E2E_BACKEND_URL: string | undefined = process.env.EXPO_PUBLIC_E2E_BACKEND_URL;
+
 // Helper function to get the correct backend URL
 export const getBackendUrl = () => {
+  if (BUILD_TIME_E2E_BACKEND_URL) {
+    return BUILD_TIME_E2E_BACKEND_URL;
+  }
+
   const runtimeOverride = getRuntimeBackendOverride();
   if (runtimeOverride) {
     return runtimeOverride;
   }
 
   if (__DEV__) {
-    // In development, try to detect the correct IP
-    // You can override this by setting the IP manually
     return config.backend.baseUrl;
   }
   return config.backend.baseUrl;
