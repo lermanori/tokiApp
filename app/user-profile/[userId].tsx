@@ -508,7 +508,7 @@ export default function UserProfileScreen() {
   return (
     <>
       <AppInstallPrompt currentUrl={getCurrentUrl()} />
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} testID={`user-profile-screen-${userId}`}>
         <LinearGradient
           colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
           style={styles.header}

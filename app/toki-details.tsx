@@ -1884,6 +1884,7 @@ export default function TokiDetailsScreen() {
                 )}
                 <View style={styles.hostDetails}>
                   <TouchableOpacity
+                    testID="toki-details-host-link"
                     onPress={() => {
                       if (!toki.isHostedByUser) {
                         navigateToUserProfile(toki.host.id);

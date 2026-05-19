@@ -16,6 +16,28 @@ module.exports = {
       exposeGlobals: true,
     },
   },
+  artifacts: {
+    rootDir: 'artifacts',
+    plugins: {
+      log: { enabled: true },
+      screenshot: {
+        enabled: true,
+        shouldTakeAutomaticSnapshots: true,
+        keepOnlyFailedTestsArtifacts: false,
+        takeWhen: {
+          testStart: false,
+          testDone: true,
+          appNotReady: true,
+          testFailure: true,
+        },
+      },
+      video: {
+        enabled: true,
+        keepOnlyFailedTestsArtifacts: true,
+      },
+      uiHierarchy: 'enabled',
+    },
+  },
   apps: {
     'ios.debug': {
       type: 'ios.app',

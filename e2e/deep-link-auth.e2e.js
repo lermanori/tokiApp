@@ -4,16 +4,29 @@ const { expect: jestExpect } = require('@jest/globals');
 const appConfig = require('../app.config.js');
 
 const BACKEND_URL = process.env.TOKI_E2E_BACKEND_URL || 'http://127.0.0.1:3002';
+const WS_URL = BACKEND_URL.startsWith('https://')
+  ? BACKEND_URL.replace('https://', 'wss://')
+  : BACKEND_URL.replace('http://', 'ws://');
 const APP_SCHEME = appConfig.expo.scheme || 'tokimap';
 const TEST_EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'password123';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Point the Release app at the local backend so deep-link target IDs prestaged
+// by the test process resolve to the same backend.
+const E2E_LAUNCH_ARGS = {
+  TOKI_E2E_API_URL: BACKEND_URL,
+  TOKI_E2E_WS_URL: WS_URL,
+  TOKI_E2E_DISABLE_REALTIME: '1',
+  TOKI_E2E_DISABLE_OTA: '1',
+};
+
 const launchApp = async ({ deleteApp = false, url } = {}) => {
   await device.launchApp({
     newInstance: true,
     delete: deleteApp,
+    launchArgs: E2E_LAUNCH_ARGS,
     ...(url ? { url } : {}),
   });
 };
@@ -81,14 +94,15 @@ const expireRefreshTokens = async (email) => {
   jestExpect(response.ok).toBe(true);
 };
 
-// Triggers the auth-required redirect from toki details. The report button uses the
-// raw-coord workaround documented in auth-entry-flow #5 (RN new-arch + Detox quirk:
-// element-based tap fires onPressIn but not onPress).
-const tapReportButtonViaRawCoords = async () => {
+// Raw-coord tap workaround documented in auth-entry-flow #5 (RN new-arch + Detox
+// quirk: element-based tap fires onPressIn but not onPress). Scrolls the
+// toki-details scroll view until the target testID is visible, then taps by
+// frame center.
+const tapElementViaRawCoords = async (targetTestId) => {
   let visible = false;
   for (let i = 0; i < 8; i += 1) {
     try {
-      await waitFor(element(by.id('toki-details-report-button')))
+      await waitFor(element(by.id(targetTestId)))
         .toBeVisible()
         .withTimeout(800);
       visible = true;
@@ -98,10 +112,10 @@ const tapReportButtonViaRawCoords = async () => {
     }
   }
   if (!visible) {
-    throw new Error('Could not bring toki-details-report-button into view');
+    throw new Error(`Could not bring ${targetTestId} into view`);
   }
   await sleep(200);
-  const attrs = await element(by.id('toki-details-report-button')).getAttributes();
+  const attrs = await element(by.id(targetTestId)).getAttributes();
   const frame = attrs.frame || attrs.elements?.[0]?.frame;
   if (!frame) {
     throw new Error(`Could not read frame from element attributes: ${JSON.stringify(attrs)}`);
@@ -110,6 +124,8 @@ const tapReportButtonViaRawCoords = async () => {
   const tapY = Math.round(frame.y + frame.height / 2);
   await device.tap({ x: tapX, y: tapY });
 };
+
+const tapReportButtonViaRawCoords = () => tapElementViaRawCoords('toki-details-report-button');
 
 describe('deep link auth', () => {
   it('opens toki details directly when relaunching with valid tokens', async () => {
@@ -156,25 +172,26 @@ describe('deep link auth', () => {
     await detoxExpect(element(by.id('login-button'))).not.toExist();
   });
 
-  it('returns to the deep-link target after both tokens are revoked and the user re-logs in', async () => {
-    await launchLogin({ deleteApp: true });
-    await loginThroughUi();
-
+  it('returns to the host profile after a guest taps the host link and logs in', async () => {
     const toki = await fetchNearbyToki();
-    await expireAccessTokens(TEST_EMAIL);
-    await expireRefreshTokens(TEST_EMAIL);
+    jestExpect(toki?.host?.id).toBeTruthy();
 
-    await relaunchApp({ url: `${APP_SCHEME}://toki-details?tokiId=${toki.id}` });
+    await launchApp({
+      deleteApp: true,
+      url: `${APP_SCHEME}://toki-details?tokiId=${toki.id}`,
+    });
 
-    // Stored tokens are unusable -> /auth/me 401 -> refresh 401 -> app clears
-    // state and the layout redirects to /login?returnTo=/toki-details&tokiId=...
-    // (see app/_layout.tsx:781). The chain takes longer than a fresh-launch login,
-    // so allow extra time.
-    await waitFor(element(by.id('email-input'))).toBeVisible().withTimeout(30000);
+    await waitFor(element(by.text(toki.title))).toBeVisible().withTimeout(20000);
+
+    await tapElementViaRawCoords('toki-details-host-link');
+
+    await waitFor(element(by.id('email-input'))).toBeVisible().withTimeout(15000);
     await submitLoginForm();
 
-    // returnTo should bring us back to the toki, not /(tabs).
-    await waitFor(element(by.text(toki.title))).toBeVisible().withTimeout(20000);
+    // returnTo should land us on the host's profile, not /(tabs).
+    await waitFor(element(by.id(`user-profile-screen-${toki.host.id}`)))
+      .toBeVisible()
+      .withTimeout(20000);
     await detoxExpect(element(by.id('login-button'))).not.toExist();
   });
 });

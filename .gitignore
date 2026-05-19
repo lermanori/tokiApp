@@ -52,3 +52,6 @@ app.json
 # local browser/debug artifacts
 .playwright-mcp/
 /landing-page*.png
+
+# detox e2e artifacts (videos, screenshots, view hierarchies)
+/artifacts/

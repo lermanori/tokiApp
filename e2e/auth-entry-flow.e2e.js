@@ -3,17 +3,29 @@ const { expect: jestExpect } = require('@jest/globals');
 
 const appConfig = require('../app.config.js');
 
-// The app's backend URL is baked in at build time via EXPO_PUBLIC_E2E_BACKEND_URL.
-// This constant is only used by tests that hit the backend directly (revoke, nearby).
+// The app's backend URL can be baked in at build time via EXPO_PUBLIC_E2E_BACKEND_URL,
+// or overridden at runtime via launchArgs (TOKI_E2E_API_URL). We pass launchArgs so the
+// app and the test process always agree on which backend they're talking to.
 const BACKEND_URL = process.env.TOKI_E2E_BACKEND_URL || 'http://127.0.0.1:3002';
+const WS_URL = BACKEND_URL.startsWith('https://')
+  ? BACKEND_URL.replace('https://', 'wss://')
+  : BACKEND_URL.replace('http://', 'ws://');
 
 const APP_SCHEME = appConfig.expo.scheme || 'tokimap';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const E2E_LAUNCH_ARGS = {
+  TOKI_E2E_API_URL: BACKEND_URL,
+  TOKI_E2E_WS_URL: WS_URL,
+  TOKI_E2E_DISABLE_REALTIME: '1',
+  TOKI_E2E_DISABLE_OTA: '1',
+};
 
 const launchApp = async ({ deleteApp = false, url } = {}) => {
   await device.launchApp({
     newInstance: true,
     delete: deleteApp,
+    launchArgs: E2E_LAUNCH_ARGS,
     ...(url ? { url } : {}),
   });
 };
