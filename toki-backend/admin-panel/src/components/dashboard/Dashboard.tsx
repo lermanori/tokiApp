@@ -9,12 +9,13 @@ import NotificationScheduleTab from './NotificationScheduleTab';
 import McpKeysTab from './McpKeysTab';
 import ReportsTab from './ReportsTab';
 import TokenDebugTab from './TokenDebugTab';
-import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer } from 'lucide-react';
+import FeatureFlagsTab from './FeatureFlagsTab';
+import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer, ToggleLeft } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys' | 'reports' | 'token-debug'
+    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys' | 'reports' | 'token-debug' | 'feature-flags'
   >('analytics');
 
   const handleLogout = () => {
@@ -152,6 +153,12 @@ export default function Dashboard() {
             icon={<Timer size={18} />}
             label="Token Debug"
           />
+          <TabButton
+            active={activeTab === 'feature-flags'}
+            onClick={() => setActiveTab('feature-flags')}
+            icon={<ToggleLeft size={18} />}
+            label="Feature Flags"
+          />
         </div>
       </div>
 
@@ -170,6 +177,7 @@ export default function Dashboard() {
         {activeTab === 'mcp-keys' && <McpKeysTab />}
         {activeTab === 'reports' && <ReportsTab />}
         {activeTab === 'token-debug' && <TokenDebugTab />}
+        {activeTab === 'feature-flags' && <FeatureFlagsTab />}
       </div>
     </div>
   );
