@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Toki",
     slug: "toki",
-    version: "1.3.2",
+    version: "1.3.3",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "tokimap",
@@ -12,7 +12,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.toki.socialmap",
-      buildNumber: "1",
+      buildNumber: "2",
       usesAppleSignIn: true,
       config: {},
       infoPlist: {
@@ -76,7 +76,7 @@ module.exports = {
       fallbackToCacheTimeout: 0
     },
     android: {
-      versionCode: 5,
+      versionCode: 6,
       permissions: [
         "android.permission.RECORD_AUDIO"
       ]
