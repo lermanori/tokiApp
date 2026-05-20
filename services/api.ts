@@ -67,6 +67,9 @@ export interface Toki {
   externalLink?: string;
   friendsAttending?: Array<{ id: string; name: string; avatar?: string }>;
   isPaid?: boolean;
+  isBoosted?: boolean;
+  boostId?: string | null;
+  algorithmScore?: number | null;
 }
 
 export interface User {
@@ -174,6 +177,31 @@ export interface SavedToki {
   };
   tags: string[];
   joinStatus?: string;
+}
+
+export interface BoostPurchaseRequest {
+  id: string;
+  tierId: string;
+  tierName: string;
+  tierSlug: string;
+  tokiId?: string | null;
+  tokiTitle?: string | null;
+  hostId?: string;
+  paymentAmount: number;
+  paymentCurrency: string;
+  totalHours: number;
+  isSplittable: boolean;
+  validityDays?: number | null;
+  status: 'pending_code' | 'code_issued' | 'approved' | 'expired' | 'cancelled';
+  codeStatus?: string;
+  codeGeneratedAt?: string | null;
+  codeExpiresAt?: string | null;
+  codeRedeemedAt?: string | null;
+  redeemedAt?: string | null;
+  boostId?: string | null;
+  generatedByAdminId?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserRatingStats {
@@ -1726,6 +1754,134 @@ class ApiService {
   async getMyReports() {
     const response = await this.makeRequest('/reports/my-reports');
     return response;
+  }
+
+  // ─── Boost Methods ─────────────────────────────────────────────────────────
+
+  async getBoostTiers(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/boosts/tiers');
+    return response.data;
+  }
+
+  async createBoostPurchaseRequest(params: {
+    tierId: string;
+    tokiId?: string;
+  }): Promise<BoostPurchaseRequest> {
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest }>('/boosts/purchase-requests', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    return response.data;
+  }
+
+  async purchaseBoost(params: {
+    tierId: string;
+    tokiId?: string;
+  }): Promise<BoostPurchaseRequest> {
+    return this.createBoostPurchaseRequest(params);
+  }
+
+  async getBoostPurchaseRequest(requestId: string): Promise<BoostPurchaseRequest> {
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest }>(`/boosts/purchase-requests/${requestId}`);
+    return response.data;
+  }
+
+  async getMyBoostPurchaseRequests(params?: { tokiId?: string }): Promise<BoostPurchaseRequest[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.tokiId) {
+      queryParams.append('tokiId', params.tokiId);
+    }
+    const query = queryParams.toString();
+    const endpoint = query ? `/boosts/purchase-requests/my?${query}` : '/boosts/purchase-requests/my';
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest[] }>(endpoint);
+    return response.data;
+  }
+
+  async redeemBoostPurchaseRequest(requestId: string, code: string): Promise<{ request: BoostPurchaseRequest; boost: any }> {
+    const response = await this.makeRequest<{ success: boolean; data: { request: BoostPurchaseRequest; boost: any } }>(
+      `/boosts/purchase-requests/${requestId}/redeem`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }
+    );
+    return response.data;
+  }
+
+  async activateBoost(boostId: string, params?: { tokiId?: string; hours?: number }): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/activate`, {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    });
+    return response.data;
+  }
+
+  async deactivateBoost(boostId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/deactivate`, {
+      method: 'POST',
+    });
+    return response.data;
+  }
+
+  async getBoostStatus(boostId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/boosts/${boostId}/status`);
+    return response.data;
+  }
+
+  async getMyBoosts(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/boosts/my-boosts');
+    return response.data;
+  }
+
+  // ─── Insights Methods ──────────────────────────────────────────────────────
+
+  async getRealtimeInsights(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/realtime`);
+    return response.data;
+  }
+
+  async getConversionReport(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/conversion`);
+    return response.data;
+  }
+
+  async getFullInsights(tokiId: string): Promise<any> {
+    const response = await this.makeRequest<{ success: boolean; data: any }>(`/insights/${tokiId}/full`);
+    return response.data;
+  }
+
+  async trackEngagement(tokiId: string, eventType: 'view' | 'open' | 'save' | 'join_request' | 'chat_join'): Promise<void> {
+    await this.makeRequest(`/insights/${tokiId}/track`, {
+      method: 'POST',
+      body: JSON.stringify({ eventType }),
+    });
+  }
+
+  // ─── Did You Go Methods ────────────────────────────────────────────────────
+
+  async getPendingDidYouGo(): Promise<any[]> {
+    const response = await this.makeRequest<{ success: boolean; data: any[] }>('/did-you-go/pending');
+    return response.data;
+  }
+
+  async respondDidYouGo(tokiId: string, response: boolean): Promise<any> {
+    const result = await this.makeRequest<{ success: boolean; message: string }>(`/did-you-go/${tokiId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ response }),
+    });
+    return result;
+  }
+
+  async markDidYouGoShown(tokiId: string): Promise<void> {
+    await this.makeRequest(`/did-you-go/${tokiId}/mark-shown`, {
+      method: 'POST',
+    });
+  }
+
+  // ─── Feature Flags ─────────────────────────────────────────────────────────
+
+  async getFeatures(): Promise<Record<string, boolean>> {
+    return this.makeRequest<Record<string, boolean>>('/features');
   }
 }
 

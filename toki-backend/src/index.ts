@@ -43,8 +43,14 @@ import ogPreviewRoutes from './routes/og-preview';
 import tokiNotificationMuteRoutes from './routes/toki-notification-mutes';
 import analyticsRoutes from './routes/analytics';
 import mobileRoutes from './routes/mobile';
+import boostRoutes from './routes/boosts';
+import insightRoutes from './routes/insights';
+import didYouGoRoutes from './routes/did-you-go';
+import featureRoutes from './routes/features';
+import testRoutes from './routes/test';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { versionEnforcementMiddleware } from './middleware/versionEnforcement';
+import { startBoostScheduler } from './services/boostScheduler';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMCPServer } from './mcp/server';
 
@@ -319,6 +325,17 @@ app.use('/api/reports', corsMiddleware, reportsRoutes);
 app.use('/api/bug-report', corsMiddleware, bugReportRoutes);
 app.use('/api/toki-notification-mutes', corsMiddleware, tokiNotificationMuteRoutes);
 app.use('/api/analytics', corsMiddleware, analyticsRoutes);
+app.use('/api/boosts', corsMiddleware, boostRoutes);
+app.use('/api/insights', corsMiddleware, insightRoutes);
+app.use('/api/did-you-go', corsMiddleware, didYouGoRoutes);
+app.use('/api/features', corsMiddleware, featureRoutes);
+
+// E2E test-only routes — gated by ENABLE_E2E_TEST_ROUTES env var.
+// MUST NOT be enabled in production.
+if (process.env.ENABLE_E2E_TEST_ROUTES === '1') {
+  console.warn('⚠️  ENABLE_E2E_TEST_ROUTES=1 — mounting /api/test routes. Never enable this in production.');
+  app.use('/api/test', corsMiddleware, testRoutes);
+}
 
 // Public share route for OG meta tag previews (no auth required)
 app.use('/share', ogPreviewRoutes);
@@ -548,6 +565,9 @@ server.listen(Number(PORT), '0.0.0.0', async () => {
 
   // Start notification scheduler
   startNotificationScheduler();
+
+  // Start boost scheduler (expiration, did-you-go prompts, conversion reports)
+  startBoostScheduler();
 });
 
 export default app; 

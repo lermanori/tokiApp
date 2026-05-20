@@ -28,6 +28,8 @@ export interface TokiEvent {
   createdAt?: string;
   friendsGoing?: Array<{ id: string; name: string; avatar?: string }>;
   isPaid?: boolean;
+  isBoosted?: boolean;
+  boostId?: string;
 }
 
 export interface DiscoverFilters {

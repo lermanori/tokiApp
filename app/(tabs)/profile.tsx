@@ -526,7 +526,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']} testID="profile-screen">
       <LinearGradient
         colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
         style={styles.header}

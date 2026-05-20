@@ -20,6 +20,7 @@ export interface EventData {
   current_attendees: number;
   distance_km?: number | null;
   host_id?: string;
+  is_boosted?: boolean;
 }
 
 export interface ScoredEvent extends EventData {

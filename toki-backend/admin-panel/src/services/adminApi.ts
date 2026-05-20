@@ -445,6 +445,33 @@ export const adminApi = {
     });
   },
 
+  // Boost purchase requests
+  getBoostPurchaseRequests: async (params?: { page?: number; limit?: number; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) query.append(key, String(value));
+      });
+    }
+    return makeRequest(`/boost-purchase-requests?${query}`);
+  },
+
+  getBoostPurchaseRequest: async (requestId: string) => {
+    return makeRequest(`/boost-purchase-requests/${requestId}`);
+  },
+
+  generateBoostPurchaseCode: async (requestId: string) => {
+    return makeRequest(`/boost-purchase-requests/${requestId}/generate-code`, {
+      method: 'POST',
+    });
+  },
+
+  invalidateBoostPurchaseCode: async (requestId: string) => {
+    return makeRequest(`/boost-purchase-requests/${requestId}/invalidate-code`, {
+      method: 'POST',
+    });
+  },
+
   // Token Debug
   getTokenDebug: async (userId: string) => {
     return makeRequest(`/token-debug/${userId}`);
@@ -462,5 +489,16 @@ export const adminApi = {
   // Auth check
   me: async () => {
     return makeRequest('/me');
-  }
+  },
+
+  // Feature flags
+  getFeatureFlags: async () => {
+    return makeRequest<{ success: boolean; data: Array<{ key: string; enabled: boolean; description: string | null; updatedAt: string; updatedBy: string | null }> }>('/feature-flags');
+  },
+  setFeatureFlag: async (key: string, enabled: boolean) => {
+    return makeRequest(`/feature-flags/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    });
+  },
 };

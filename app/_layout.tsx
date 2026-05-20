@@ -11,6 +11,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 import { VersionGateProvider } from '@/contexts/VersionGateContext';
+import { FeaturesProvider, useFeatures } from '@/contexts/FeaturesContext';
 import { apiService } from '@/services/api';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import RedirectionGuard from '@/components/RedirectionGuard';
@@ -28,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   const { state, actions } = useApp();
   const { trackEvent } = useAnalytics();
+  const features = useFeatures();
   const segments = useSegments();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -924,6 +926,7 @@ function RootLayoutNav() {
             'edit-profile',
             'find-people',
             'my-tokis',
+            ...(features.boosts ? ['boost-payment', 'boost-manage', 'boost-insights'] : []),
             'saved-tokis',
             'complete-profile',
             'report-bug',
@@ -940,6 +943,9 @@ function RootLayoutNav() {
             path.startsWith('/edit-profile') ||
             path.startsWith('/find-people') ||
             path.startsWith('/my-tokis') ||
+            (features.boosts && path.startsWith('/boost-payment')) ||
+            (features.boosts && path.startsWith('/boost-manage')) ||
+            (features.boosts && path.startsWith('/boost-insights')) ||
             path.startsWith('/saved-tokis');
 
           // Also check if we're still handling initial URL (on native, this might take a moment)
@@ -1179,6 +1185,9 @@ function RootLayoutNav() {
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="my-tokis" options={{ headerShown: false }} />
+        {features.boosts && <Stack.Screen name="boost-payment" options={{ headerShown: false }} />}
+        {features.boosts && <Stack.Screen name="boost-manage" options={{ headerShown: false }} />}
+        {features.boosts && <Stack.Screen name="boost-insights" options={{ headerShown: false }} />}
         <Stack.Screen name="saved-tokis" options={{ headerShown: false }} />
         <Stack.Screen name="connections" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
@@ -1253,11 +1262,13 @@ export default function RootLayout() {
   );
 
   return (
-    <VersionGateProvider>
-      <VersionGateCoordinator>
-        {appShell}
-      </VersionGateCoordinator>
-    </VersionGateProvider>
+    <FeaturesProvider>
+      <VersionGateProvider>
+        <VersionGateCoordinator>
+          {appShell}
+        </VersionGateCoordinator>
+      </VersionGateProvider>
+    </FeaturesProvider>
   );
 }
 

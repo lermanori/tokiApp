@@ -25,7 +25,23 @@ describe('version gate bootstrap', () => {
       launchArgs: server.getLaunchArgs(),
     });
 
-    await waitFor(element(by.id('login-button'))).toBeVisible().withTimeout(15000);
+    // Cold launch races between /login and the guest exMap overlay -- accept either.
+    let reachedPostGate = false;
+    for (let i = 0; i < 15; i += 1) {
+      try {
+        await waitFor(element(by.id('login-button'))).toBeVisible().withTimeout(500);
+        reachedPostGate = true;
+        break;
+      } catch (_) {}
+      try {
+        await waitFor(element(by.id('guest-overlay-login-button'))).toBeVisible().withTimeout(500);
+        reachedPostGate = true;
+        break;
+      } catch (_) {}
+    }
+    if (!reachedPostGate) {
+      throw new Error('Neither login-button nor guest-overlay-login-button appeared within 15s');
+    }
     await detoxExpect(element(by.id('version-gate-screen'))).not.toExist();
   });
 

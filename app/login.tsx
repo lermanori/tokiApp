@@ -438,9 +438,9 @@ export default function LoginScreen() {
                     placeholderTextColor="#666"
                     value={password}
                     onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoComplete={isLogin ? "current-password" : "new-password"}
-                    textContentType={isLogin ? "password" : "newPassword"}
+                    secureTextEntry={process.env.EXPO_PUBLIC_E2E_BACKEND_URL ? false : !showPassword}
+                    autoComplete={process.env.EXPO_PUBLIC_E2E_BACKEND_URL ? "off" : (isLogin ? "current-password" : "new-password")}
+                    textContentType={process.env.EXPO_PUBLIC_E2E_BACKEND_URL ? "oneTimeCode" : (isLogin ? "password" : "newPassword")}
                     autoCorrect={false}
                     onSubmitEditing={handleAuth}
                     returnKeyType="done"

@@ -2,9 +2,7 @@ const http = require('http');
 const { by, device, element, expect: detoxExpect, waitFor } = require('detox');
 const { expect: jestExpect } = require('@jest/globals');
 
-const appConfig = require('../app.config.js');
-
-const API_ROOT = process.env.TOKI_TEST_API_URL || appConfig.expo.extra.EXPO_PUBLIC_API_URL;
+const API_ROOT = process.env.TOKI_E2E_BACKEND_URL || process.env.TOKI_TEST_API_URL || 'http://127.0.0.1:3002';
 const API_BASE_URL = `${API_ROOT}/api`;
 const TEST_EMAIL = 'test@example.com';
 const TEST_PASSWORD = 'password123';
@@ -105,9 +103,23 @@ const waitForNearbyCountGreaterThan = async (initialCount, timeoutMs = 15000) =>
   throw new Error(`Timed out waiting for nearby count to increase. Last count: ${lastCount}`);
 };
 
+const ensureOnLoginScreen = async () => {
+  // Cold launch races between /login and the guest exMap "Login to watch Tokis map" overlay.
+  // Wait for either, then if the overlay won, tap it to navigate to /login.
+  try {
+    await waitFor(element(by.id('email-input'))).toBeVisible().withTimeout(15000);
+    return;
+  } catch (_) {
+    // fall through to overlay path
+  }
+  await waitFor(element(by.id('guest-overlay-login-button'))).toBeVisible().withTimeout(5000);
+  await element(by.id('guest-overlay-login-button')).tap();
+  await waitFor(element(by.id('email-input'))).toBeVisible().withTimeout(15000);
+};
+
 const loginThroughUi = async () => {
   await device.disableSynchronization();
-  await waitFor(element(by.id('email-input'))).toBeVisible().withTimeout(15000);
+  await ensureOnLoginScreen();
   await element(by.id('email-input')).replaceText(TEST_EMAIL);
   await element(by.id('password-input')).replaceText(TEST_PASSWORD);
   await element(by.id('login-button')).tap();

@@ -73,6 +73,7 @@
     "react-mobile-picker": "^1.2.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-launch-arguments": "^4.1.1",
     "react-native-maps": "1.20.1",
     "react-native-modal-datetime-picker": "^18.0.0",
     "react-native-reanimated": "~4.1.1",
@@ -91,8 +92,8 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
     "@babel/core": "^7.25.2",
+    "@playwright/test": "^1.55.0",
     "@types/react": "~19.1.10",
     "concurrently": "^8.2.2",
     "detox": "^20.46.0",
@@ -100,6 +101,7 @@
     "eslint-config-expo": "~10.0.0",
     "gh-pages": "^6.3.0",
     "jest": "^29.7.0",
+    "jest-summarizing-reporter": "^1.1.4",
     "typescript": "~5.9.2"
   }
 }

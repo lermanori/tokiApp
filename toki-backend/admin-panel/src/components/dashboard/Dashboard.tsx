@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
+import { adminApi } from '../../services/adminApi';
 import WaitlistTab from './WaitlistTab';
 import DatabaseTab from './DatabaseTab';
 import AlgorithmTab from './AlgorithmTab';
@@ -9,13 +10,33 @@ import NotificationScheduleTab from './NotificationScheduleTab';
 import McpKeysTab from './McpKeysTab';
 import ReportsTab from './ReportsTab';
 import TokenDebugTab from './TokenDebugTab';
-import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer } from 'lucide-react';
+import BoostPaymentsTab from './BoostPaymentsTab';
+import FeatureFlagsTab from './FeatureFlagsTab';
+import { LogOut, Users, Mail, Sliders, BarChart, Bell, KeyRound, Flag, Timer, CreditCard, ToggleLeft } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, logout } = useAdminAuth();
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys' | 'reports' | 'token-debug'
+    'analytics' | 'waitlist' | 'database' | 'algorithm' | 'settings' | 'notification-schedule' | 'mcp-keys' | 'reports' | 'boost-payments' | 'token-debug' | 'feature-flags'
   >('analytics');
+  const [boostsEnabled, setBoostsEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    adminApi
+      .getFeatureFlags()
+      .then((res) => {
+        if (cancelled) return;
+        const boosts = res?.data?.find((f) => f.key === 'boosts');
+        setBoostsEnabled(boosts?.enabled === true);
+      })
+      .catch(() => {
+        // Fail closed
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -146,11 +167,25 @@ export default function Dashboard() {
             icon={<Flag size={18} />}
             label="Reports"
           />
+          {boostsEnabled && (
+            <TabButton
+              active={activeTab === 'boost-payments'}
+              onClick={() => setActiveTab('boost-payments')}
+              icon={<CreditCard size={18} />}
+              label="Boost Payments"
+            />
+          )}
           <TabButton
             active={activeTab === 'token-debug'}
             onClick={() => setActiveTab('token-debug')}
             icon={<Timer size={18} />}
             label="Token Debug"
+          />
+          <TabButton
+            active={activeTab === 'feature-flags'}
+            onClick={() => setActiveTab('feature-flags')}
+            icon={<ToggleLeft size={18} />}
+            label="Feature Flags"
           />
         </div>
       </div>
@@ -169,7 +204,9 @@ export default function Dashboard() {
         {activeTab === 'notification-schedule' && <NotificationScheduleTab />}
         {activeTab === 'mcp-keys' && <McpKeysTab />}
         {activeTab === 'reports' && <ReportsTab />}
+        {activeTab === 'boost-payments' && boostsEnabled && <BoostPaymentsTab />}
         {activeTab === 'token-debug' && <TokenDebugTab />}
+        {activeTab === 'feature-flags' && <FeatureFlagsTab />}
       </div>
     </div>
   );
@@ -216,5 +253,4 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
     </button>
   );
 }
-
 

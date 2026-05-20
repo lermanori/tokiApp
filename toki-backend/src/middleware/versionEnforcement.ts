@@ -13,10 +13,6 @@ const EXEMPT_PATH_PREFIXES = [
   '/mcp',
 ];
 
-const LEGACY_BLOCKED_IOS_USER_AGENTS = [
-  /^Toki\/1\b/i,
-];
-
 const parseBuildHeader = (headerValue: string | string[] | undefined): number | null => {
   const rawValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
   if (!rawValue) {
@@ -42,20 +38,6 @@ const readClientVersionMetadata = (request: Request): ClientVersionMetadata => {
     updateId: (Array.isArray(updateIdHeader) ? updateIdHeader[0] : updateIdHeader) || null,
     updateChannel: (Array.isArray(updateChannelHeader) ? updateChannelHeader[0] : updateChannelHeader) || null,
   };
-};
-
-const isLegacyBlockedIosClient = (request: Request, client: ClientVersionMetadata): boolean => {
-  const platformHeader = request.headers['x-platform'];
-  const appVersionHeader = request.headers['x-app-version'];
-
-  if (platformHeader || appVersionHeader || client.appBuild !== null || client.runtimeVersion) {
-    return false;
-  }
-
-  const userAgentHeader = request.headers['user-agent'];
-  const userAgent = Array.isArray(userAgentHeader) ? userAgentHeader[0] : userAgentHeader || '';
-
-  return LEGACY_BLOCKED_IOS_USER_AGENTS.some((pattern) => pattern.test(userAgent));
 };
 
 export const versionEnforcementMiddleware = (
@@ -90,26 +72,6 @@ export const versionEnforcementMiddleware = (
   }
 
   if (client.platform !== 'ios' && client.platform !== 'android') {
-    if (isLegacyBlockedIosClient(request, client)) {
-      const legacyPolicy = evaluateVersionPolicy({
-        platform: 'ios',
-        appVersion: '0.0.0',
-        appBuild: 1,
-        runtimeVersion: null,
-        updateId: null,
-        updateChannel: null,
-      });
-
-      logger.warn('[VERSION] Blocking legacy iOS client identified by default user-agent', {
-        method: request.method,
-        path: request.path,
-        userAgent,
-      });
-
-      response.status(426).json(createUnsupportedVersionErrorPayload(legacyPolicy));
-      return;
-    }
-
     next();
     return;
   }

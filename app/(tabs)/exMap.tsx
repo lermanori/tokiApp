@@ -10,6 +10,8 @@ import DiscoverMap from '@/components/DiscoverMap';
 import { DiscoverCategories } from '@/components/DiscoverCategories';
 import TokiSortModal, { SortState } from '@/components/TokiSortModal';
 import UserSearchCard from '@/components/UserSearchCard';
+import DidYouGoCard from '@/components/DidYouGoCard';
+import { useFeatures } from '@/contexts/FeaturesContext';
 import { useApp } from '@/contexts/AppContext';
 import { useDiscoverData } from '@/hooks/useDiscoverData';
 import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
@@ -63,6 +65,7 @@ const GUEST_MAP_DEFAULT_REGION = {
 
 export default function ExMapScreen() {
     const { state, actions, dispatch } = useApp();
+    const features = useFeatures();
     const { trackEvent } = useAnalytics();
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -82,6 +85,7 @@ export default function ExMapScreen() {
     const renderCountRef = useRef(0);
     const justSetHighlightRef = useRef(false);
     const hasReloadedForProfileCenterRef = useRef<string | null>(null);
+    const trackedViewIdsRef = useRef<Set<string>>(new Set());
 
     // Image loading tracking
     const [imageLoadTracking, setImageLoadTracking] = useState<Set<string>>(new Set());
@@ -221,6 +225,37 @@ export default function ExMapScreen() {
             }, 150);
         });
     }, [hasMoreLocal, isLocalLoadingMore, sortedEvents.length]);
+
+    const viewabilityConfig = useRef({
+        itemVisiblePercentThreshold: 65,
+        minimumViewTime: 600,
+    }).current;
+
+    const boostsEnabledRef = useRef(features.boosts);
+    useEffect(() => {
+        boostsEnabledRef.current = features.boosts;
+    }, [features.boosts]);
+
+    const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item?: TokiEvent | null }> }) => {
+        if (!boostsEnabledRef.current) {
+            return;
+        }
+        if (!apiService.hasToken()) {
+            return;
+        }
+
+        for (const entry of viewableItems) {
+            const tokiId = entry.item?.id;
+            if (!tokiId || trackedViewIdsRef.current.has(tokiId)) {
+                continue;
+            }
+
+            trackedViewIdsRef.current.add(tokiId);
+            apiService.trackEngagement(tokiId, 'view').catch((error) => {
+                console.warn('⚠️ Failed to track toki view engagement:', error);
+            });
+        }
+    }).current;
 
     // Sort categories by number of tokis in each category (most first), keeping 'all' first
     const sortedCategories = useMemo(() => {
@@ -697,6 +732,7 @@ export default function ExMapScreen() {
                                     Previewing Tokis around Tel Aviv. Login to explore the full live map.
                                 </Text>
                                 <TouchableOpacity
+                                    testID="guest-overlay-login-button"
                                     style={styles.guestMapButton}
                                     onPress={() => {
                                         actions.requireAuthForIntent({ route: '/exMap' });
@@ -843,13 +879,17 @@ export default function ExMapScreen() {
                                 </TouchableOpacity>
                             </View>
                         ) : (
-                            <TouchableOpacity style={styles.searchButton} onPress={() => {
+                            <TouchableOpacity
+                                testID="exmap-search-button"
+                                style={styles.searchButton}
+                                onPress={() => {
                                 if (isGuestMapPreview) {
                                     actions.requireAuthForIntent({ route: '/exMap' });
                                     return;
                                 }
                                 setShowSearch(true);
-                            }}>
+                            }}
+                            >
                                 <Search size={20} color="#666666" />
                                 <Text style={styles.searchPlaceholder}>Search activities, people...</Text>
                             </TouchableOpacity>
@@ -973,6 +1013,7 @@ export default function ExMapScreen() {
                                 <View>
                                     <Text style={styles.sectionTitle}>{String(sectionTitle || '')}</Text>
                                 </View>
+                                {features.boosts && <DidYouGoCard compact />}
                                 {(isWaitingForUserLocation || (state.loading && state.tokis.length === 0)) ? (
                                     <View style={styles.loadingContainer}>
                                         <ActivityIndicator size="large" color="#B49AFF" />
@@ -1082,6 +1123,8 @@ export default function ExMapScreen() {
                 }
                 onEndReached={handleLoadMoreLocal}
                 onEndReachedThreshold={0.2}
+                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfig={viewabilityConfig}
                 removeClippedSubviews={false}
                 maxToRenderPerBatch={10}
                 windowSize={10}

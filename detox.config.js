@@ -1,4 +1,4 @@
-const detoxDevice = process.env.DETOX_DEVICE || 'iPhone 16';
+const detoxDevice = process.env.DETOX_DEVICE || 'iPhone 17';
 
 /** @type {Detox.DetoxConfig} */
 module.exports = {
@@ -14,6 +14,28 @@ module.exports = {
   behavior: {
     init: {
       exposeGlobals: true,
+    },
+  },
+  artifacts: {
+    rootDir: 'artifacts',
+    plugins: {
+      log: { enabled: true },
+      screenshot: {
+        enabled: true,
+        shouldTakeAutomaticSnapshots: true,
+        keepOnlyFailedTestsArtifacts: false,
+        takeWhen: {
+          testStart: false,
+          testDone: true,
+          appNotReady: true,
+          testFailure: true,
+        },
+      },
+      video: {
+        enabled: true,
+        keepOnlyFailedTestsArtifacts: true,
+      },
+      uiHierarchy: 'enabled',
     },
   },
   apps: {

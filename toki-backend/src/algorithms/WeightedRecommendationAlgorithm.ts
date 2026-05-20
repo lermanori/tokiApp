@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { pool } from '../config/database';
 import { calculateDistance } from '../utils/distance';
+import { isEnabled } from '../services/featureFlags';
 import { RecommendationStrategy } from './RecommendationStrategy';
 import {
   AlgorithmContext,
@@ -40,9 +41,10 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
     }
 
     const userContext = await this.loadUserContext(context.userId, events);
+    const boostsEnabled = await isEnabled('boosts');
 
     const scoredEvents = events.map((event) => {
-      const score = this.calculateEventScore(event, context, userContext);
+      const score = this.calculateEventScore(event, context, userContext, boostsEnabled);
       return {
         ...event,
         algorithm_score: score,
@@ -69,7 +71,8 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
   private calculateEventScore(
     event: EventData,
     context: AlgorithmContext,
-    userContext: UserContext
+    userContext: UserContext,
+    boostsEnabled: boolean
   ): number {
     const { weights, userLat, userLng } = context;
 
@@ -100,6 +103,11 @@ export class WeightedRecommendationAlgorithm implements RecommendationStrategy {
 
     const newEventScore = this.calculateNewEventScore(event);
     score += weights.w_new * newEventScore;
+
+    // Boost priority: boosted Tokis get a large bonus to guarantee top placement
+    if (boostsEnabled && event.is_boosted) {
+      score += 10;
+    }
 
     return score;
   }

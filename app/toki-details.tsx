@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Heart, Share, MessageCircle, UserPlus, Edit, Trash2, CheckCircle, Lock, Link, Copy, RefreshCw, X, Flag, Tag } from 'lucide-react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatures } from '@/contexts/FeaturesContext';
 import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import RatingPrompt from '@/components/RatingPrompt';
@@ -73,6 +74,8 @@ interface TokiDetails {
     isFriend?: boolean;
   }>;
   isPaid?: boolean;
+  isBoosted?: boolean;
+  boostId?: string | null;
 }
 
 // Fallback data for different Tokis
@@ -191,8 +194,10 @@ const tokiDetailsMap: { [key: string]: TokiDetails } = {
 
 export default function TokiDetailsScreen() {
   const { state, actions } = useApp();
+  const features = useFeatures();
   const params = useLocalSearchParams();
   const hasTrackedView = useRef(false);
+  const hasTrackedOpen = useRef<string | null>(null);
   const resumeActionHandledRef = useRef<string | null>(null);
 
   // Fallback to read URL parameters directly (for web deep linking)
@@ -484,6 +489,8 @@ export default function TokiDetailsScreen() {
           })),
           friendsAttending: friendsAttending, // Include friends data in initial object
           isPaid: tokiData.isPaid || false,
+          isBoosted: tokiData.isBoosted || false,
+          boostId: tokiData.boostId || null,
         };
 
         setToki(transformedToki);
@@ -559,7 +566,7 @@ export default function TokiDetailsScreen() {
         : 'N/A (native)');
     console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] lastProcessedTokiId:', lastProcessedTokiId.current);
 
-    if (tokiId && tokiId !== lastProcessedTokiId.current) {
+if (tokiId && tokiId !== lastProcessedTokiId.current) {
       lastProcessedTokiId.current = tokiId;
       console.log('🔍 [FLOW DEBUG] [TOKI DETAILS] ✅ Valid tokiId found, loading data:', tokiId);
       // Ensure current user is loaded before loading Toki data
@@ -586,6 +593,20 @@ export default function TokiDetailsScreen() {
       actions.viewToki(tokiId);
     }
   }, [effectiveParams.tokiId]);
+
+  useEffect(() => {
+    if (!features.boosts) return;
+    if (!toki?.id || !state.currentUser?.id) {
+      return;
+    }
+    if (hasTrackedOpen.current === toki.id) {
+      return;
+    }
+    hasTrackedOpen.current = toki.id;
+    apiService.trackEngagement(toki.id, 'open').catch((error) => {
+      console.warn('⚠️ Failed to track toki open engagement:', error);
+    });
+  }, [features.boosts, toki?.id, state.currentUser?.id]);
 
   useEffect(() => {
     const tokiId = effectiveParams.tokiId as string;
@@ -749,6 +770,11 @@ export default function TokiDetailsScreen() {
 
     // Only allow chat access if user is approved
     if (toki.joinStatus === 'approved' || toki.isHostedByUser) {
+      if (features.boosts) {
+        apiService.trackEngagement(toki.id, 'chat_join').catch((error) => {
+          console.warn('⚠️ Failed to track chat join engagement:', error);
+        });
+      }
       router.push({
         pathname: '/chat',
         params: {
@@ -829,6 +855,17 @@ export default function TokiDetailsScreen() {
     } finally {
       setIsLoadingInvites(false);
     }
+  };
+
+  const handleBoostManagePress = () => {
+    if (!toki) return;
+    router.push({
+      pathname: '/boost-manage' as any,
+      params: {
+        tokiId: toki.id,
+        title: toki.title,
+      },
+    });
   };
 
   // New share function for sharing URLs
@@ -1621,7 +1658,7 @@ export default function TokiDetailsScreen() {
       />
       <AppInstallPrompt currentUrl={getCurrentUrl()} />
       <SafeAreaView style={styles.container}>
-        <ScrollView style={{ ...styles.content, width: '100%', maxWidth: 1000, alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
+        <ScrollView testID="toki-details-scroll" style={{ ...styles.content, width: '100%', maxWidth: 1000, alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
           <TokiHeader
             toki={{
               id: toki.id,
@@ -1702,6 +1739,11 @@ export default function TokiDetailsScreen() {
               <View style={styles.eventTitleRow}>
                 <Text style={styles.eventTitle}>{toki.title}</Text>
                 <View style={styles.eventBadgesContainer}>
+                  {features.boosts && toki.isBoosted && (
+                    <View style={styles.eventFeaturedBadge}>
+                      <Text style={styles.eventFeaturedBadgeText}>Featured</Text>
+                    </View>
+                  )}
                   {toki.visibility === 'private' && (
                     <View style={styles.eventPrivateBadge}>
                       <Lock size={14} color="#8B5CF6" />
@@ -1884,6 +1926,7 @@ export default function TokiDetailsScreen() {
                 )}
                 <View style={styles.hostDetails}>
                   <TouchableOpacity
+                    testID="toki-details-host-link"
                     onPress={() => {
                       if (!toki.isHostedByUser) {
                         navigateToUserProfile(toki.host.id);
@@ -1932,6 +1975,17 @@ export default function TokiDetailsScreen() {
                 )}
 
               {/* Hide button (host-only) */}
+              {toki.isHostedByUser && (
+                <TouchableOpacity
+                  style={styles.boostButton}
+                  onPress={handleBoostManagePress}
+                  testID="toki-details-boost-button"
+                >
+                  <Text style={styles.boostButtonEmoji}>▲</Text>
+                  <Text style={styles.boostButtonText}>Boost</Text>
+                </TouchableOpacity>
+              )}
+
               {toki.isHostedByUser && (
                 <TouchableOpacity style={styles.hideButton} onPress={async () => {
                   try {
@@ -1988,6 +2042,7 @@ export default function TokiDetailsScreen() {
             {!toki.isHostedByUser && (
               <View style={styles.reportSection}>
                 <TouchableOpacity
+                  testID="toki-details-report-button"
                   style={styles.reportButton}
                   onPress={() => {
                     if (!actions.requireAuthForIntent({
@@ -2569,6 +2624,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Medium',
     marginLeft: 4,
   },
+  eventFeaturedBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  eventFeaturedBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+  },
   eventHiddenBadge: {
     backgroundColor: '#F3F4F6',
     paddingHorizontal: 8,
@@ -2744,6 +2810,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#B49AFF',
     marginLeft: 8,
+  },
+  boostButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  boostButtonEmoji: {
+    fontSize: 14,
+    color: '#F59E0B',
+    marginRight: 8,
+  },
+  boostButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#F59E0B',
   },
   chatButton: {
     flex: 1,
