@@ -2,8 +2,17 @@ import { Router, Request, Response } from 'express';
 import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import logger from '../utils/logger';
+import { isEnabled } from '../services/featureFlags';
 
 const router = Router();
+
+router.use(async (_req: Request, res: Response, next) => {
+  if (!(await isEnabled('boosts'))) {
+    res.status(404).json({ success: false, message: 'Feature disabled' });
+    return;
+  }
+  next();
+});
 
 // ─── GET /:tokiId/realtime ── Real-time visibility data ─────────────────────
 

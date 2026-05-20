@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MapPin, Clock, Users, Calendar, Plus, RefreshCw } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatures } from '@/contexts/FeaturesContext';
 import TokiCard from '@/components/TokiCard';
 
 interface Toki {
@@ -33,6 +34,8 @@ interface Toki {
   host_id?: string;
   scheduledTime?: string; // Add scheduledTime from API
   currentAttendees?: string | number; // Add currentAttendees from API
+  isBoosted?: boolean;
+  boostId?: string | null;
 }
 
 // Helper function to determine status for My Tokis filtering
@@ -72,6 +75,7 @@ const transformTokiToInitialData = (toki: any) => {
 
 export default function MyTokisScreen() {
   const { state, actions } = useApp();
+  const features = useFeatures();
   const params = useLocalSearchParams();
   const initialTab = (params.tab as 'hosting' | 'joined' | 'pending') || 'hosting';
   const [selectedFilter, setSelectedFilter] = useState<'hosting' | 'joined' | 'pending'>(initialTab);
@@ -187,6 +191,16 @@ export default function MyTokisScreen() {
     });
   };
 
+  const handleBoostPress = (toki: any) => {
+    router.push({
+      pathname: '/boost-manage' as any,
+      params: {
+        tokiId: toki.id,
+        title: toki.title,
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -260,6 +274,13 @@ export default function MyTokisScreen() {
                   onRecreate={() => handleRecreateToki(toki)}
                   showRecreateButton={toki.isHostedByUser || toki.normalizedStatus === 'hosting'}
                 />
+                {features.boosts && toki.isHostedByUser && (
+                  <TouchableOpacity style={styles.boostActionButton} onPress={() => handleBoostPress(toki)}>
+                    <Text style={styles.boostActionButtonText}>
+                      {toki.isBoosted ? 'Manage Boost' : 'Boost This Toki'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </View>
@@ -374,6 +395,21 @@ const styles = StyleSheet.create({
     flexBasis: 360,
     maxWidth: 520,
     width: '100%',
+  },
+  boostActionButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  boostActionButtonText: {
+    color: '#F59E0B',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
   },
   tokiCardWrapper: {
     position: 'relative',

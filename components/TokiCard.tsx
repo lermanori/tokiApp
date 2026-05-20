@@ -38,6 +38,8 @@ export interface TokiCardProps {
         isSaved?: boolean;
         friendsGoing?: Array<{ id: string; name: string; avatar?: string; isFriend?: boolean }>; // Participants who are attending
         isPaid?: boolean;
+        isBoosted?: boolean;
+        boostId?: string | null;
     };
     onPress: () => void;
     onHostPress?: () => void;
@@ -344,6 +346,11 @@ export default function TokiCard({ toki, onPress, onHostPress, onSaveToggle, onI
                     >
                         <CopyPlus size={18} color="#FFFFFF" />
                     </TouchableOpacity>
+                )}
+                {toki.isBoosted && (
+                    <View style={styles.featuredBadge}>
+                        <Text style={styles.featuredBadgeText}>Featured</Text>
+                    </View>
                 )}
                 {/* <View style={styles.headerImageOverlay} /> */}
             </View>
@@ -717,5 +724,27 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 8,
         zIndex: 10,
+    },
+    featuredBadge: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    featuredBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontFamily: 'Inter-Bold',
     },
 });

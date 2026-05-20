@@ -6,6 +6,8 @@ import { Bell, Users, Calendar, MessageCircle, Heart, CircleCheck as CheckCircle
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '@/contexts/AppContext';
+import { useFeatures } from '@/contexts/FeaturesContext';
+import DidYouGoCard from '@/components/DidYouGoCard';
 // Backend data is loaded via AppContext unified endpoint; no direct API calls here
 
 interface Notification {
@@ -108,6 +110,7 @@ const formatRelativeTime = (input: string): string => {
 
 export default function NotificationsScreen() {
   const { state, actions } = useApp();
+  const features = useFeatures();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -404,6 +407,7 @@ export default function NotificationsScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {features.boosts && <DidYouGoCard />}
         {loading ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>Loading notifications...</Text>
@@ -771,6 +775,5 @@ const styles = StyleSheet.create({
     height: 20,
   },
 });
-
 
 

@@ -1,10 +1,12 @@
 import { pool } from '../config/database';
 import logger from '../utils/logger';
+import { isEnabled } from './featureFlags';
 
 // ─── Boost Expiration Check ─────────────────────────────────────────────────
 // Runs every 5 minutes. Deactivates boosts whose active hours have elapsed.
 
 async function checkBoostExpirations(): Promise<void> {
+    if (!(await isEnabled('boosts'))) return;
     try {
         // Find active activations that have passed their end time
         const expiredActivations = await pool.query(
@@ -36,7 +38,7 @@ async function checkBoostExpirations(): Promise<void> {
                 await client.query(
                     `UPDATE boosts
            SET hours_used = hours_used + $1, hours_remaining = $2,
-               status = $3, completed_at = CASE WHEN $3 = 'completed' THEN NOW() ELSE NULL END,
+               status = $3, completed_at = CASE WHEN $3::varchar = 'completed' THEN NOW() ELSE NULL END,
                updated_at = NOW()
            WHERE id = $4`,
                     [newHoursUsed, newRemaining, newStatus, activation.boost_id]
@@ -78,6 +80,7 @@ async function checkBoostExpirations(): Promise<void> {
 // Runs every 30 minutes. Creates survey prompts ~24h after event ends for engaged users.
 
 async function createDidYouGoPrompts(): Promise<void> {
+    if (!(await isEnabled('boosts'))) return;
     try {
         // Find boosted tokis whose event ended 20-28 hours ago and haven't been prompted yet
         const eligibleTokis = await pool.query(

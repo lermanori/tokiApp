@@ -67,6 +67,9 @@ export interface Toki {
   externalLink?: string;
   friendsAttending?: Array<{ id: string; name: string; avatar?: string }>;
   isPaid?: boolean;
+  isBoosted?: boolean;
+  boostId?: string | null;
+  algorithmScore?: number | null;
 }
 
 export interface User {
@@ -174,6 +177,31 @@ export interface SavedToki {
   };
   tags: string[];
   joinStatus?: string;
+}
+
+export interface BoostPurchaseRequest {
+  id: string;
+  tierId: string;
+  tierName: string;
+  tierSlug: string;
+  tokiId?: string | null;
+  tokiTitle?: string | null;
+  hostId?: string;
+  paymentAmount: number;
+  paymentCurrency: string;
+  totalHours: number;
+  isSplittable: boolean;
+  validityDays?: number | null;
+  status: 'pending_code' | 'code_issued' | 'approved' | 'expired' | 'cancelled';
+  codeStatus?: string;
+  codeGeneratedAt?: string | null;
+  codeExpiresAt?: string | null;
+  codeRedeemedAt?: string | null;
+  redeemedAt?: string | null;
+  boostId?: string | null;
+  generatedByAdminId?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserRatingStats {
@@ -1735,17 +1763,48 @@ class ApiService {
     return response.data;
   }
 
-  async purchaseBoost(params: {
+  async createBoostPurchaseRequest(params: {
     tierId: string;
     tokiId?: string;
-    paymentReference?: string;
-    paymentAmount?: number;
-    paymentCurrency?: string;
-  }): Promise<any> {
-    const response = await this.makeRequest<{ success: boolean; data: any }>('/boosts/purchase', {
+  }): Promise<BoostPurchaseRequest> {
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest }>('/boosts/purchase-requests', {
       method: 'POST',
       body: JSON.stringify(params),
     });
+    return response.data;
+  }
+
+  async purchaseBoost(params: {
+    tierId: string;
+    tokiId?: string;
+  }): Promise<BoostPurchaseRequest> {
+    return this.createBoostPurchaseRequest(params);
+  }
+
+  async getBoostPurchaseRequest(requestId: string): Promise<BoostPurchaseRequest> {
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest }>(`/boosts/purchase-requests/${requestId}`);
+    return response.data;
+  }
+
+  async getMyBoostPurchaseRequests(params?: { tokiId?: string }): Promise<BoostPurchaseRequest[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.tokiId) {
+      queryParams.append('tokiId', params.tokiId);
+    }
+    const query = queryParams.toString();
+    const endpoint = query ? `/boosts/purchase-requests/my?${query}` : '/boosts/purchase-requests/my';
+    const response = await this.makeRequest<{ success: boolean; data: BoostPurchaseRequest[] }>(endpoint);
+    return response.data;
+  }
+
+  async redeemBoostPurchaseRequest(requestId: string, code: string): Promise<{ request: BoostPurchaseRequest; boost: any }> {
+    const response = await this.makeRequest<{ success: boolean; data: { request: BoostPurchaseRequest; boost: any } }>(
+      `/boosts/purchase-requests/${requestId}/redeem`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }
+    );
     return response.data;
   }
 
@@ -1817,6 +1876,12 @@ class ApiService {
     await this.makeRequest(`/did-you-go/${tokiId}/mark-shown`, {
       method: 'POST',
     });
+  }
+
+  // ─── Feature Flags ─────────────────────────────────────────────────────────
+
+  async getFeatures(): Promise<Record<string, boolean>> {
+    return this.makeRequest<Record<string, boolean>>('/features');
   }
 }
 

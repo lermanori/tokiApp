@@ -255,7 +255,13 @@ const openTokiDetails = async (tokiIdToOpen) => {
   await device.enableSynchronization();
 };
 
-describe('boost center host flow', () => {
+const boostsEnabled = process.env.TOKI_E2E_BOOSTS_ENABLED === '1';
+if (!boostsEnabled) {
+  console.warn('[BOOST E2E] boosts feature flag is OFF — skipping boost-center suite');
+}
+const describeBoosts = boostsEnabled ? describe : describe.skip;
+
+describeBoosts('boost center host flow', () => {
   let accessToken;
   let tokiId;
 

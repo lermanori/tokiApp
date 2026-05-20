@@ -20,7 +20,6 @@ interface Toki {
   attendees: number;
   currentAttendees?: number;
   maxAttendees: number | null;
-  autoApprove?: boolean;
   tags: string[];
   host: {
     id: string;
@@ -40,6 +39,11 @@ interface Toki {
   scheduledTime?: string; // Add scheduled time for better display
   isSaved?: boolean;
   algorithmScore?: number | null;
+  isBoosted?: boolean;
+  boostId?: string | null;
+  isPaid?: boolean;
+  autoApprove?: boolean;
+  externalLink?: string;
 }
 
 interface User {
@@ -83,7 +87,7 @@ interface SavedToki {
   timeSlot: string;
   scheduledTime: string;
   currentAttendees: number;
-  maxAttendees: number;
+  maxAttendees: number | null;
   category: string;
   imageUrl: string;
   savedAt: string;
@@ -1332,6 +1336,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isPaid: (apiToki as any).isPaid || false,
         autoApprove: (apiToki as any).autoApprove || false,
         externalLink: (apiToki as any).externalLink || '',
+        isBoosted: apiToki.isBoosted || false,
+        boostId: apiToki.boostId || null,
       }));
 
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1397,6 +1403,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         longitude: apiToki.longitude ? (typeof apiToki.longitude === 'string' ? parseFloat(apiToki.longitude) : apiToki.longitude) : undefined,
         algorithmScore: apiToki.algorithmScore ?? null,
         friendsGoing: (apiToki as any).friendsAttending || [],
+        isBoosted: apiToki.isBoosted || false,
+        boostId: apiToki.boostId || null,
+        isPaid: (apiToki as any).isPaid || false,
       }));
 
       dispatch({ type: 'SET_TOKIS', payload: apiTokis });
@@ -1502,6 +1511,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           isSaved: (apiToki as any).is_saved || false,
           algorithmScore: apiToki.algorithmScore ?? null,
           friendsGoing: (apiToki as any).friendsAttending || [],
+          isBoosted: apiToki.isBoosted || false,
+          boostId: apiToki.boostId || null,
+          isPaid: (apiToki as any).isPaid || false,
         }));
 
         if (append) {
@@ -1652,7 +1664,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: apiToki.latitude ? Number(apiToki.latitude) : undefined,
         longitude: apiToki.longitude ? Number(apiToki.longitude) : undefined,
         scheduledTime: apiToki.scheduledTime,
-        isSaved: apiToki.is_saved ?? false,
+        isSaved: (apiToki as any).isSaved ?? false,
       };
 
       dispatch({ type: 'ADD_TOKI', payload: newToki });
@@ -1747,6 +1759,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (response.success) {
         const backendStatus = (response.data?.status as 'approved' | 'pending' | undefined) || 'pending';
+        try {
+          await apiService.trackEngagement(id, 'join_request');
+        } catch (trackingError) {
+          console.warn('⚠️ Failed to track join engagement:', trackingError);
+        }
         // Update local state to reflect backend status
         dispatch({
           type: 'UPDATE_TOKI',
@@ -2961,6 +2978,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const success = await apiService.saveToki(tokiId);
       if (success) {
+        try {
+          await apiService.trackEngagement(tokiId, 'save');
+        } catch (trackingError) {
+          console.warn('⚠️ Failed to track save engagement:', trackingError);
+        }
         // Refresh saved Tokis
         dispatch({ type: 'REFRESH_SAVED_TOKIS' });
       }
