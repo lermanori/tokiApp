@@ -348,6 +348,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 21.5: Feature flags
+    try {
+      console.log('📝 Migration: Creating feature_flags table...');
+      const featureFlagsSql = readFileSync(
+        join(sqlDir, 'create-feature-flags.sql'),
+        'utf-8'
+      );
+      await pool.query(featureFlagsSql);
+      console.log('✅ Feature flags migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.message?.includes('already exists')) {
+        console.log('ℹ️  feature_flags table already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     // Migration 20: Boost monetization tables
     try {
       console.log('📝 Migration 20: Creating boost monetization tables...');
@@ -360,6 +377,23 @@ async function runMigrations() {
     } catch (error: any) {
       if (error.code === '42P07' || error.code === '42701' || error.message?.includes('already exists')) {
         console.log('ℹ️  Boost monetization tables already exist, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
+    // Migration 21: Boost purchase request authorization flow
+    try {
+      console.log('📝 Migration 21: Creating boost purchase request tables...');
+      const boostPurchaseRequestSql = readFileSync(
+        join(sqlDir, 'create-boost-purchase-requests.sql'),
+        'utf-8'
+      );
+      await pool.query(boostPurchaseRequestSql);
+      console.log('✅ Boost purchase request migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42P07' || error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  Boost purchase request tables already exist, skipping...\n');
       } else {
         throw error;
       }
@@ -383,4 +417,3 @@ if (require.main === module) {
 }
 
 export default runMigrations;
-

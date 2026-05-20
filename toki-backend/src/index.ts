@@ -46,6 +46,7 @@ import mobileRoutes from './routes/mobile';
 import boostRoutes from './routes/boosts';
 import insightRoutes from './routes/insights';
 import didYouGoRoutes from './routes/did-you-go';
+import featureRoutes from './routes/features';
 import testRoutes from './routes/test';
 import { startNotificationScheduler } from './services/notificationScheduler';
 import { versionEnforcementMiddleware } from './middleware/versionEnforcement';
@@ -327,6 +328,7 @@ app.use('/api/analytics', corsMiddleware, analyticsRoutes);
 app.use('/api/boosts', corsMiddleware, boostRoutes);
 app.use('/api/insights', corsMiddleware, insightRoutes);
 app.use('/api/did-you-go', corsMiddleware, didYouGoRoutes);
+app.use('/api/features', corsMiddleware, featureRoutes);
 
 // E2E test-only routes — gated by ENABLE_E2E_TEST_ROUTES env var.
 // MUST NOT be enabled in production.

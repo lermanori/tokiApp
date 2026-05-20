@@ -4,7 +4,7 @@ module.exports = {
   testTimeout: 120000,
   maxWorkers: 1,
   reporters: ['detox/runners/jest/reporter', 'jest-summarizing-reporter'],
-  globalSetup: 'detox/runners/jest/globalSetup',
+  globalSetup: '<rootDir>/e2e/globalSetup.js',
   globalTeardown: 'detox/runners/jest/globalTeardown',
   testEnvironment: 'detox/runners/jest/testEnvironment',
   verbose: true,
