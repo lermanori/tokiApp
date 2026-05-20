@@ -70,10 +70,12 @@ export default function ExMapScreen() {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const params = useLocalSearchParams();
+
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [showMap, setShowMap] = useState(true); // Start with map view
+
     const [highlightedTokiId, setHighlightedTokiId] = useState<string | null>(null);
     const [highlightedTokiCoordinates, setHighlightedTokiCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
     const [sort, setSort] = useState<SortState>({ sortBy: 'relevance', sortOrder: 'asc' });
@@ -845,81 +847,6 @@ export default function ExMapScreen() {
 
     return (
         <SafeAreaView style={styles.container} edges={['left', 'right']}>
-            {/* Header from Explore with extended controls */}
-            <View style={styles.headerWrapper}>
-                <LinearGradient
-                    colors={['rgba(255, 241, 235, 1)', 'rgba(243, 231, 255, 1)', 'rgba(229, 220, 255, 1)']}
-                    style={styles.header}
-                >
-                    <View style={styles.headerContent}>
-                        <Text style={styles.greeting} testID="explore-greeting">Feeling social right now?</Text>
-                        <Text style={styles.subtitle}>Find what's happening around you</Text>
-                        {!state.isConnected && (
-                            <View style={styles.connectionStatus}>
-                                <Text style={styles.connectionStatusText}>⚠️ Offline mode - limited functionality</Text>
-                            </View>
-                        )}
-                    </View>
-
-                        <View style={styles.searchContainer}>
-                        {showSearch ? (
-                            <View style={styles.searchInputContainer}>
-                                <Search size={20} color="#666666" />
-                                <TextInput
-                                    style={{ outline: 'none', ...styles.searchInput }}
-                                    placeholder="Search activities, people..."
-                                    value={searchQuery}
-                                    onChangeText={setSearchQuery}
-                                    placeholderTextColor="#999999"
-                                    autoFocus
-                                    editable={!isGuestMapPreview}
-                                />
-                                <TouchableOpacity onPress={clearSearch}>
-                                    <X size={20} color="#666666" />
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <TouchableOpacity
-                                testID="exmap-search-button"
-                                style={styles.searchButton}
-                                onPress={() => {
-                                if (isGuestMapPreview) {
-                                    actions.requireAuthForIntent({ route: '/exMap' });
-                                    return;
-                                }
-                                setShowSearch(true);
-                            }}
-                            >
-                                <Search size={20} color="#666666" />
-                                <Text style={styles.searchPlaceholder}>Search activities, people...</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {/* Extended controls from Map */}
-                        <View style={styles.extendedControls}>
-                            <TouchableOpacity style={styles.controlButton} onPress={() => {
-                                if (isGuestMapPreview) {
-                                    actions.requireAuthForIntent({ route: '/exMap' });
-                                    return;
-                                }
-                                setShowSortModal(true);
-                            }}>
-                                <ArrowUpDown size={20} color="#666666" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.controlButton} onPress={() => {
-                                if (isGuestMapPreview) {
-                                    actions.requireAuthForIntent({ route: '/exMap' });
-                                    return;
-                                }
-                                setShowFilterModal(true);
-                            }}>
-                                <Filter size={20} color="#B49AFF" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </LinearGradient>
-            </View>
-
             <FlatList
                 testID="discover-feed-list"
                 key={`flatlist-${numColumns}`}
@@ -947,6 +874,76 @@ export default function ExMapScreen() {
 
                         return (
                             <>
+                                <View style={styles.headerWrapper}>
+                                    <LinearGradient
+                                        colors={['rgba(255, 241, 235, 1)', 'rgba(243, 231, 255, 1)', 'rgba(229, 220, 255, 1)']}
+                                        style={styles.header}
+                                    >
+                                        <View style={styles.headerContent}>
+                                            <Text style={styles.greeting} testID="explore-greeting">Feeling social right now?</Text>
+                                            <Text style={styles.subtitle}>Find what's happening around you</Text>
+                                            {!state.isConnected && (
+                                                <View style={styles.connectionStatus}>
+                                                    <Text style={styles.connectionStatusText}>⚠️ Offline mode - limited functionality</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <View style={styles.searchContainer}>
+                                            {showSearch ? (
+                                                <View style={styles.searchInputContainer}>
+                                                    <Search size={20} color="#666666" />
+                                                    <TextInput
+                                                        style={{ outline: 'none', ...styles.searchInput }}
+                                                        placeholder="Search activities, people..."
+                                                        value={searchQuery}
+                                                        onChangeText={setSearchQuery}
+                                                        placeholderTextColor="#999999"
+                                                        autoFocus
+                                                        editable={!isGuestMapPreview}
+                                                    />
+                                                    <TouchableOpacity onPress={clearSearch}>
+                                                        <X size={20} color="#666666" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : (
+                                                <TouchableOpacity
+                                                    testID="exmap-search-button"
+                                                    style={styles.searchButton}
+                                                    onPress={() => {
+                                                        if (isGuestMapPreview) {
+                                                            actions.requireAuthForIntent({ route: '/exMap' });
+                                                            return;
+                                                        }
+                                                        setShowSearch(true);
+                                                    }}
+                                                >
+                                                    <Search size={20} color="#666666" />
+                                                    <Text style={styles.searchPlaceholder}>Search activities, people...</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            <View style={styles.extendedControls}>
+                                                <TouchableOpacity style={styles.controlButton} onPress={() => {
+                                                    if (isGuestMapPreview) {
+                                                        actions.requireAuthForIntent({ route: '/exMap' });
+                                                        return;
+                                                    }
+                                                    setShowSortModal(true);
+                                                }}>
+                                                    <ArrowUpDown size={20} color="#666666" />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity style={styles.controlButton} onPress={() => {
+                                                    if (isGuestMapPreview) {
+                                                        actions.requireAuthForIntent({ route: '/exMap' });
+                                                        return;
+                                                    }
+                                                    setShowFilterModal(true);
+                                                }}>
+                                                    <Filter size={20} color="#B49AFF" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </LinearGradient>
+                                </View>
                                 {mapComponent && typeof mapComponent === 'object' ? mapComponent : null}
                                 <DiscoverCategories
                                     categories={sortedCategories || []}
@@ -1032,7 +1029,7 @@ export default function ExMapScreen() {
                             </View>
                         );
                     }
-                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion, userSearchResults, isSearchingUsers])}
+                }, [renderInteractiveMap, sortedCategories, selectedCategories, handleCategoryToggle, sortedEvents.length, state.loading, state.tokis.length, selectedFilters, searchQuery, state.totalNearbyCount, isWaitingForUserLocation, mapRegion, userSearchResults, isSearchingUsers, showSearch, state.isConnected])}
                 renderItem={({ item, index }) => {
                     if (!item || typeof item !== 'object') {
                         return null;
@@ -1107,14 +1104,13 @@ export default function ExMapScreen() {
                         <View style={styles.bottomSpacing} />
                     </>
                 )}
-                contentContainerStyle={[
+                contentContainerStyle={
                     filteredEvents.length === 0 ? styles.contentEmpty : [
                         styles.contentList,
                         numColumns > 1 && { paddingHorizontal: 12 }
-                    ],
-                    { paddingTop: 0 } // No padding - content scrolls under header
-                ]}
-                contentInsetAdjustmentBehavior="automatic"
+                    ]
+                }
+                contentInsetAdjustmentBehavior="never"
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     isGuestMapPreview
@@ -1244,9 +1240,9 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
-        backgroundColor: 'transparent', // Transparent wrapper so content shows through rounded corners
-        marginBottom: -20, // Negative margin to allow overlap
-        zIndex: 1, // Ensure header stays on top
+        backgroundColor: 'transparent',
+        marginBottom: -20,
+        zIndex: 1,
     },
     header: {
         // paddingTop: 20,

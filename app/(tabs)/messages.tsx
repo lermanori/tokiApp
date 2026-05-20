@@ -299,6 +299,12 @@ export default function MessagesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => { if (isSearching) Keyboard.dismiss(); }}
+      >
       <LinearGradient
         colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
         style={styles.header}
@@ -347,17 +353,6 @@ export default function MessagesScreen() {
           </View>
         )}
       </LinearGradient>
-
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => {
-          if (isSearching) {
-            Keyboard.dismiss();
-          }
-        }}
-      >
         {/* Search Summary Header */}
         {isSearching && searchQuery.trim() && filteredChats.length > 0 && (
           <View style={styles.searchSummaryHeader}>

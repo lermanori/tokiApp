@@ -392,6 +392,10 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       <LinearGradient
         colors={['#FFF1EB', '#F3E7FF', '#E5DCFF']}
         style={styles.header}
@@ -405,8 +409,6 @@ export default function NotificationsScreen() {
           )}
         </View>
       </LinearGradient>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {features.boosts && <DidYouGoCard />}
         {loading ? (
           <View style={styles.emptyState}>
