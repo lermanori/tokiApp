@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Share, Linking, Platform, AppState } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { registerAndSyncPushToken } from '@/utils/notifications';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Edit3, MapPin, Calendar, Users, Heart, Share as ShareIcon, Bell, Shield, CircleHelp, LogOut, Instagram, Linkedin, Facebook, User, RefreshCw, Activity, Eye, EyeOff, Trash2, Bug } from 'lucide-react-native';
@@ -13,7 +15,34 @@ import { useUserPhotoViewer } from '@/components/UserPhotoViewer/UserPhotoViewer
 export default function ProfileScreen() {
   const { state, actions, dispatch } = useApp();
   const { openUserPhoto } = useUserPhotoViewer();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsCanAskAgain, setNotificationsCanAskAgain] = useState(true);
+
+  const refreshNotificationStatus = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+    try {
+      const perms = await Notifications.getPermissionsAsync();
+      setNotificationsEnabled(perms.status === 'granted');
+      setNotificationsCanAskAgain(perms.canAskAgain !== false);
+    } catch (e) {
+      console.warn('[profile] getPermissionsAsync failed:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshNotificationStatus();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refreshNotificationStatus();
+    });
+    return () => sub.remove();
+  }, [refreshNotificationStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshNotificationStatus();
+    }, [refreshNotificationStatus])
+  );
+
   const [locationEnabled, setLocationEnabled] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
@@ -464,14 +493,40 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleNotificationToggle = (value: boolean) => {
-    setNotificationsEnabled(value);
-    Alert.alert(
-      'Notification Settings Updated',
-      value
-        ? 'Push notifications are now enabled. You\'ll receive updates about your Tokis, messages, and new connections.'
-        : 'Push notifications are now disabled. You can still check updates manually in the app.'
-    );
+  const handleNotificationToggle = async (value: boolean) => {
+    if (Platform.OS === 'web') return;
+
+    if (!value) {
+      // OS doesn't allow programmatic revoke — direct user to Settings.
+      Alert.alert(
+        'Turn Off Notifications',
+        'To turn off push notifications, disable them for Toki in your device Settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    const current = await Notifications.getPermissionsAsync();
+    if (current.status === 'granted') {
+      setNotificationsEnabled(true);
+      return;
+    }
+    if (current.status === 'denied' && current.canAskAgain === false) {
+      Alert.alert(
+        'Enable Notifications',
+        'Notifications are blocked for Toki. Enable them in your device Settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    await registerAndSyncPushToken();
+    await refreshNotificationStatus();
   };
 
   const handleLocationToggle = (value: boolean) => {

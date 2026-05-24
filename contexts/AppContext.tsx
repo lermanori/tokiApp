@@ -7,7 +7,7 @@ import { apiService, Toki as ApiToki, User as ApiUser, UserStats, UserRating, Us
 import { socketService } from '../services/socket';
 import { getBackendUrl } from '../services/config';
 import { isRealtimeDisabledForE2E } from '../services/launchArgs';
-import { registerForPushNotificationsAsync, configureForegroundNotificationHandler } from '../utils/notifications';
+import { registerAndSyncPushToken, configureForegroundNotificationHandler } from '../utils/notifications';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { buildIntentLoginUrl, normalizeAnonymousRoute, ProtectedIntent } from '../utils/anonymousLanding';
 
@@ -867,33 +867,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Register and send push token once connected and user is available
   useEffect(() => {
-    const ensurePushRegistration = async () => {
-      try {
-        const reg = await registerForPushNotificationsAsync();
-        if (reg.token) {
-          console.log('📱 [PUSH] Registering token:', reg.token.substring(0, 20) + '...');
-          const response = await fetch(`${getBackendUrl()}/api/push/register`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${await apiService.getAccessToken()}`
-            },
-            body: JSON.stringify({ token: reg.token, platform: reg.platform })
-          });
-          if (response.ok) {
-            console.log('✅ [PUSH] Token registered successfully');
-          } else {
-            console.warn('⚠️ [PUSH] Token registration failed:', response.status);
-          }
-        } else {
-          console.warn('⚠️ [PUSH] No token available (may be simulator or permissions denied)');
-        }
-      } catch (e) {
-        console.warn('❌ [PUSH] Push registration failed:', e);
-      }
-    };
     if (state.isConnected && state.currentUser?.id) {
-      ensurePushRegistration();
+      registerAndSyncPushToken().catch((e) => {
+        console.warn('❌ [PUSH] Push registration failed:', e);
+      });
     }
   }, [state.isConnected, state.currentUser?.id]);
 

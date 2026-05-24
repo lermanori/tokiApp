@@ -15,6 +15,7 @@ import FriendsGoingModal from '@/components/FriendsGoingModal';
 import FriendsGoingOverlay from '@/components/FriendsGoingOverlay';
 import ReportModal from '@/components/ReportModal';
 import ConfirmModal from '@/components/ConfirmModal';
+import { useNotificationOptIn } from '@/hooks/useNotificationOptIn';
 import { apiService } from '@/services/api';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import { generateTokiShareUrl, generateTokiShareMessage, generateTokiShareOptions, generateInviteLinkUrl } from '@/utils/tokiUrls';
@@ -25,6 +26,14 @@ import AppInstallPrompt from '@/components/AppInstallPrompt';
 import TokiHeader from '@/components/TokiHeader';
 import { Share as RNShare } from 'react-native';
 import { stripResumeParams } from '@/utils/anonymousLanding';
+import { captureRef } from 'react-native-view-shot';
+import TokiStorySticker from '@/components/TokiStorySticker';
+import TokiStoryBackground from '@/components/TokiStoryBackground';
+import {
+  shareTokiToInstagramStory,
+  isInstagramAvailable,
+  InstagramNotAvailableError,
+} from '@/services/instagramShare';
 
 const { width } = Dimensions.get('window');
 
@@ -255,6 +264,7 @@ export default function TokiDetailsScreen() {
   };
   const [isJoining, setIsJoining] = useState(false);
   const [showCancelRequestModal, setShowCancelRequestModal] = useState(false);
+  const notifOptIn = useNotificationOptIn();
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showRatingPrompt, setShowRatingPrompt] = useState(false);
@@ -271,6 +281,19 @@ export default function TokiDetailsScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [editableMessage, setEditableMessage] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+  const stickerRef = useRef<View>(null);
+  const backgroundRef = useRef<View>(null);
+  const [isPreparingStoryShare, setIsPreparingStoryShare] = useState(false);
+  const [instagramAvailable, setInstagramAvailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (Platform.OS === 'web') return;
+    isInstagramAvailable()
+      .then((ok) => { if (!cancelled) setInstagramAvailable(ok); })
+      .catch(() => { if (!cancelled) setInstagramAvailable(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Invite Link Management (integrated into invite modal)
   const [inviteLinks, setInviteLinks] = useState<any[]>([]);
@@ -716,9 +739,11 @@ if (tokiId && tokiId !== lastProcessedTokiId.current) {
             setToki(prev => prev ? ({ ...prev, joinStatus: 'approved' }) : null);
             setTimeout(() => { loadTokiData(toki.id); }, 300);
             console.log('✅ Auto-joined via invite for Toki:', toki.id);
+            notifOptIn.maybePrompt();
           } else if (joinResultStatus === 'pending') {
             setToki(prev => prev ? ({ ...prev, joinStatus: 'pending' }) : null);
             console.log('✅ Join request pending for Toki:', toki.id);
+            notifOptIn.maybePrompt();
           } else {
             Alert.alert('Error', 'Failed to send join request. Please try again.');
           }
@@ -868,72 +893,70 @@ if (tokiId && tokiId !== lastProcessedTokiId.current) {
     });
   };
 
-  // New share function for sharing URLs
-  const handleShareToki = async () => {
-    console.log('🔍 [SHARE] ===== SHARE FUNCTION CALLED =====');
-    console.log('🔍 [SHARE] Share button pressed');
-    if (!toki) {
-      console.log('🔍 [SHARE] No Toki data available to share.');
+  // Share link via the platform's default share UI / custom modal
+  const shareTokiLink = async () => {
+    if (!toki) return;
+    const shareUrl = generateTokiShareUrl(toki);
+
+    if (Platform.OS === 'ios') {
+      await RNShare.share({
+        message: `${shareUrl}`,
+        title: toki.title,
+      });
       return;
     }
-    console.log('🔍 [SHARE] Toki data:', { id: toki.id, title: toki.title });
 
+    const shareOptions = generateTokiShareOptions(toki);
+    setEditableMessage(shareOptions.message);
+    setShareUrl(shareOptions.url);
+    setShowShareModal(true);
+  };
+
+  // Capture sticker + background and hand off to Instagram Stories
+  const shareTokiToStoryFlow = async () => {
+    if (!toki) return;
+    setIsPreparingStoryShare(true);
     try {
-      const shareUrl = generateTokiShareUrl(toki);
-      const shareMessage = generateTokiShareMessage(toki);
+      // Allow a tick so the offscreen views are laid out before capture.
+      await new Promise((r) => setTimeout(r, 50));
 
-      // On iOS, use native share sheet
-      if (Platform.OS === 'ios') {
-        console.log('🔍 [SHARE] Using iOS native share sheet');
-        await RNShare.share({
-          message: `${shareUrl}`,
-          title: toki.title
-          // Removed 'url' parameter to avoid duplication - message already contains the URL
-        });
+      const [stickerBase64, backgroundBase64] = await Promise.all([
+        captureRef(stickerRef as any, { format: 'png', quality: 1, result: 'base64' }),
+        captureRef(backgroundRef as any, { format: 'png', quality: 0.9, result: 'base64' }),
+      ]);
+
+      await shareTokiToInstagramStory({
+        stickerBase64,
+        backgroundBase64,
+        attributionUrl: generateTokiShareUrl(toki),
+      });
+    } catch (error) {
+      console.error('[SHARE] Instagram story share failed', error);
+      if (error instanceof InstagramNotAvailableError) {
+        Toast.show({ type: 'info', text1: 'Instagram not installed', text2: 'Falling back to share menu' });
+        await shareTokiLink();
         return;
       }
-
-      // On web/Android, show custom modal
-      console.log('🔍 [SHARE] Showing custom share modal');
-      const shareOptions = generateTokiShareOptions(toki);
-      console.log('🔍 [SHARE] Share options generated:', shareOptions);
-
-      // Initialize editable message and URL
-      setEditableMessage(shareOptions.message);
-      setShareUrl(shareOptions.url);
-      setShowShareModal(true);
-    } catch (error) {
-      console.error('Error sharing Toki:', error);
-
-      // Fallback to simple share
-      try {
-        const shareUrl = generateTokiShareUrl(toki);
-        await RNShare.share({
-          message: shareUrl,
-          title: toki.title
-          // Removed 'url' parameter to avoid duplication - message already contains the URL
-        });
-      } catch (shareError) {
-        console.error('Error with fallback share:', shareError);
-        // Final fallback to clipboard
-        try {
-          const shareUrl = generateTokiShareUrl(toki);
-          await Clipboard.setStringAsync(shareUrl);
-          Toast.show({
-            type: 'success',
-            text1: 'Link copied!',
-            text2: 'The event link has been copied to your clipboard'
-          });
-        } catch (clipboardError) {
-          console.error('Error copying to clipboard:', clipboardError);
-          Toast.show({
-            type: 'error',
-            text1: 'Share failed',
-            text2: 'Unable to share the event. Please try again.'
-          });
-        }
-      }
+      Toast.show({ type: 'error', text1: 'Share failed', text2: 'Could not open Instagram. Try again.' });
+    } finally {
+      setIsPreparingStoryShare(false);
     }
+  };
+
+  // Entry point for the regular share button — restored to original link-share behavior
+  const handleShareToki = async () => {
+    if (!toki) return;
+    try {
+      await shareTokiLink();
+    } catch (e) {
+      console.error('[SHARE] link share failed', e);
+    }
+  };
+
+  // Entry point for the dedicated Instagram Story button
+  const handleShareToStory = () => {
+    if (!toki || isPreparingStoryShare) return;
+    shareTokiToStoryFlow();
   };
 
   // Social media share functions
@@ -1670,6 +1693,7 @@ if (tokiId && tokiId !== lastProcessedTokiId.current) {
             isSaving={isSaving}
             onSaveToggle={handleSaveToggle}
             onShare={handleShareToki}
+            onShareToStory={instagramAvailable ? handleShareToStory : undefined}
             friendsAttending={toki?.friendsAttending}
             onFriendsPress={() => setShowFriendsModal(true)}
             onBack={() => {
@@ -2461,6 +2485,41 @@ if (tokiId && tokiId !== lastProcessedTokiId.current) {
           onConfirm={handleCancelRequest}
           onCancel={() => setShowCancelRequestModal(false)}
         />
+        <ConfirmModal
+          visible={notifOptIn.visible}
+          title="You're in!"
+          message="Want a reminder when it starts?"
+          icon="clock"
+          confirmLabel={notifOptIn.mode === 'openSettings' ? 'Open Settings' : 'Yes, remind me'}
+          cancelLabel="Not now"
+          confirmStyle="primary"
+          onConfirm={notifOptIn.handleConfirm}
+          onCancel={notifOptIn.handleDismiss}
+        />
+
+        {/* Offscreen render targets for Instagram Story capture */}
+        {toki && (Platform.OS === 'ios' || Platform.OS === 'android') ? (
+          <View
+            pointerEvents="none"
+            style={styles.offscreenCaptureHost}
+            collapsable={false}
+          >
+            <TokiStoryBackground ref={backgroundRef} imageUri={toki.image} />
+            <TokiStorySticker
+              ref={stickerRef}
+              toki={{
+                id: toki.id,
+                title: toki.title,
+                image: toki.image,
+                location: toki.location,
+                scheduledTime: toki.scheduledTime,
+                timeSlot: toki.timeSlot,
+                category: toki.category,
+                distance: toki.distance,
+              }}
+            />
+          </View>
+        ) : null}
       </SafeAreaView>
     </>
   );
@@ -2473,6 +2532,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  offscreenCaptureHost: {
+    position: 'absolute',
+    left: -10000,
+    top: -10000,
+    width: 1080,
+    height: 1920,
+    opacity: 0,
   },
   errorContainer: {
     flex: 1,
