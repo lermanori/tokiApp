@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, useWindowDimensions, ActivityIndicator, TextInput, ScrollView, Image, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Filter, ArrowUpDown, X, Users, ChevronRight } from 'lucide-react-native';
+import { Search, Filter, ArrowUpDown, X, Users, ChevronRight, Maximize2 } from 'lucide-react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
@@ -75,6 +75,7 @@ export default function ExMapScreen() {
     const [showSortModal, setShowSortModal] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
     const [showMap, setShowMap] = useState(true); // Start with map view
+    const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
     const [highlightedTokiId, setHighlightedTokiId] = useState<string | null>(null);
     const [highlightedTokiCoordinates, setHighlightedTokiCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -702,6 +703,15 @@ export default function ExMapScreen() {
         return `map-${hash}`;
     }, [sortedEvents]);
 
+    const validMapEvents = useMemo(() =>
+        sortedEvents.filter(e =>
+            e.coordinate &&
+            Number.isFinite(e.coordinate.latitude) &&
+            Number.isFinite(e.coordinate.longitude)
+        ),
+        [sortedEvents]
+    );
+
     const renderInteractiveMap = useCallback(() => {
         try {
             if (isGuestMapPreview) {
@@ -785,6 +795,14 @@ export default function ExMapScreen() {
                         profileCenter={profileCenter}
                         maxRadiusMeters={maxRadiusMeters}
                     />
+                    <TouchableOpacity
+                        testID="map-expand-button"
+                        style={styles.expandButton}
+                        onPress={() => setIsMapFullscreen(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Maximize2 size={16} color="#1C1C1C" />
+                    </TouchableOpacity>
                 </View>
             );
         } catch (error) {
@@ -1136,6 +1154,44 @@ export default function ExMapScreen() {
                 }}
                 scrollEventThrottle={16}
             />
+
+            <Modal
+                visible={isMapFullscreen}
+                animationType="slide"
+                onRequestClose={() => setIsMapFullscreen(false)}
+                statusBarTranslucent
+            >
+                <View style={styles.fullscreenModal}>
+                    <DiscoverMap
+                        fullscreen
+                        key={`fullscreen-${mapKey}`}
+                        region={mapRegion || GUEST_MAP_DEFAULT_REGION}
+                        onRegionChange={handleRegionChange}
+                        events={validMapEvents as any}
+                        onEventPress={handleEventPress as any}
+                        onMarkerPress={handleMapMarkerPress as any}
+                        highlightedTokiId={highlightedTokiId}
+                        highlightedCoordinates={highlightedTokiCoordinates}
+                        profileCenter={isGuestMapPreview ? null : profileCenter}
+                        maxRadiusMeters={isGuestMapPreview ? undefined : maxRadiusMeters}
+                    />
+                    <SafeAreaView
+                        testID="fullscreen-map-modal"
+                        style={styles.fullscreenSafeArea}
+                        edges={['top', 'right']}
+                        pointerEvents="box-none"
+                    >
+                        <TouchableOpacity
+                            testID="map-collapse-button"
+                            style={styles.collapseButton}
+                            onPress={() => setIsMapFullscreen(false)}
+                            activeOpacity={0.8}
+                        >
+                            <X size={20} color="#1C1C1C" />
+                        </TouchableOpacity>
+                    </SafeAreaView>
+                </View>
+            </Modal>
 
             <TokiFilters
                 visible={showFilterModal}
@@ -1492,5 +1548,47 @@ const styles = StyleSheet.create({
     peopleScrollContent: {
         paddingHorizontal: 20,
         paddingBottom: 8,
+    },
+    expandButton: {
+        position: 'absolute',
+        bottom: 30,
+        right: 10,
+        width: 34,
+        height: 34,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+        elevation: 3,
+        zIndex: 20,
+    },
+    fullscreenModal: {
+        flex: 1,
+        backgroundColor: '#000000',
+    },
+    fullscreenSafeArea: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        left: 0,
+    },
+    collapseButton: {
+        alignSelf: 'flex-end',
+        margin: 12,
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.92)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+        elevation: 3,
     },
 });

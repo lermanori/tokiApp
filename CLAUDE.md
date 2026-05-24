@@ -30,6 +30,41 @@ npm run start:device     # Run on physical iOS device (Release)
 - Default iOS Detox commands use `ios.sim.release` because this Expo app is more reliable there than in the Metro-dependent debug path.
 - Use `npm run detox:build:ios:debug` and `npm run detox:test:ios:debug` only when you explicitly want to debug against the development build with Metro running.
 
+### Detox: required setup before running the suite
+
+Two environment-variable knobs are non-obvious and easy to miss. **Both are required for the full suite to pass.**
+
+#### 1. Build the app with `EXPO_PUBLIC_E2E_BACKEND_URL` set
+
+`EXPO_PUBLIC_*` vars are inlined into the JS bundle at build time. The value does two things:
+1. Suppresses iOS "Save Password" popups during automated login flows. The popup blocks Detox's 100%-visibility check on any element it overlaps, silently failing unrelated tests (see `app/login.tsx` — `textContentType` flips to `"oneTimeCode"` when this var is truthy).
+2. Sets the build-time backend URL fallback in `services/config.ts` (runtime `TOKI_E2E_API_URL` launch arg still wins per-test).
+
+```bash
+rm -rf ios/build   # incremental builds may reuse a cached JS bundle without the var
+EXPO_PUBLIC_E2E_BACKEND_URL=http://127.0.0.1:3002 npm run detox:build:ios
+
+# verify the var got inlined:
+grep -o "127\.0\.0\.1:3002" ios/build/Build/Products/Release-iphonesimulator/Toki.app/main.jsbundle | head -1
+```
+
+Use `http://127.0.0.1:3002` (local backend) — not prod — so tests run against test data and against the test-only routes mounted below.
+
+#### 2. Start the backend with `ENABLE_E2E_TEST_ROUTES=1`
+
+The `/api/test/*` endpoints (`expire-access-tokens-for-user`, `expire-refresh-tokens-for-user`, etc.) used by token-refresh tests are gated by an env var (`toki-backend/src/index.ts:333`). Without it, those routes return 404 and tests like `auth-entry-flow › refreshes the session on relaunch` and `deep-link-auth › silently refreshes the session with deep link` fail at the `expireAccessTokens()` helper before they even relaunch the app.
+
+```bash
+cd toki-backend
+ENABLE_E2E_TEST_ROUTES=1 npm run dev
+```
+
+#### Test credentials and auth helpers
+- Test user: `test@example.com` / `password123` — a real account on **both** local and prod backends (the same email/password is hardcoded in the mock server too).
+- Shared login helper at `e2e/support/auth.js` — exports `loginThroughUi`, `ensureOnLoginScreen`, `TEST_CREDENTIALS`, `startMockAuthServer`. Use this from new tests instead of duplicating the login flow.
+- For tests that want a real backend with real data: don't set `TOKI_E2E_API_URL` in `launchArgs`; the build-time URL takes over.
+- For tests that want isolated auth (no network, deterministic): use `startMockAuthServer()` and pass `server.getLaunchArgs()` — runtime `TOKI_E2E_API_URL` will point the app at the mock.
+
 ### Backend (`toki-backend/`)
 ```bash
 npm run dev              # Start with nodemon (auto-rebuilds admin panel)

@@ -27,11 +27,12 @@ interface Props {
   highlightedCoordinates?: { latitude: number; longitude: number } | null;
   profileCenter?: { latitude: number; longitude: number } | null;
   maxRadiusMeters?: number;
+  fullscreen?: boolean;
 }
 
 const getCategoryColorForMap = (category: string) => CATEGORY_COLORS[category] || '#666666';
 
-function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList, highlightedTokiId, highlightedCoordinates }: Props) {
+function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPress, onToggleList, highlightedTokiId, highlightedCoordinates, fullscreen }: Props) {
   const pendingSelectionRef = useRef<EventItem | null>(null);
   // Freeze the initial region on first mount only - never update after mount
   const initialRegionRef = useRef(region);
@@ -305,11 +306,11 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
     }
   }, [highlightedTokiId, highlightedCoordinates, clustered, onMarkerPress, onRegionChange]);
   return (
-    <View style={styles.container}>
+    <View style={fullscreen ? styles.containerFullscreen : styles.container}>
       <MapView
         ref={mapViewRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-        style={styles.map}
+        style={fullscreen ? styles.mapFullscreen : styles.map}
         initialRegion={initialRegionRef.current}
         onRegionChange={(newRegion) => {
           // Update ref during dragging (no re-render)
@@ -439,7 +440,9 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
 
 const styles = StyleSheet.create({
   container: { position: 'relative', backgroundColor: '#FFFFFF', marginTop: 10 },
+  containerFullscreen: { flex: 1, position: 'relative', backgroundColor: '#FFFFFF' },
   map: { width: '100%', height: 275, borderRadius: 16 },
+  mapFullscreen: { width: '100%', flex: 1 },
   overlay: { position: 'absolute', top: 60, right: 16, gap: 8 },
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   zoomButton: { marginBottom: 6 },
