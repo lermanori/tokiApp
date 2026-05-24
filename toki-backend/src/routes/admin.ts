@@ -2065,23 +2065,75 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     startTime.setHours(startTime.getHours() - hoursNum);
     const startTimeStr = startTime.toISOString();
 
+    // Fetch internal users (marked via is_internal flag) so we can split each
+    // time-series metric into a "real" baseline plus one toggleable series per
+    // internal account.
+    const INTERNAL_USER_PALETTE = [
+      '#F97316', '#0EA5E9', '#A855F7', '#14B8A6', '#EAB308',
+      '#EF4444', '#22C55E', '#DB2777', '#6366F1', '#84CC16',
+    ];
+    const internalUsersResult = await pool.query(
+      `SELECT id, name, email FROM users WHERE is_internal = TRUE ORDER BY name ASC`
+    );
+    const internalUsers = internalUsersResult.rows.map((u: any, idx: number) => ({
+      id: u.id,
+      name: u.name || u.email || u.id,
+      color: INTERNAL_USER_PALETTE[idx % INTERNAL_USER_PALETTE.length],
+    }));
+    const internalUserIds = internalUsers.map((u: any) => u.id);
+    const internalKey = (metric: string, userId: string) => `${metric}__internal__${userId}`;
+
+    // Helper to run a per-internal-user breakdown query for any time-series metric.
+    // Returns Map<userId, Map<dateKey, count>>.
+    const runInternalBreakdown = async (
+      sql: string,
+      params: any[]
+    ): Promise<Map<string, Map<string, number>>> => {
+      const out = new Map<string, Map<string, number>>();
+      if (internalUserIds.length === 0) return out;
+      const result = await pool.query(sql, params);
+      for (const row of result.rows) {
+        const userId = String(row.user_id);
+        const dateKey = row.date instanceof Date ? row.date.toISOString() : String(row.date);
+        if (!out.has(userId)) out.set(userId, new Map());
+        out.get(userId)!.set(dateKey, parseInt(row.count));
+      }
+      return out;
+    };
+
     // 1. Active Users (users who connected via WebSocket per hour or day)
+    // Real = excludes internal users; internal users get their own series below.
     const activeUsersResult = await pool.query(
-      `SELECT 
-        ${getDateGroupExpr('created_at')} as date, 
-        COUNT(DISTINCT user_id) as count
-      FROM user_activity_logs 
-      WHERE event_type = 'connect' 
-        AND created_at >= $1
-      GROUP BY ${getDateGroupExpr('created_at')}
+      `SELECT
+        ${getDateGroupExpr('l.created_at')} as date,
+        COUNT(DISTINCT l.user_id) as count
+      FROM user_activity_logs l
+      LEFT JOIN users u ON u.id = l.user_id
+      WHERE l.event_type = 'connect'
+        AND l.created_at >= $1
+        AND COALESCE(u.is_internal, FALSE) = FALSE
+      GROUP BY ${getDateGroupExpr('l.created_at')}
       ORDER BY date ASC`,
       [startTimeStr]
     );
+    const activeUsersInternal = await runInternalBreakdown(
+      `SELECT
+        ${getDateGroupExpr('created_at')} as date,
+        user_id,
+        COUNT(DISTINCT user_id) as count
+      FROM user_activity_logs
+      WHERE event_type = 'connect'
+        AND created_at >= $1
+        AND user_id = ANY($2::uuid[])
+      GROUP BY ${getDateGroupExpr('created_at')}, user_id
+      ORDER BY date ASC`,
+      [startTimeStr, internalUserIds]
+    );
 
-    // 2. Total Accounts (cumulative count from beginning)
+    // 2. Total Accounts (cumulative count from beginning, excluding internal users)
     // First get total before start time
     const totalBeforeResult = await pool.query(
-      `SELECT COUNT(*) as count FROM users WHERE created_at < $1`,
+      `SELECT COUNT(*) as count FROM users WHERE created_at < $1 AND COALESCE(is_internal, FALSE) = FALSE`,
       [startTimeStr]
     );
     const totalBefore = parseInt(totalBeforeResult.rows[0]?.count || '0');
@@ -2091,10 +2143,10 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       `WITH period_counts AS (
         SELECT ${getDateGroupExpr('created_at')} as date, COUNT(*) as count
         FROM users
-        WHERE created_at >= $1
+        WHERE created_at >= $1 AND COALESCE(is_internal, FALSE) = FALSE
         GROUP BY ${getDateGroupExpr('created_at')}
       )
-      SELECT 
+      SELECT
         date,
         $2 + SUM(count) OVER (ORDER BY date) as cumulative_count
       FROM period_counts
@@ -2104,51 +2156,108 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
 
     // 3. Unique Logins (actual login events per hour or day)
     const uniqueLoginsResult = await pool.query(
-      `SELECT 
+      `SELECT
+        ${getDateGroupExpr('l.created_at')} as date,
+        COUNT(DISTINCT l.user_id) as count
+      FROM user_activity_logs l
+      LEFT JOIN users u ON u.id = l.user_id
+      WHERE l.event_type = 'login'
+        AND l.created_at >= $1
+        AND COALESCE(u.is_internal, FALSE) = FALSE
+      GROUP BY ${getDateGroupExpr('l.created_at')}
+      ORDER BY date ASC`,
+      [startTimeStr]
+    );
+    const uniqueLoginsInternal = await runInternalBreakdown(
+      `SELECT
         ${getDateGroupExpr('created_at')} as date,
+        user_id,
         COUNT(DISTINCT user_id) as count
       FROM user_activity_logs
       WHERE event_type = 'login'
         AND created_at >= $1
-      GROUP BY ${getDateGroupExpr('created_at')}
+        AND user_id = ANY($2::uuid[])
+      GROUP BY ${getDateGroupExpr('created_at')}, user_id
+      ORDER BY date ASC`,
+      [startTimeStr, internalUserIds]
+    );
+
+    // 4. Tokis Created (per hour or day, host_id is creator)
+    const tokisCreatedResult = await pool.query(
+      `SELECT
+        ${getDateGroupExpr('t.created_at')} as date,
+        COUNT(*) as count
+      FROM tokis t
+      LEFT JOIN users u ON u.id = t.host_id
+      WHERE t.created_at >= $1
+        AND COALESCE(u.is_internal, FALSE) = FALSE
+      GROUP BY ${getDateGroupExpr('t.created_at')}
       ORDER BY date ASC`,
       [startTimeStr]
     );
-
-    // 4. Tokis Created (per hour or day)
-    const tokisCreatedResult = await pool.query(
-      `SELECT 
+    const tokisCreatedInternal = await runInternalBreakdown(
+      `SELECT
         ${getDateGroupExpr('created_at')} as date,
+        host_id as user_id,
         COUNT(*) as count
       FROM tokis
       WHERE created_at >= $1
-      GROUP BY ${getDateGroupExpr('created_at')}
+        AND host_id = ANY($2::uuid[])
+      GROUP BY ${getDateGroupExpr('created_at')}, host_id
       ORDER BY date ASC`,
-      [startTimeStr]
+      [startTimeStr, internalUserIds]
     );
 
     // 5. Join Requests (per hour or day)
     const joinRequestsResult = await pool.query(
-      `SELECT 
-        ${getDateGroupExpr('joined_at')} as date,
+      `SELECT
+        ${getDateGroupExpr('tp.joined_at')} as date,
         COUNT(*) as count
-      FROM toki_participants
-      WHERE joined_at >= $1
-      GROUP BY ${getDateGroupExpr('joined_at')}
+      FROM toki_participants tp
+      LEFT JOIN users u ON u.id = tp.user_id
+      WHERE tp.joined_at >= $1
+        AND COALESCE(u.is_internal, FALSE) = FALSE
+      GROUP BY ${getDateGroupExpr('tp.joined_at')}
       ORDER BY date ASC`,
       [startTimeStr]
     );
+    const joinRequestsInternal = await runInternalBreakdown(
+      `SELECT
+        ${getDateGroupExpr('joined_at')} as date,
+        user_id,
+        COUNT(*) as count
+      FROM toki_participants
+      WHERE joined_at >= $1
+        AND user_id = ANY($2::uuid[])
+      GROUP BY ${getDateGroupExpr('joined_at')}, user_id
+      ORDER BY date ASC`,
+      [startTimeStr, internalUserIds]
+    );
 
-    // 6. Total Views (per hour or day)
+    // 6. Total Views (per hour or day). user_id can be NULL for guests; those count as real.
     const totalViewsResult = await pool.query(
-      `SELECT 
+      `SELECT
+        ${getDateGroupExpr('v.viewed_at')} as date,
+        COUNT(*) as count
+      FROM toki_views v
+      LEFT JOIN users u ON u.id = v.user_id
+      WHERE v.viewed_at >= $1
+        AND COALESCE(u.is_internal, FALSE) = FALSE
+      GROUP BY ${getDateGroupExpr('v.viewed_at')}
+      ORDER BY date ASC`,
+      [startTimeStr]
+    );
+    const totalViewsInternal = await runInternalBreakdown(
+      `SELECT
         ${getDateGroupExpr('viewed_at')} as date,
+        user_id,
         COUNT(*) as count
       FROM toki_views
       WHERE viewed_at >= $1
-      GROUP BY ${getDateGroupExpr('viewed_at')}
+        AND user_id = ANY($2::uuid[])
+      GROUP BY ${getDateGroupExpr('viewed_at')}, user_id
       ORDER BY date ASC`,
-      [startTimeStr]
+      [startTimeStr, internalUserIds]
     );
 
     // 7. Top 30 Viewed Tokis
@@ -2166,42 +2275,51 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     );
 
     // Get current summary stats
-    // Active Users (last 7 days - users who connected via WebSocket)
+    // Active Users (last 7 days - users who connected via WebSocket, excluding internal)
     const currentActiveUsersResult = await pool.query(
-      `SELECT COUNT(DISTINCT user_id) as count
-       FROM user_activity_logs
-       WHERE event_type = 'connect'
-         AND created_at >= NOW() - INTERVAL '7 days'`
+      `SELECT COUNT(DISTINCT l.user_id) as count
+       FROM user_activity_logs l
+       LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.event_type = 'connect'
+         AND l.created_at >= NOW() - INTERVAL '7 days'
+         AND COALESCE(u.is_internal, FALSE) = FALSE`
     );
 
-    // Online Users (any activity in last 10 minutes)
+    // Online Users (any activity in last 10 minutes, excluding internal)
     const onlineUsersResult = await pool.query(
-      `SELECT COUNT(DISTINCT user_id) as count
-       FROM user_activity_logs
-       WHERE created_at >= NOW() - INTERVAL '10 minutes'`
+      `SELECT COUNT(DISTINCT l.user_id) as count
+       FROM user_activity_logs l
+       LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.created_at >= NOW() - INTERVAL '10 minutes'
+         AND COALESCE(u.is_internal, FALSE) = FALSE`
     );
 
-    // Platform Distribution
+    // Platform Distribution (excludes internal users so device share reflects real users only)
     const platformStatsResult = await pool.query(
-      `SELECT 
-         CASE 
-           WHEN device_platform IS NULL OR device_platform = '' THEN 'unknown'
-           ELSE LOWER(device_platform)
+      `SELECT
+         CASE
+           WHEN l.device_platform IS NULL OR l.device_platform = '' THEN 'unknown'
+           ELSE LOWER(l.device_platform)
          END as platform,
-         COUNT(DISTINCT user_id) as count
-       FROM user_activity_logs
-       WHERE created_at >= NOW() - INTERVAL '30 days'
+         COUNT(DISTINCT l.user_id) as count
+       FROM user_activity_logs l
+       LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.created_at >= NOW() - INTERVAL '30 days'
+         AND COALESCE(u.is_internal, FALSE) = FALSE
        GROUP BY platform`
     );
 
+    // Excludes internal users so dev/test activity doesn't skew version distribution.
     const appVersionStatsResult = await pool.query(
       `SELECT
-         COALESCE(NULLIF(metadata->>'clientVersion', ''), 'unknown') as version,
+         COALESCE(NULLIF(l.metadata->>'clientVersion', ''), 'unknown') as version,
          COUNT(*) as count
-       FROM user_activity_logs
-       WHERE event_type = 'request'
-         AND path = '/nearby'
-         AND created_at >= $1
+       FROM user_activity_logs l
+       LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.event_type = 'request'
+         AND l.path = '/nearby'
+         AND l.created_at >= $1
+         AND COALESCE(u.is_internal, FALSE) = FALSE
        GROUP BY version
        ORDER BY count DESC, version ASC`,
       [startTimeStr]
@@ -2367,21 +2485,29 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     }
 
     const totalAccountsResult2 = await pool.query(
-      'SELECT COUNT(*) as count FROM users'
+      `SELECT
+         COUNT(*) FILTER (WHERE COALESCE(is_internal, FALSE) = FALSE) as count,
+         COUNT(*) FILTER (WHERE is_internal = TRUE) as internal_count,
+         COUNT(*) as total_count
+       FROM users`
     );
 
-    // Unique Logins Today (actual login events)
+    // Unique Logins Today (actual login events) - excluding internal users
     const uniqueLoginsTodayResult = await pool.query(
-      `SELECT COUNT(DISTINCT user_id) as count
-       FROM user_activity_logs
-       WHERE event_type = 'login'
-         AND DATE(created_at) = CURRENT_DATE`
+      `SELECT COUNT(DISTINCT l.user_id) as count
+       FROM user_activity_logs l
+       LEFT JOIN users u ON u.id = l.user_id
+       WHERE l.event_type = 'login'
+         AND DATE(l.created_at) = CURRENT_DATE
+         AND COALESCE(u.is_internal, FALSE) = FALSE`
     );
 
     const tokisCreatedTodayResult = await pool.query(
       `SELECT COUNT(*) as count
-       FROM tokis
-       WHERE DATE(created_at) = CURRENT_DATE`
+       FROM tokis t
+       LEFT JOIN users u ON u.id = t.host_id
+       WHERE DATE(t.created_at) = CURRENT_DATE
+         AND COALESCE(u.is_internal, FALSE) = FALSE`
     );
 
     const appOpenCount = parseInt(loginAfterOpenResult.rows[0]?.app_open_count || '0');
@@ -2434,6 +2560,34 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
     const timeSeries: any[] = [];
     const sortedDates = Array.from(allDates).sort();
 
+    // Add internal-user breakdown dates to allDates so points exist for those buckets.
+    const internalBreakdowns: [string, Map<string, Map<string, number>>][] = [
+      ['activeUsers', activeUsersInternal],
+      ['uniqueLoginsToday', uniqueLoginsInternal],
+      ['tokisCreatedToday', tokisCreatedInternal],
+      ['joinRequestsToday', joinRequestsInternal],
+      ['totalViewsToday', totalViewsInternal],
+    ];
+    for (const [, byUser] of internalBreakdowns) {
+      for (const dateMap of byUser.values()) {
+        for (const dateKey of dateMap.keys()) {
+          if (!allDates.has(dateKey)) {
+            allDates.add(dateKey);
+            sortedDates.push(dateKey);
+          }
+        }
+      }
+    }
+    sortedDates.sort();
+
+    const buildInternalKeys = (metric: string, dateStr: string, byUser: Map<string, Map<string, number>>) => {
+      const out: Record<string, number> = {};
+      for (const u of internalUsers) {
+        out[internalKey(metric, u.id)] = byUser.get(u.id)?.get(dateStr) || 0;
+      }
+      return out;
+    };
+
     // If no data, create empty series for the time range
     if (sortedDates.length === 0) {
       const increment = groupByHour ? 1 : 24; // hours
@@ -2445,15 +2599,19 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
           date.setHours(date.getHours() + i);
         }
         const dateStr = date.toISOString();
-        timeSeries.push({
+        const emptyRow: any = {
           date: dateStr,
           activeUsers: 0,
           totalAccounts: totalBefore,
           uniqueLoginsToday: 0,
           tokisCreatedToday: 0,
           joinRequestsToday: 0,
-          totalViewsToday: 0
-        });
+          totalViewsToday: 0,
+        };
+        for (const [metric] of internalBreakdowns) {
+          for (const u of internalUsers) emptyRow[internalKey(metric, u.id)] = 0;
+        }
+        timeSeries.push(emptyRow);
       }
     } else {
       // Fill gaps in time range
@@ -2474,7 +2632,12 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
           uniqueLoginsToday,
           tokisCreatedToday,
           joinRequestsToday,
-          totalViewsToday
+          totalViewsToday,
+          ...buildInternalKeys('activeUsers', dateStr, activeUsersInternal),
+          ...buildInternalKeys('uniqueLoginsToday', dateStr, uniqueLoginsInternal),
+          ...buildInternalKeys('tokisCreatedToday', dateStr, tokisCreatedInternal),
+          ...buildInternalKeys('joinRequestsToday', dateStr, joinRequestsInternal),
+          ...buildInternalKeys('totalViewsToday', dateStr, totalViewsInternal),
         });
       }
     }
@@ -2483,6 +2646,8 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       currentActiveUsers: parseInt(currentActiveUsersResult.rows[0].count),
       onlineUsers: parseInt(onlineUsersResult.rows[0].count),
       totalAccounts: parseInt(totalAccountsResult2.rows[0].count),
+      totalAccountsInternal: parseInt(totalAccountsResult2.rows[0].internal_count || '0'),
+      totalAccountsAll: parseInt(totalAccountsResult2.rows[0].total_count || totalAccountsResult2.rows[0].count),
       uniqueLoginsToday: parseInt(uniqueLoginsTodayResult.rows[0].count),
       tokisCreatedToday: parseInt(tokisCreatedTodayResult.rows[0].count),
       averageSessionLength: avgSessionSeconds,
@@ -2497,6 +2662,7 @@ router.get('/analytics', authenticateToken, requireAdmin, async (req: Request, r
       data: {
         timeSeries,
         summary,
+        internalUsers,
         platformStats: platformStatsResult.rows,
         appVersionStats: appVersionStatsResult.rows,
         topViewedTokis: topViewedTokisResult.rows,
@@ -2528,11 +2694,12 @@ router.get('/analytics/active-users', authenticateToken, requireAdmin, async (re
     const daysNum = parseInt(days as string) || 7;
 
     const result = await pool.query(
-      `SELECT 
-        u.id, 
-        u.name, 
-        u.email, 
+      `SELECT
+        u.id,
+        u.name,
+        u.email,
         u.avatar_url,
+        COALESCE(u.is_internal, FALSE) as is_internal,
         COUNT(l.id) as request_count,
         ARRAY_AGG(DISTINCT l.device_platform) as platforms,
         MAX(l.created_at) as last_active
@@ -2553,6 +2720,30 @@ router.get('/analytics/active-users', authenticateToken, requireAdmin, async (re
   } catch (error) {
     console.error('Error fetching active users:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch active users' });
+  }
+});
+
+// Toggle is_internal flag for a user. Internal users are split out as their own
+// toggleable series in the Analytics dashboard charts so admins can see metrics
+// with or without their own dev/test accounts.
+router.patch('/users/:id/internal', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isInternal } = req.body as { isInternal?: boolean };
+    if (typeof isInternal !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'isInternal must be a boolean' });
+    }
+    const result = await pool.query(
+      `UPDATE users SET is_internal = $1 WHERE id = $2 RETURNING id, name, email, is_internal`,
+      [isInternal, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating is_internal flag:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update internal flag' });
   }
 });
 

@@ -208,6 +208,13 @@ export const adminApi = {
     });
   },
 
+  setUserInternal: async (userId: string, isInternal: boolean) => {
+    return makeRequest(`/users/${userId}/internal`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isInternal })
+    });
+  },
+
   // Tokis
   getTokis: async (params?: { page?: number; limit?: number; search?: string; category?: string; status?: string }) => {
     const query = new URLSearchParams();

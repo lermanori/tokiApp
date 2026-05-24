@@ -399,6 +399,23 @@ async function runMigrations() {
       }
     }
 
+    // Migration 22: Add is_internal flag to users
+    try {
+      console.log('📝 Migration 22: Adding is_internal flag to users table...');
+      const isInternalSql = readFileSync(
+        join(sqlDir, 'add-is-internal-flag.sql'),
+        'utf-8'
+      );
+      await pool.query(isInternalSql);
+      console.log('✅ is_internal flag migration completed\n');
+    } catch (error: any) {
+      if (error.code === '42701' || error.message?.includes('already exists')) {
+        console.log('ℹ️  is_internal column already exists, skipping...\n');
+      } else {
+        throw error;
+      }
+    }
+
     console.log('🎉 All migrations completed successfully!');
   } catch (error: any) {
     console.error('❌ Migration error:', error);

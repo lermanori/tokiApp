@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { adminApi } from '../../services/adminApi';
-import { Smartphone, Globe, Terminal, Activity, Users, Clock, LogIn, Plus, Info } from 'lucide-react';
+import { Smartphone, Globe, Terminal, Activity, Users, Clock, LogIn, Plus, Info, Star } from 'lucide-react';
 import UserActionsTimeline from './UserActionsTimeline';
 
 interface TimeSeriesData {
@@ -12,6 +12,14 @@ interface TimeSeriesData {
   tokisCreatedToday: number;
   joinRequestsToday: number;
   totalViewsToday: number;
+  // Internal-user breakdown keys take the form `${metric}__internal__${userId}`.
+  [key: string]: number | string;
+}
+
+interface InternalUser {
+  id: string;
+  name: string;
+  color: string;
 }
 
 interface TopViewedToki {
@@ -67,6 +75,8 @@ interface AnalyticsResponse {
       currentActiveUsers: number;
       onlineUsers: number;
       totalAccounts: number;
+      totalAccountsInternal: number;
+      totalAccountsAll: number;
       uniqueLoginsToday: number;
       tokisCreatedToday: number;
       averageSessionLength: number;
@@ -75,6 +85,7 @@ interface AnalyticsResponse {
       startupRefreshSuccessRate: number;
       forcedReauthAfterRefreshFailureRate: number;
     };
+    internalUsers: InternalUser[];
     platformStats: { platform: string; count: string }[];
     appVersionStats: AppVersionStat[];
     topViewedTokis: TopViewedToki[];
@@ -84,11 +95,13 @@ interface AnalyticsResponse {
 
 interface ChartCardProps {
   title: string;
-  dataKey: keyof TimeSeriesData;
+  dataKey: string;
   color: string;
   timeSeries: TimeSeriesData[];
   loading: boolean;
   groupByHour: boolean;
+  internalUsers?: InternalUser[];
+  supportsInternalBreakdown?: boolean;
 }
 
 export default function AnalyticsTab() {
@@ -98,6 +111,8 @@ export default function AnalyticsTab() {
     currentActiveUsers: 0,
     onlineUsers: 0,
     totalAccounts: 0,
+    totalAccountsInternal: 0,
+    totalAccountsAll: 0,
     uniqueLoginsToday: 0,
     tokisCreatedToday: 0,
     averageSessionLength: 0,
@@ -106,10 +121,12 @@ export default function AnalyticsTab() {
     startupRefreshSuccessRate: 0,
     forcedReauthAfterRefreshFailureRate: 0
   });
+  const [internalUsers, setInternalUsers] = useState<InternalUser[]>([]);
   const [platformStats, setPlatformStats] = useState<any[]>([]);
   const [hours, setHours] = useState(720); // default 30 days
   const [error, setError] = useState<string | null>(null);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [togglingInternalId, setTogglingInternalId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string | undefined>(undefined);
@@ -148,7 +165,12 @@ export default function AnalyticsTab() {
       const resp = await adminApi.getAnalytics(hours) as AnalyticsResponse;
       if (resp.data) {
         setTimeSeries(resp.data.timeSeries);
-        setSummary(resp.data.summary);
+        setSummary({
+          ...resp.data.summary,
+          totalAccountsInternal: resp.data.summary.totalAccountsInternal ?? 0,
+          totalAccountsAll: resp.data.summary.totalAccountsAll ?? resp.data.summary.totalAccounts,
+        });
+        setInternalUsers(resp.data.internalUsers || []);
         setPlatformStats(resp.data.platformStats || []);
         setAppVersionStats(
           (resp.data.appVersionStats || [])
@@ -168,6 +190,8 @@ export default function AnalyticsTab() {
         currentActiveUsers: 0,
         onlineUsers: 0,
         totalAccounts: 0,
+        totalAccountsInternal: 0,
+        totalAccountsAll: 0,
         uniqueLoginsToday: 0,
         tokisCreatedToday: 0,
         averageSessionLength: 0,
@@ -176,6 +200,7 @@ export default function AnalyticsTab() {
         startupRefreshSuccessRate: 0,
         forcedReauthAfterRefreshFailureRate: 0
       });
+      setInternalUsers([]);
       setPlatformStats([]);
       setAppVersionStats([]);
       setTopViewedTokis([]);
@@ -193,6 +218,19 @@ export default function AnalyticsTab() {
       }
     } catch (e) {
       console.error('Failed to load active users', e);
+    }
+  };
+
+  const handleToggleInternal = async (userId: string, current: boolean) => {
+    setTogglingInternalId(userId);
+    try {
+      await adminApi.setUserInternal(userId, !current);
+      setActiveUsers((prev) => prev.map((u) => u.id === userId ? { ...u, is_internal: !current } : u));
+      await loadAnalytics();
+    } catch (e) {
+      console.error('Failed to toggle internal flag', e);
+    } finally {
+      setTogglingInternalId(null);
     }
   };
 
@@ -260,9 +298,16 @@ export default function AnalyticsTab() {
         />
         <StatCard
           title="Total Accounts"
-          value={loading ? '…' : summary.totalAccounts.toLocaleString()}
+          value={
+            loading
+              ? '…'
+              : summary.totalAccountsInternal > 0
+                ? `${summary.totalAccounts.toLocaleString()} / ${summary.totalAccountsAll.toLocaleString()}`
+                : summary.totalAccounts.toLocaleString()
+          }
           gradient="var(--gradient-secondary)"
           icon={<Users size={20} />}
+          infoTooltip={summary.totalAccountsInternal > 0 ? `${summary.totalAccounts.toLocaleString()} real / ${summary.totalAccountsAll.toLocaleString()} total (${summary.totalAccountsInternal.toLocaleString()} internal excluded)` : undefined}
         />
       </div>
       <div style={{
@@ -353,6 +398,8 @@ export default function AnalyticsTab() {
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
+            internalUsers={internalUsers}
+            supportsInternalBreakdown
           />
           <ChartCard
             title="Total Accounts"
@@ -369,6 +416,8 @@ export default function AnalyticsTab() {
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
+            internalUsers={internalUsers}
+            supportsInternalBreakdown
           />
           <ChartCard
             title="Tokis Created"
@@ -377,6 +426,8 @@ export default function AnalyticsTab() {
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
+            internalUsers={internalUsers}
+            supportsInternalBreakdown
           />
           <ChartCard
             title="Join Requests"
@@ -385,6 +436,8 @@ export default function AnalyticsTab() {
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
+            internalUsers={internalUsers}
+            supportsInternalBreakdown
           />
           <ChartCard
             title="Total Toki Views"
@@ -393,6 +446,8 @@ export default function AnalyticsTab() {
             timeSeries={timeSeries}
             loading={loading}
             groupByHour={groupByHour}
+            internalUsers={internalUsers}
+            supportsInternalBreakdown
           />
         </div>
       )}
@@ -442,6 +497,7 @@ export default function AnalyticsTab() {
                   <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>ACTIONS</th>
                   <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>PLATFORMS</th>
                   <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>LAST ACTIVE</th>
+                  <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>INTERNAL</th>
                   <th style={{ padding: '12px', color: '#666', fontSize: '13px' }}>DETAILS</th>
                 </tr>
               </thead>
@@ -488,6 +544,25 @@ export default function AnalyticsTab() {
                       </td>
                       <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
                         {new Date(user.last_active).toLocaleDateString()}
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <button
+                          onClick={() => handleToggleInternal(user.id, !!user.is_internal)}
+                          disabled={togglingInternalId === user.id}
+                          title={user.is_internal ? 'Click to unmark as internal (include in metrics)' : 'Click to mark as internal (exclude from metrics)'}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: togglingInternalId === user.id ? 'wait' : 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: user.is_internal ? '#F59E0B' : '#9CA3AF',
+                            opacity: togglingInternalId === user.id ? 0.5 : 1,
+                          }}
+                        >
+                          <Star size={18} fill={user.is_internal ? '#F59E0B' : 'none'} />
+                        </button>
                       </td>
                       <td style={{ padding: '12px' }}>
                         <button
@@ -739,7 +814,7 @@ export default function AnalyticsTab() {
   );
 }
 
-function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: ChartCardProps) {
+function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour, internalUsers, supportsInternalBreakdown }: ChartCardProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     if (groupByHour) {
@@ -748,6 +823,9 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     }
   };
+
+  const internals = supportsInternalBreakdown ? (internalUsers || []) : [];
+  const hasInternals = internals.length > 0;
 
   return (
     <div style={{
@@ -762,9 +840,17 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
         fontSize: '18px',
         fontFamily: 'var(--font-semi)',
         marginBottom: '16px',
-        color: '#1C1C1C'
+        color: '#1C1C1C',
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: '8px',
       }}>
-        {title}
+        <span>{title}</span>
+        {hasInternals && (
+          <span style={{ fontSize: '12px', color: '#9CA3AF', fontFamily: 'var(--font-regular)' }}>
+            ({internals.length} internal hidden — click legend to show)
+          </span>
+        )}
       </h3>
       {loading ? (
         <div style={{ padding: '60px', textAlign: 'center', color: '#666' }}>
@@ -775,7 +861,7 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
           No data available
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={hasInternals ? 340 : 300}>
           <LineChart data={timeSeries} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.1)" />
             <XAxis
@@ -797,14 +883,28 @@ function ChartCard({ title, dataKey, color, timeSeries, loading, groupByHour }: 
               }}
               labelFormatter={formatDate}
             />
+            {hasInternals && <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />}
             <Line
               type="monotone"
               dataKey={dataKey}
               stroke={color}
               strokeWidth={2}
               dot={false}
-              name={title}
+              name={hasInternals ? `${title} (real)` : title}
             />
+            {internals.map((u) => (
+              <Line
+                key={u.id}
+                type="monotone"
+                dataKey={`${dataKey}__internal__${u.id}`}
+                stroke={u.color}
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+                dot={false}
+                name={u.name}
+                hide
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       )}
