@@ -1187,7 +1187,7 @@ export default function ExMapScreen() {
                             onPress={() => setIsMapFullscreen(false)}
                             activeOpacity={0.8}
                         >
-                            <X size={20} color="#1C1C1C" />
+                            <X size={24} color="#1C1C1C" />
                         </TouchableOpacity>
                     </SafeAreaView>
                 </View>
@@ -1578,10 +1578,11 @@ const styles = StyleSheet.create({
     },
     collapseButton: {
         alignSelf: 'flex-end',
-        margin: 12,
-        width: 38,
-        height: 38,
-        borderRadius: 10,
+        marginTop: 28,
+        marginRight: 12,
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         backgroundColor: 'rgba(255, 255, 255, 0.92)',
         alignItems: 'center',
         justifyContent: 'center',

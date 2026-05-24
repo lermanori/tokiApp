@@ -391,7 +391,7 @@ function DiscoverMap({ region, onRegionChange, events, onEventPress, onMarkerPre
         ))}
       </MapView>
 
-      <View style={styles.overlay}>
+      <View style={fullscreen ? styles.overlayFullscreen : styles.overlay}>
         {/* Zoom Controls */}
         <TouchableOpacity
           style={[styles.control, styles.zoomButton]}
@@ -444,6 +444,8 @@ const styles = StyleSheet.create({
   map: { width: '100%', height: 275, borderRadius: 16 },
   mapFullscreen: { width: '100%', flex: 1 },
   overlay: { position: 'absolute', top: 60, right: 16, gap: 8 },
+  // In fullscreen, sit below the close button (top safe-area + marginTop:28 + height:44 + spacing)
+  overlayFullscreen: { position: 'absolute', top: 144, right: 16, gap: 8 },
   control: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   zoomButton: { marginBottom: 6 },
   zoomText: { fontSize: 18, fontFamily: 'Inter-SemiBold', color: '#1C1C1C' },
