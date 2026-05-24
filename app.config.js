@@ -27,6 +27,10 @@ module.exports = {
               "com.googleusercontent.apps.637006267798-43d8irdorehl3sedc7btq6r1pt2hfhs3"
             ]
           }
+        ],
+        LSApplicationQueriesSchemes: [
+          "instagram",
+          "instagram-stories"
         ]
       },
       associatedDomains: [
@@ -49,6 +53,14 @@ module.exports = {
         {
           photosPermission: "The app accesses your photos to let you share them with your friends."
         }
+      ],
+      [
+        "react-native-share",
+        {
+          ios: ["instagram", "instagram-stories"],
+          android: ["com.instagram.android"],
+          enableBase64ShareAndroid: true
+        }
       ]
     ],
     experiments: {
@@ -59,6 +71,8 @@ module.exports = {
       // Google OAuth client IDs
       GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID || '637006267798-fto4pgl9cpqktdn7sgl7t54dd2dbdpld.apps.googleusercontent.com',
       GOOGLE_IOS_CLIENT_ID: process.env.GOOGLE_IOS_CLIENT_ID || '637006267798-43d8irdorehl3sedc7btq6r1pt2hfhs3.apps.googleusercontent.com',
+      // Facebook App ID required by Instagram Stories share API
+      FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || '1306431924354794',
       router: {},
       eas: {
         projectId: "41a24d0b-1d53-429a-8753-acd4a5b9972c"

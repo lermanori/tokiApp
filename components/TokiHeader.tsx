@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Heart, Share } from 'lucide-react-native';
+import { ArrowLeft, Heart, Share, Instagram } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { getActivityPhoto } from '@/utils/activityPhotos';
 import FriendsGoingOverlay, { Participant } from './FriendsGoingOverlay';
@@ -17,6 +17,7 @@ interface TokiHeaderProps {
   isSaving: boolean;
   onSaveToggle: () => void;
   onShare: () => void;
+  onShareToStory?: () => void;
   onBack: () => void;
   friendsAttending?: Participant[];
   onFriendsPress?: () => void;
@@ -29,6 +30,7 @@ export default function TokiHeader({
   isSaving,
   onSaveToggle,
   onShare,
+  onShareToStory,
   onBack,
   friendsAttending,
   onFriendsPress
@@ -75,6 +77,18 @@ export default function TokiHeader({
             />
           )}
         </TouchableOpacity>
+        {onShareToStory ? (
+          <TouchableOpacity onPress={onShareToStory} activeOpacity={0.85}>
+            <LinearGradient
+              colors={['#FEDA75', '#FA7E1E', '#D62976', '#962FBF', '#4F5BD5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.storyButton}
+            >
+              <Instagram size={20} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity style={styles.actionButton} onPress={onShare}>
           <Share size={20} color="#FFFFFF" />
         </TouchableOpacity>
@@ -130,6 +144,13 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
