@@ -3,7 +3,7 @@ import { TokiEvent, DiscoverFilters } from '@/utils/discoverTypes';
 import { filterEvents } from '@/utils/discoverHelpers';
 import { apiService } from '@/services/api';
 
-const DEFAULT_FILTERS: DiscoverFilters = {
+export const DEFAULT_FILTERS: DiscoverFilters = {
   visibility: 'all',
   category: 'all',
   distance: 'all',

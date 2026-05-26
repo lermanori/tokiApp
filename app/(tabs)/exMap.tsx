@@ -8,13 +8,14 @@ import TokiCard from '@/components/TokiCard';
 import TokiFilters from '@/components/TokiFilters';
 import DiscoverMap from '@/components/DiscoverMap';
 import { DiscoverCategories } from '@/components/DiscoverCategories';
+import DiscoverActiveFiltersBar from '@/components/DiscoverActiveFiltersBar';
 import TokiSortModal, { SortState } from '@/components/TokiSortModal';
 import UserSearchCard from '@/components/UserSearchCard';
 import DidYouGoCard from '@/components/DidYouGoCard';
 import { useFeatures } from '@/contexts/FeaturesContext';
 import { useApp } from '@/contexts/AppContext';
 import { useDiscoverData } from '@/hooks/useDiscoverData';
-import { useDiscoverFilters } from '@/hooks/useDiscoverFilters';
+import { useDiscoverFilters, DEFAULT_FILTERS } from '@/hooks/useDiscoverFilters';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { TokiEvent } from '@/utils/discoverTypes';
 import { CATEGORIES } from '@/utils/categories';
@@ -970,6 +971,20 @@ export default function ExMapScreen() {
                                     showMap={showMap}
                                     timeFilter={timeFilter}
                                     onTimeFilterChange={setTimeFilter}
+                                />
+                                <DiscoverActiveFiltersBar
+                                    filters={selectedFilters}
+                                    sort={sort}
+                                    onClearFilter={(key) => handleFilterChange(key as string, (DEFAULT_FILTERS as any)[key])}
+                                    onClearDateRange={() => {
+                                        handleFilterChange('dateFrom', '');
+                                        handleFilterChange('dateTo', '');
+                                    }}
+                                    onClearSort={() => setSort({ sortBy: 'relevance', sortOrder: 'asc' })}
+                                    onClearAll={() => {
+                                        clearAllFilters();
+                                        setSort({ sortBy: 'relevance', sortOrder: 'asc' });
+                                    }}
                                 />
                                 {/* People search results section */}
                                 {searchQuery.trim().length >= 2 && (userSearchResults.length > 0 || isSearchingUsers) && (
